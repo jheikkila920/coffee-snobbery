@@ -1,0 +1,12 @@
+# Dev dependency manifest for Snobbery.
+# Pins per .planning/phases/00-foundation/00-RESEARCH.md §Dev requirements.
+
+-r requirements.txt
+
+ruff>=0.15.13,<0.16
+mypy>=1.13,<2
+pytest>=9.0,<10
+pytest-asyncio
+pytest-cov
+respx
+# httpx is already in requirements.txt; FastAPI TestClient depends on it.
