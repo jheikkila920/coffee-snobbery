@@ -76,8 +76,13 @@ lint:
 # Smoke — the Phase 0 gating verification (CONTEXT D-18 + planner add).
 # Drops volumes so we test from a genuinely clean cold-start, rebuilds,
 # waits ~30s for the DB healthcheck + alembic migrations to settle, then
-# curls /healthz and grep-asserts the migration log line. Any sub-command
-# failure exits non-zero (`set -e` + `&&` chaining).
+# curls /healthz and asserts the migration head via `alembic current`.
+# We assert against `alembic current` rather than a log grep because Alembic
+# runs in entrypoint.sh before structlog initializes, so its INFO log line
+# `Running upgrade <prev> -> <new>` is silently dropped by stdlib's default
+# WARNING level. `alembic current` queries `alembic_version` directly — a
+# stronger assertion that's independent of log format or visibility.
+# Any sub-command failure exits non-zero (`set -e` + `&&` chaining).
 smoke:
 	docker compose down -v
 	docker compose up -d --build
@@ -85,5 +90,5 @@ smoke:
 	sleep 30
 	curl -fsS http://127.0.0.1:8080/healthz
 	@echo ""
-	docker compose logs coffee-snobbery | grep -E 'Running upgrade .* -> 0001'
+	docker compose exec coffee-snobbery alembic current | grep -E '^0001_initial \(head\)'
 	@echo "smoke: OK"
