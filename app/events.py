@@ -22,7 +22,7 @@ CONTEXT D-14 taxonomy lists the auth + admin + csp events. CONTEXT D-15
 locks the failed-login username policy. ``auth.login_attempt`` is NOT in
 the D-14 taxonomy as originally written but IS in ROADMAP Phase 1 success
 criterion 4 — RESEARCH §6 recommends adding it; this module ships it.
-``docs/decisions/0001`` ADR (Plan 10) formalizes the amendment.
+``docs/decisions/0003`` ADR (Plan 10) formalizes the amendment.
 
 Why string constants rather than :class:`enum.Enum`?
 ----------------------------------------------------
@@ -48,6 +48,12 @@ ADMIN_PASSWORD_RESET = "admin.password_reset"  # noqa: S105 — event name, not 
 ADMIN_IS_ADMIN_TOGGLED = "admin.is_admin_toggled"
 
 # --- operational counters --------------------------------------------------
+# CSP violation report — emitted by ``app.routers.csp_report`` on every POST
+# to ``/csp-report`` (one log line per report; the dual-content-type handler
+# emits one event per item in the ``application/reports+json`` array).
+# Event fields (per D-06): ``blocked_uri``, ``violated_directive``, ``line``,
+# ``source_file``, ``ip``. Other fields in the browser-supplied payload are
+# stripped before emission to limit PII surface (threat T-03-07).
 CSP_VIOLATION = "csp.violation"
 RATE_LIMIT_EXCEEDED = "rate_limit.exceeded"
 

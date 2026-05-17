@@ -9,6 +9,9 @@ breaking ``request_id`` correlation. See ``01-RESEARCH.md`` §13.1 and the
 forthcoming ``docs/decisions/0002`` ADR (Plan 10) for the load-bearing
 rationale.
 
+Each Wave 1 plan lands a middleware module here and re-exports its class
+from this package so ``app/main.py`` (Plan 09) can do a single
+``from app.middleware import ...`` block instead of N module-level imports.
 Subsequent Wave 1 plans (03 SecurityHeaders, 04 Session, 06 FragmentCache)
 append their own re-exports below; the file is structured so additions are
 purely additive — never a line replacement.
@@ -17,7 +20,9 @@ purely additive — never a line replacement.
 from __future__ import annotations
 
 from app.middleware.request_context import RequestContextMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 
 __all__ = [
     "RequestContextMiddleware",
+    "SecurityHeadersMiddleware",
 ]
