@@ -85,24 +85,50 @@ must return at least three hits.
 
 ### NGINX server-block snippet
 
-NGINX terminates TLS on the host and proxies to `127.0.0.1:8080` (the compose stack binds there — never to `0.0.0.0`). Minimal snippet:
+NGINX terminates TLS on the host and proxies to `127.0.0.1:8080` (the compose stack binds there — never to `0.0.0.0`). Canonical server block (SEC-04):
 
 ```nginx
+# Optional: redirect HTTP → HTTPS so HSTS gets a chance to install on first visit.
+server {
+  listen 80;
+  server_name snobbery.example.com;
+  return 301 https://$host$request_uri;
+}
+
 server {
   listen 443 ssl http2;
   server_name snobbery.example.com;
   # ssl_certificate / ssl_certificate_key handled by your existing setup.
+
+  # HSTS — two years, includes subdomains. Browsers refuse plaintext after first visit.
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+  # Phase 11 PWA service worker needs scope: / — file is served from /sw.js so the
+  # default scope already allows it, but the explicit header is required if the file
+  # ever moves under /static/. Documented here now to avoid a retroactive edit.
+  location = /sw.js {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header Service-Worker-Allowed "/" always;
+  }
 
   location / {
     proxy_pass http://127.0.0.1:8080;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Disable response buffering. Phase 1 doesn't need it (no SSE in v1), but Phase 7
+    # may switch from polling to SSE in v1.1 and a buffered NGINX silently delays /
+    # drops events. Pre-baking the directive avoids retroactive NGINX edits.
+    proxy_buffering off;
   }
 }
 ```
 
-Phase 1 will extend this snippet with HSTS, `proxy_buffering off` (forward-looking for SSE — Phase 7 currently chose polling), and an explicit SSL cipher list. The Phase 0 minimum is the four `proxy_set_header` lines above, which the app reads via uvicorn's `--proxy-headers` flag and the `TRUSTED_PROXY_IPS` env var.
+The four `proxy_set_header` lines feed uvicorn's `--proxy-headers --forwarded-allow-ips=$TRUSTED_PROXY_IPS` so `request.url.scheme` is rewritten to `https` and `request.client.host` is rewritten to the real upstream IP. Without `proxy_set_header X-Forwarded-Proto $scheme`, cookies marked `Secure` silently break.
 
 ### Deploying a change
 
@@ -121,7 +147,28 @@ Migrations run automatically on container start via `entrypoint.sh` (`alembic up
 
 The default `TRUSTED_PROXY_IPS=127.0.0.1` aligns with the recommended deployment shape: NGINX runs on the same host, proxies to the compose-exposed `127.0.0.1:8080`, and the X-Forwarded-* headers from NGINX are honored.
 
-If NGINX runs on a different host or a Docker network address, update `TRUSTED_PROXY_IPS` to the comma-separated list of trusted upstream IPs. **Setting this wrong breaks `Secure` session cookies** (uvicorn ignores `X-Forwarded-Proto`, the app sees `scheme=http`, the cookie's `Secure` flag is dropped on outbound, the browser refuses to send it back, login bounces). Phase 1's forthcoming `/debug/proxy` smoke endpoint will end-to-end-verify the trust-list configuration.
+If NGINX runs on a different host or a Docker network address, update `TRUSTED_PROXY_IPS` to the comma-separated list of trusted upstream IPs:
+
+- **NGINX on the same VPS as the Docker stack** (recommended): `TRUSTED_PROXY_IPS=127.0.0.1`
+- **NGINX in a separate container or on a different host**: the Docker bridge gateway IP, typically `172.18.0.1`. Confirm with `docker network inspect coffee-snobbery-net | grep Gateway`.
+
+**Setting this wrong breaks `Secure` session cookies** (uvicorn ignores `X-Forwarded-Proto`, the app sees `scheme=http`, the cookie's `Secure` flag is dropped on outbound, the browser refuses to send it back, login bounces). The `/debug/proxy` endpoint (see §Operational smoke check) end-to-end-verifies the trust-list configuration.
+
+### Operational smoke check
+
+After deploying — or after any NGINX config change — run:
+
+```bash
+curl -i https://snobbery.example.com/debug/proxy
+```
+
+A correctly configured stack returns JSON with `"scheme": "https"` and `"headers_honored": true`. If `headers_honored` is `false`:
+
+- Verify NGINX is setting `X-Forwarded-Proto $scheme` and `X-Forwarded-For $proxy_add_x_forwarded_for`.
+- Verify `TRUSTED_PROXY_IPS` in `.env` matches the upstream IP NGINX hits the container from.
+- Restart the web container after changing `TRUSTED_PROXY_IPS`: `docker compose up -d coffee-snobbery`.
+
+Phase 2 will wrap `/debug/proxy` in the admin gate; until then it is publicly readable (the trust list is operational config, not secret).
 
 ## Environment variables
 
