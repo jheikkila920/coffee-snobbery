@@ -1,0 +1,20 @@
+/* Tailwind v4 source — Phase 0 (Plan 00-04).
+ *
+ * Compiled at image build time by Dockerfile stage 1 (tailwind-builder)
+ * into a content-hashed sibling file `tailwind.<sha8>.css`. The runtime
+ * image carries the hashed output only; this src file ships in the repo
+ * (whitelisted by .gitignore in Plan 00-01).
+ *
+ * The 16px form-input rule below is PITFALL MX-1 prevention: iOS Safari
+ * auto-zooms when a focused input has a computed font-size smaller than
+ * 16px, breaking mobile-first ergonomics. Landing the rule globally now
+ * means Phase 5's brew-log forms inherit it without per-field config.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  input, select, textarea { font-size: 16px; }
+}
