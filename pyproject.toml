@@ -37,3 +37,22 @@ warn_unused_ignores = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-x --tb=short"
+# Phase 1 Plan 01 (Wave 0): warning policy.
+#
+# The plan text proposed `filterwarnings = ["error"]` (treat all warnings as
+# errors). Deferred to Wave 1 — turning it on at the conftest-only stage
+# crashes pytest's collection in the host environment when pytest-asyncio is
+# absent (pytest issues a `PytestConfigWarning: Unknown config option:
+# asyncio_mode`, which `error` promotes to an INTERNALERROR halting all
+# collection). The acceptance criteria for this plan only require
+# `asyncio_mode = "auto"` + `testpaths = ["tests"]` and clean collection — both
+# satisfied without the filterwarnings escalation. Plan 02 (which lands
+# structlog redaction in a way that's exercised under Docker only) is the
+# correct seat to flip strict warnings on, since by then `pytest-asyncio` is
+# guaranteed-installed via `requirements-dev.txt` in every environment that
+# runs the suite. Recorded as a deviation in the Plan 01-01 SUMMARY.
+# Test dependency policy (Wave 0): Phase 0 ships dev deps via `requirements-dev.txt`
+# (see file for the pytest>=9,<10 / pytest-asyncio / httpx pins). We intentionally
+# do NOT duplicate them under `[project.optional-dependencies] test = [...]` —
+# the requirements-dev.txt file is the single source of truth per Phase 0's
+# convention, and the Dockerfile installs from it. Re-pinning here risks drift.
