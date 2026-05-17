@@ -6,9 +6,10 @@ All middleware classes here MUST be pure ASGI (``__init__(self, app)`` +
 inside a task group that does not propagate
 :mod:`structlog.contextvars` mutations back to the route handler, silently
 breaking ``request_id`` correlation (AUTH-10) and any future
-``contextvars``-bound user/session tracking. See ``01-RESEARCH.md`` §13.1
-and the forthcoming ``docs/decisions/0002`` ADR (Plan 10) for the
-load-bearing rationale.
+``contextvars``-bound user/session tracking. Starlette's request/response
+buffering middleware base is also on a soft-deprecation path in
+Starlette 1.0. See ``01-RESEARCH.md`` §13.1 and the forthcoming
+``docs/decisions/0002`` ADR (Plan 10) for the load-bearing rationale.
 
 Each Wave 1 plan lands a middleware module here and re-exports its class
 from this package so ``app/main.py`` (Plan 09) can do a single
@@ -20,6 +21,7 @@ purely additive — never a line replacement.
 
 from __future__ import annotations
 
+from app.middleware.fragment_cache import FragmentCacheHeadersMiddleware
 from app.middleware.request_context import RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.session import (
@@ -31,6 +33,7 @@ from app.middleware.session import (
 
 __all__ = [
     "COOKIE_NAME",
+    "FragmentCacheHeadersMiddleware",
     "MAX_AGE_SECONDS",
     "REFRESH_THRESHOLD_SECONDS",
     "RequestContextMiddleware",
