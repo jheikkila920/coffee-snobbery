@@ -1,0 +1,80 @@
+# Snobbery — Compose stack (Phase 0 / Plan 00-05).
+#
+# Two services on the coffee-snobbery-net bridge:
+#   - coffee-snobbery     : FastAPI + uvicorn (single worker) — host-bound to 127.0.0.1:8080
+#   - coffee-snobbery-db  : Postgres 16 — no host port; reachable only via the bridge
+#
+# Three named volumes (CONTEXT D-03 / FOUND-03):
+#   - coffee_snobbery_postgres_data : Postgres data dir
+#   - coffee_snobbery_photos        : photo uploads (Phase 4 writes)
+#   - coffee_snobbery_backups       : nightly backups (Phase 8 writes)
+#
+# Healthcheck (CONTEXT D-07): `pg_isready` on the db; the web service gates startup
+# on `condition: service_healthy` so `entrypoint.sh` never races migrations.
+#
+# Port binding (CONTEXT D-09): 127.0.0.1:8080:8000 — NEVER 0.0.0.0. NGINX on the
+# host proxies to 127.0.0.1:8080 (see README NGINX server-block snippet).
+#
+# No `version:` key — Compose v2 ignores it and emits a deprecation warning.
+
+name: coffee-snobbery
+
+services:
+  coffee-snobbery-db:
+    image: postgres:16-alpine
+    container_name: coffee-snobbery-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - coffee_snobbery_postgres_data:/var/lib/postgresql/data
+    networks:
+      - coffee-snobbery-net
+    # FOUND-02: DB is internal-only. Intentionally NO `ports:` block.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  coffee-snobbery:
+    image: coffee-snobbery:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coffee-snobbery
+    restart: unless-stopped
+    depends_on:
+      coffee-snobbery-db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Computed inline so the URL always references the correct compose service
+      # hostname (`coffee-snobbery-db`), independent of whatever DATABASE_URL the
+      # operator may have set in .env. psycopg 3 driver, per CLAUDE.md stack lock.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@coffee-snobbery-db:5432/${POSTGRES_DB}
+    volumes:
+      - coffee_snobbery_photos:/app/data/photos
+      - coffee_snobbery_backups:/app/data/backups
+    networks:
+      - coffee-snobbery-net
+    # CONTEXT D-09: localhost-only host bind. NGINX on the host proxies to this.
+    ports:
+      - "127.0.0.1:8080:8000"
+
+networks:
+  coffee-snobbery-net:
+    driver: bridge
+    name: coffee-snobbery-net
+
+volumes:
+  coffee_snobbery_postgres_data:
+    name: coffee_snobbery_postgres_data
+  coffee_snobbery_photos:
+    name: coffee_snobbery_photos
+  coffee_snobbery_backups:
+    name: coffee_snobbery_backups
