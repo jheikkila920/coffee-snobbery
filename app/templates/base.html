@@ -1,3 +1,4 @@
+{# Base layout. CSP-strict — no |safe, no hx-on:, no hx-vals='js:'. Plan 01's grep test enforces this for pages/; this base file is reviewed at PR time. #}
 <!doctype html>
 <html lang="en">
   <head>
@@ -5,8 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#FAF7F2" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#1A1110" media="(prefers-color-scheme: dark)">
-    <title>Snobbery — {% block page_title %}{% endblock %}</title>
+    {# Double-submit CSRF token surface — read by /static/js/htmx-listeners.js at request time. #}
+    <meta name="csrf-token" content="{{ request.cookies.get('csrftoken', '') }}">
+    <title>Snobbery — {% block page_title %}{% endblock %}{% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="{{ tailwind_css_path }}">
+    {# Alpine CSP build — declarative-only (no eval). Pin 3.14.9 — RESEARCH §1. #}
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.14.9/dist/cdn.min.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# HTMX 2.0.10 core — exact version pin per RESEARCH §1 + STACK.md §1. #}
+    <script defer src="https://unpkg.com/[email protected]" nonce="{{ csp_nonce(request) }}"></script>
+    {# Local HTMX listeners (Plan 01-05) — MUST load AFTER the htmx core script so htmx.config.allowEval=false runs after htmx is defined. #}
+    <script defer src="/static/js/htmx-listeners.js" nonce="{{ csp_nonce(request) }}"></script>
   </head>
   <body class="bg-cream-50 text-espresso-900 dark:bg-espresso-950 dark:text-cream-100">
     {% block content %}{% endblock %}
