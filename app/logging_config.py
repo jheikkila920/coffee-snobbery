@@ -32,11 +32,11 @@ the Phase 0 module would force every Phase 0 caller (``app/main.py``,
 mass-rename commit with no functional benefit. The shim costs one file and
 preserves both Phase 0 and Plan 01-02 acceptance criteria simultaneously.
 
-CLAUDE.md "no os.environ outside app/config.py" is honored — neither this
-file nor ``app/logging.py`` reads the process environment directly. The
-``level`` argument to :func:`configure_logging` is the only configuration
-input; ``app/main.py``'s lifespan passes ``settings.LOG_LEVEL`` (and the
-existing ``settings.LOG_FORMAT``) at startup.
+FOUND-10 is honored — neither this file nor ``app/logging.py`` reads the
+process environment directly. The ``level`` argument to
+:func:`configure_logging` is the only configuration input;
+``app/main.py``'s lifespan passes ``settings.LOG_LEVEL`` (and the existing
+``settings.LOG_FORMAT``) at startup.
 """
 
 from __future__ import annotations
