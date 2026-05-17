@@ -127,6 +127,26 @@ def db_session() -> Iterator[Any]:
             pass
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> Iterator[None]:
+    """Clear slowapi's in-memory bucket before each test.
+
+    Without this, a test that intentionally exceeds the rate limit (e.g.,
+    ``test_rate_limit`` in test_csp_report.py) leaves the limiter's storage
+    populated. Subsequent tests in the same pytest session hit the limiter
+    and receive 429s on requests they expected to succeed. The limiter is
+    a module-level singleton (``app.rate_limit.limiter``); resetting it per
+    test isolates each test's rate-limit state without rebuilding the app.
+    """
+    yield
+    try:
+        from app.rate_limit import limiter
+        limiter.reset()
+    except (ImportError, AttributeError):
+        # Wave 1 dependency not present (Plan 03 / Plan 07); harmless.
+        pass
+
+
 @pytest.fixture
 def forwarded_headers() -> dict[str, str]:
     """Simulated NGINX-rewritten proxy headers for tests that exercise SEC-04 / D-16.
