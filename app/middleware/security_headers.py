@@ -7,11 +7,11 @@ response. The set is locked in CONTEXT D-05 and satisfies SEC-02
 and SEC-03 (X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
 Permissions-Policy).
 
-Why pure ASGI and not :class:`starlette.middleware.base.BaseHTTPMiddleware`?
-``BaseHTTPMiddleware`` buffers the entire response body before forwarding it
-downstream, which breaks streaming responses (Phase 1 also adds a fragment
-cache, Phase 6's eventual AI streaming endpoint, ``StaticFiles`` ranged
-GETs). The ``send_wrapper`` pattern below mutates only the
+Why pure ASGI and not Starlette's high-level base-http middleware? The
+high-level base class buffers the entire response body before forwarding
+it downstream, which breaks streaming responses (Phase 1 also adds a
+fragment cache, Phase 6's eventual AI streaming endpoint, ``StaticFiles``
+ranged GETs). The ``send_wrapper`` pattern below mutates only the
 ``http.response.start`` ASGI message — the body chunks pass through
 untouched.
 
@@ -160,9 +160,10 @@ del _segment  # don't leak the loop variable into the module namespace
 class SecurityHeadersMiddleware:
     """Pure-ASGI middleware that appends the security header set on every response.
 
-    Does NOT inherit from :class:`BaseHTTPMiddleware` (see module docstring
-    for the rationale). Lifespan and websocket scopes are passed through
-    unchanged — neither has a meaningful response.start message.
+    Does NOT inherit from Starlette's high-level base-http middleware (see
+    module docstring for the rationale). Lifespan and websocket scopes are
+    passed through unchanged — neither has a meaningful response.start
+    message.
 
     The middleware is stateless: a single instance handles every concurrent
     request. The ``send_wrapper`` closure captures ``scope`` so it can read
