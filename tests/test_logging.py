@@ -167,8 +167,8 @@ def test_redactor_scrubs_sensitive_keys() -> None:
     )
 
     record = _last_json_record(buf)
-    assert record["password"] == "<redacted>"
-    assert record["api_key"] == "<redacted>"
+    assert record["password"] == "***REDACTED***"
+    assert record["api_key"] == "***REDACTED***"
     # Non-sensitive keys pass through untouched — the redactor must NOT
     # over-match.
     assert record["username"] == "alice"
@@ -189,7 +189,7 @@ def test_redactor_scrubs_sensitive_keys() -> None:
         username="alice",
     )
     console_out = buf2.getvalue()
-    assert "<redacted>" in console_out
+    assert "***REDACTED***" in console_out
     assert "secret123" not in console_out, (
         "redactor leaked password value into console output"
     )

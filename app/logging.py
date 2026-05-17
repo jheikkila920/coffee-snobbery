@@ -45,10 +45,16 @@ import structlog
 
 # Deny-list of top-level event-dict keys whose VALUES are scrubbed before
 # emission. Names are matched case-insensitively (``Password`` matches as
-# readily as ``password``). The list is intentionally minimal in Phase 0;
-# Phase 1 extends it in the same processor.
+# readily as ``password``).
+#
+# Phase 0 (Plan 00-02) shipped this list as the minimal core. Phase 1
+# (Plan 01-02) extends it with the AUTH-10 / CONTEXT D-14 / D-15 keys
+# (session_token, api_key_encrypted, csrf token names, x-csrf-token) and
+# normalizes the redaction sentinel to ``"***REDACTED***"`` (the canonical
+# string in the AUTH-10 spec and Wave 0 ``test_redaction_processor``).
 _SENSITIVE_KEYS: frozenset[str] = frozenset(
     {
+        # Phase 0 core (PASSWORD-style + raw secrets)
         "password",
         "password_hash",
         "api_key",
@@ -59,8 +65,26 @@ _SENSITIVE_KEYS: frozenset[str] = frozenset(
         "secret",
         "secret_key",
         "encryption_key",
+        # Phase 1 (Plan 01-02) AUTH-10 additions — matches the canonical list
+        # in 01-02-PLAN.md Task 1 <action> and 01-RESEARCH.md §6 redaction.
+        "api_key_encrypted",
+        "session_token",
+        "x-csrf-token",
+        "csrftoken",
     }
 )
+
+# Public alias — the canonical name Plan 01-02 documents in its <interfaces>
+# section for downstream importers. ``app.logging.SENSITIVE_KEYS`` and
+# ``app.logging_config.SENSITIVE_KEYS`` refer to the same frozenset instance.
+SENSITIVE_KEYS: frozenset[str] = _SENSITIVE_KEYS
+
+# Redaction sentinel — the literal string substituted for any deny-listed
+# key's value. Pinned by AUTH-10 + Wave 0 ``test_redaction_processor`` /
+# ``test_redaction``. Changing this value is a breaking change to the log
+# contract; bump the redaction processor name first if a substitution shift
+# is ever needed.
+_REDACTED_VALUE: str = "***REDACTED***"
 
 
 def _redact_sensitive_keys(
@@ -68,7 +92,7 @@ def _redact_sensitive_keys(
     method_name: str,  # noqa: ARG001 — structlog processor signature
     event_dict: dict[str, Any],
 ) -> dict[str, Any]:
-    """Scrub deny-listed top-level keys to ``"<redacted>"``.
+    """Scrub deny-listed top-level keys to ``"***REDACTED***"``.
 
     Walks only the top-level keys of ``event_dict`` — Phase 0 does not log
     nested PII, and a recursive walk would risk mutating unrelated data
@@ -80,8 +104,15 @@ def _redact_sensitive_keys(
     """
     for key in list(event_dict.keys()):
         if key.lower() in _SENSITIVE_KEYS:
-            event_dict[key] = "<redacted>"
+            event_dict[key] = _REDACTED_VALUE
     return event_dict
+
+
+# Plan 01-02 <interfaces> spells the helper as ``_redact_sensitive_fields``.
+# Phase 0 already shipped ``_redact_sensitive_keys`` — the function semantics
+# are identical, only the suffix differs. Export both names so both spellings
+# resolve to the same processor (avoids a rename churn across two phases).
+_redact_sensitive_fields = _redact_sensitive_keys
 
 
 def configure_logging(format: str = "json", level: str = "INFO") -> None:  # noqa: A002 — `format` is the CONTEXT D-16 vocabulary
