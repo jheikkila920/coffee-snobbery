@@ -1,0 +1,42 @@
+# Snobbery — keep the Docker build context small and reproducible.
+# CRITICAL: `tests/` is NOT excluded — Plan 05's `make test` target runs
+# `docker compose exec coffee-snobbery pytest -x` against /app/tests inside
+# the container, so the directory must be present in the image.
+
+# VCS + planning + tooling
+.git/
+.gitignore
+.planning/
+.claude/
+docs/
+
+# Python build / cache
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# Node-style noise (defensive — we have no npm pipeline, but a future tooling
+# experiment might drop one of these)
+node_modules/
+
+# Secrets — never bake into the image. Note: `.env.example` IS included so
+# operators inside the container can `cp .env.example .env` if needed.
+.env
+.env.*
+!.env.example
+
+# Editor / OS detritus
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Coverage artifacts
+htmlcov/
+.coverage

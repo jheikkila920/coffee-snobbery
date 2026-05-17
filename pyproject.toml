@@ -1,0 +1,39 @@
+# Snobbery — household coffee log.
+# Tool configs only at Phase 0: ruff (format + lint), mypy, pytest.
+# CI YAML (GitHub Actions) is deferred to Phase 12 per CONTEXT §Deferred.
+
+[project]
+name = "coffee-snobbery"
+version = "0.1.0"
+description = "Self-hosted household coffee log for pour-over enthusiasts."
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+# Defaults: double quotes, trailing comma in multi-line collections, etc.
+
+[tool.ruff.lint]
+extend-select = ["E", "F", "I", "B", "UP", "S"]
+# CONTEXT D-19 ruff rule set. `S` is bandit; combined with `B` (bugbear), `UP`
+# (pyupgrade) and `I` (isort) plus the pycodestyle/pyflakes defaults this is the
+# baseline Phase 12 will tighten.
+
+[tool.ruff.lint.per-file-ignores]
+# Test files routinely use `assert` (S101) and may hard-code credentials in
+# fixtures (S105/S106) — these are not security smells in the test domain.
+"tests/**/*.py" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict_optional = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-x --tb=short"
