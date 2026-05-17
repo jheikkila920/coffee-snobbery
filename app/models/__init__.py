@@ -16,6 +16,7 @@ from app.models.ai_recommendation import AIRecommendation
 from app.models.app_setting import AppSetting
 from app.models.bag import Bag
 from app.models.base import Base
+from app.models.session import Session
 from app.models.user import User
 from app.models.wishlist_entry import WishlistEntry
 
@@ -26,4 +27,5 @@ __all__ = [
     "WishlistEntry",
     "AIRecommendation",
     "AppSetting",
+    "Session",
 ]
