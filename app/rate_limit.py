@@ -1,87 +1,74 @@
-"""Rate-limit helper — **temporary Plan 01-03 stub**.
+"""slowapi 0.1.9 wiring.
 
-Plan 07 replaces this module with the final slowapi wiring:
+Final replacement for the Plan 01-03 stub. Uses ``get_remote_address``
+(NOT ``get_ipaddr`` — slowapi issue #255 / RESEARCH §13.3) so that uvicorn's
+``--proxy-headers`` rewriting of ``request.client.host`` from
+``X-Forwarded-For`` feeds the keying function correctly.
 
-- ``limiter = Limiter(key_func=get_remote_address, default_limits=[...])``
-  using ``slowapi.util.get_remote_address`` so the keying function honours
-  ``X-Forwarded-For`` (via Uvicorn ``--proxy-headers``).
-- A ``RateLimitExceeded`` exception handler registered on the FastAPI app
-  that returns a 429 with the canonical JSON / HTML response.
-- Decoration of ``/login`` (5/15 minutes per IP) and ``/setup``
-  (3/hour per IP) under SEC-01 / AUTH-08.
+In-memory storage is consistent under the single uvicorn worker rule
+(FOUND-04). Restart clears all rate-limit buckets — documented limitation
+in RESEARCH §7; household scale + single VPS makes this acceptable.
 
-Why a stub now?
-    Plan 03 needs to decorate ``POST /csp-report`` with
-    ``@limiter.limit("30/minute")`` (D-17). Without this module, Plan 03's
-    ``app/routers/csp_report.py`` cannot import; under Wave 1 parallelism
-    Plan 03 and Plan 07 must both land independently of each other.
+Limits per CONTEXT D-17:
 
-What the stub does
-------------------
-- Exposes a ``limiter`` object whose ``.limit(rate)`` method returns an
-  identity decorator. The decoration site
-  (``@limiter.limit("30/minute")``) compiles and runs in isolation, but
-  rate-limiting itself is a no-op — every request is served. The dedicated
-  Wave 0 test ``tests/routers/test_csp_report.py::test_rate_limit`` is
-  expected to remain RED until Plan 07 lands; the other two CSP-report
-  tests (``test_legacy_format``, ``test_reporting_api_format``) do not
-  depend on rate limiting.
-- Falls back to slowapi when it's importable, so Plan 07 can land the real
-  ``Limiter`` instance without touching this file's API surface. The
-  fallback is intentionally minimal — Plan 07 will rewrite this module
-  outright with the final shape, including the exception handler and the
-  ``app.state.limiter`` wiring on the FastAPI app.
+- ``/login`` and ``/setup``: 5/15 minutes per IP
+- ``/csp-report``: 30/minute per IP
 
-Stub API surface (Plan 07 must preserve these)
-----------------------------------------------
-- ``limiter.limit(rate_str: str)`` -> callable decorator that preserves the
-  decorated function signature (including the ``request: Request`` parameter
-  slowapi requires for keying).
-- The ``limiter`` symbol importable via
-  ``from app.rate_limit import limiter`` from any router module.
-
-DO NOT add features to this stub. If a Wave 1 plan needs a real rate-limit
-behaviour during its own development, raise it as a Plan 07 dependency and
-ship a slowapi pin in ``requirements.txt`` as part of that plan.
+The ``register_rate_limiter(app)`` helper is called once by Plan 09 during
+``app/main.py`` assembly. It (a) sets ``app.state.limiter`` (slowapi looks
+there at decoration time) and (b) registers a custom 429 handler that emits
+the canonical ``rate_limit.exceeded`` structured log line BEFORE delegating
+to slowapi's stock JSON response. Every 429 leaves an audit trail (T-07-07).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+import structlog
+from fastapi import FastAPI
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from starlette.requests import Request
+from starlette.responses import Response
 
-try:
-    # Prefer the real slowapi when present (Plan 07 will pin it in
-    # requirements.txt). Until then the import fails and we drop into the
-    # no-op shim below.
-    from slowapi import Limiter as _SlowapiLimiter
-    from slowapi.util import get_remote_address as _get_remote_address
+from app.events import RATE_LIMIT_EXCEEDED
 
-    limiter: Any = _SlowapiLimiter(
-        key_func=_get_remote_address,
-        default_limits=[],
+log = structlog.get_logger()
+
+# Limit-string constants — per-route decorations import these rather than
+# hard-coding strings, so D-17 changes touch exactly one file.
+LOGIN_LIMIT: str = "5/15minutes"
+SETUP_LIMIT: str = "5/15minutes"
+CSP_REPORT_LIMIT: str = "30/minute"
+
+# Module-level Limiter. Constructed at import so router modules can decorate
+# at module-load time via ``@limiter.limit(...)``. ``default_limits=[]``
+# means routes opt in explicitly — RESEARCH §7 calls out no global default.
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+
+
+def _structured_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Response:
+    """Emit a structured ``rate_limit.exceeded`` log line, then delegate.
+
+    Logs ``path``, ``ip``, and ``detail`` — never the request body. Calls
+    slowapi's stock ``_rate_limit_exceeded_handler`` to preserve the
+    canonical 429 JSON response shape.
+    """
+    log.warning(
+        RATE_LIMIT_EXCEEDED,
+        path=request.url.path,
+        ip=request.client.host if request.client else "unknown",
+        detail=str(getattr(exc, "detail", "")),
     )
-except ImportError:  # pragma: no cover — exercised only when slowapi is absent
+    return _rate_limit_exceeded_handler(request, exc)
 
-    class _NoOpLimiter:
-        """No-op stand-in for ``slowapi.Limiter`` until Plan 07 lands.
 
-        Mirrors the subset of slowapi's surface used by the Wave 1 routers —
-        only ``.limit(rate_str)``. Returns the decorated function unchanged.
-        Plan 07's real Limiter implements rate enforcement; until then every
-        decorated route serves every request without throttling. The
-        ``test_rate_limit`` Wave 0 test stays red until Plan 07 swaps this
-        out — that's expected and tracked in 01-03-SUMMARY.md.
-        """
+def register_rate_limiter(app: FastAPI) -> None:
+    """Attach the limiter + exception handler to a FastAPI app.
 
-        def limit(
-            self, rate_str: str
-        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-            """Identity decorator. ``rate_str`` is ignored under the stub."""
-
-            def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-                return func
-
-            return _decorator
-
-    limiter = _NoOpLimiter()
+    Called once by Plan 09 during ``app/main.py`` assembly. slowapi looks
+    up ``app.state.limiter`` at decoration time, so this MUST run before
+    any router is included.
+    """
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _structured_rate_limit_handler)
