@@ -25,7 +25,6 @@ import os
 
 import pytest
 
-
 # Module-level capture dict; cleared at the top of each test by the test
 # itself so that test ordering does not leak state. We do NOT use a fixture
 # for this because the echo endpoint is module-level (Starlette routes are
