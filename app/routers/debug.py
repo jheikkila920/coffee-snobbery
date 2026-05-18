@@ -1,22 +1,29 @@
 """Debug + operational endpoints.
 
-Phase 1 ships ``/debug/proxy`` public per D-16; Phase 2 will wrap it in the
-``is_admin`` gate. Permanent endpoint — used after every NGINX config change
+``/debug/proxy`` is admin-gated as of Phase 2 (D-14 — closing the Phase 1
+D-16 hand-off). Permanent endpoint — used after every NGINX config change
 to confirm ``X-Forwarded-Proto`` / ``X-Forwarded-For`` are flowing
-end-to-end. See README §NGINX reverse proxy and §Operational smoke check.
+end-to-end. Admins curl this from the deployed app to verify proxy
+behavior; non-admins and anonymous users get 403.
+See README §NGINX reverse proxy and §Operational smoke check.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.config import settings
+from app.dependencies.auth import require_admin
 from app.schemas.debug import DebugProxyResponse
 
 router = APIRouter()
 
 
-@router.get("/debug/proxy", response_model=DebugProxyResponse)
+@router.get(
+    "/debug/proxy",
+    response_model=DebugProxyResponse,
+    dependencies=[Depends(require_admin)],
+)
 async def debug_proxy(request: Request) -> DebugProxyResponse:
     """Echo what uvicorn ProxyHeadersMiddleware concluded about the request.
 
