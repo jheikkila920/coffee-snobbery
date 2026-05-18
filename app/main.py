@@ -72,7 +72,7 @@ from starlette_csrf import CSRFMiddleware
 
 from app.config import settings
 from app.csrf import CSRFFormFieldShim, csrf_middleware_kwargs
-from app.db import dispose_engine, engine
+from app.db import SessionLocal, dispose_engine, engine
 from app.logging_config import configure_logging
 from app.middleware import (
     FragmentCacheHeadersMiddleware,
@@ -85,6 +85,9 @@ from app.routers import admin as admin_router
 from app.routers import auth as auth_router
 from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
+from app.services import credentials
+from app.services import settings as settings_service
+from app.services.encryption import startup_check as encryption_startup_check
 from app.templates_setup import templates
 
 # Configure logging at module import so uvicorn's first log line already
@@ -132,13 +135,26 @@ def compute_tailwind_css_path() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Startup smoke check + clean shutdown.
+    """Startup smoke check + Phase 3 hooks + clean shutdown.
 
     Phase 8 will start APScheduler here; Phase 0's sync ``SELECT 1`` smoke
     against the main engine is preserved. Shutdown disposes both engines.
+
+    Phase 3 hooks (D-16). All three are sync; await-free is fine inside the
+    async lifespan body. ``encryption_startup_check`` runs FIRST so a bad
+    ``APP_ENCRYPTION_KEY`` fails fast before any DB I/O. ``rewrap_if_needed``
+    runs BEFORE ``prewarm_cache`` so the new fingerprint written by rewrap
+    lands in the cache (T-03-T5). Any failure propagates: uvicorn exits
+    non-zero, docker healthcheck flips unhealthy (T-03-T3). No outer
+    ``try/except`` — the per-row guard inside ``rewrap_if_needed`` is the
+    only swallow point.
     """
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
+    encryption_startup_check()  # raises EncryptionStartupError -> uvicorn exits non-zero
+    with SessionLocal() as db:
+        credentials.rewrap_if_needed(db)
+        settings_service.prewarm_cache(db)
     log.info("app.startup", version=app.version)
     yield
     log.info("app.shutdown")
