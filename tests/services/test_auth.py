@@ -75,9 +75,7 @@ def test_password_hasher_params() -> None:
         f"memory_cost must be 65536 (64 MiB) per AUTH-04, got {_ph.memory_cost}"
     )
     assert _ph.time_cost == 3, f"time_cost must be 3 per AUTH-04, got {_ph.time_cost}"
-    assert _ph.parallelism == 4, (
-        f"parallelism must be 4 per AUTH-04, got {_ph.parallelism}"
-    )
+    assert _ph.parallelism == 4, f"parallelism must be 4 per AUTH-04, got {_ph.parallelism}"
     assert _ph.type == Type.ID, (
         f"type must be argon2.Type.ID (argon2id) per AUTH-04, got {_ph.type}"
     )
