@@ -2,8 +2,8 @@
 phase: 3
 slug: encryption-settings
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-18
 ---
 
@@ -41,33 +41,33 @@ created: 2026-05-18
 
 | # | Plan | Wave | Requirement | Decision | Secure Behavior | Test Type | Automated Command | Status |
 |---|------|------|-------------|----------|-----------------|-----------|-------------------|--------|
-| 1 | encryption | 1 | SEC-08 | D-09, D-12 | `decrypt(encrypt(b"x")) == b"x"` round-trip | unit | `pytest tests/test_encryption.py::test_roundtrip` | ⬜ |
-| 2 | encryption | 1 | SEC-08 | D-09 | Token encrypted under primary key K1 decrypts after rotation `(K2, K1)` (K1 now secondary) | unit | `pytest tests/test_encryption.py::test_rotation_decrypts_old_token` | ⬜ |
-| 3 | encryption | 1 | SEC-08 | D-12 | Token encrypted under K1 fails to decrypt when MultiFernet has only `[K3]` (`InvalidToken`) | unit | `pytest tests/test_encryption.py::test_unknown_key_raises_invalid_token` | ⬜ |
-| 4 | encryption | 1 | SEC-09 | D-13 | `startup_check()` raises `EncryptionStartupError` when `APP_ENCRYPTION_KEY` is empty/malformed | unit | `pytest tests/test_encryption.py::test_startup_check_fails_loudly` | ⬜ |
-| 5 | encryption | 1 | SEC-09 | D-13 | `startup_check()` returns None and emits `event=ENCRYPTION_STARTUP_OK` on healthy key | unit | `pytest tests/test_encryption.py::test_startup_check_emits_ok_event` | ⬜ |
-| 6 | encryption | 1 | SEC-08 | D-14 | `primary_key_fingerprint()` returns deterministic SHA-256 hex of first key string | unit | `pytest tests/test_encryption.py::test_fingerprint_stable_and_hex` | ⬜ |
-| 7 | settings | 1 | (substrate) | D-06 | `prewarm_cache(db)` loads every `app_settings` row into `_cache` with coerced values | unit | `pytest tests/test_settings.py::test_prewarm_loads_all_rows` | ⬜ |
-| 8 | settings | 1 | (substrate) | D-05 | `get_str` / `get_int` / `get_bool` / `get_json` return coerced values; `'null'` rows → `None` | unit | `pytest tests/test_settings.py::test_typed_accessors_coerce` | ⬜ |
-| 9 | settings | 1 | (substrate) | D-05 | Accessor type mismatch raises `SettingTypeError` (e.g., `get_int` on a string row) | unit | `pytest tests/test_settings.py::test_type_mismatch_raises` | ⬜ |
-| 10 | settings | 1 | (substrate) | D-08 | `set_setting(db, key, value, *, by_user_id)` UPDATEs row, invalidates cache, next read returns new value | unit | `pytest tests/test_settings.py::test_write_through_invalidate` | ⬜ |
-| 11 | settings | 1 | (substrate) | D-08 | `set_setting` emits structured event `ADMIN_APP_SETTING_CHANGED` with `setting_key`, `value_type`, `user_id` | unit | `pytest tests/test_settings.py::test_emits_admin_app_setting_changed_event` | ⬜ |
-| 12 | settings | 1 | (substrate) | D-05 | Unknown key raises `SettingNotFoundError` | unit | `pytest tests/test_settings.py::test_unknown_key_raises_not_found` | ⬜ |
-| 13 | credentials | 2 | SEC-08 | D-01, D-03 | `set_provider_credential(db, 'anthropic', key='sk-x', ...)` UPDATEs row with `key_ciphertext` (encrypted), `last_four='sk-x'[-4:]`, `is_enabled` unchanged unless explicitly set | unit | `pytest tests/test_credentials.py::test_set_writes_ciphertext_and_last_four` | ⬜ |
-| 14 | credentials | 2 | SEC-08 | D-09, D-11 | `get_provider_credential(db, 'anthropic')` returns `ProviderCredential` with decrypted `key`, `model_name`, `last_four`; `frozen=True, slots=True` enforced | unit | `pytest tests/test_credentials.py::test_get_returns_frozen_dataclass` | ⬜ |
-| 15 | credentials | 2 | SEC-08 | D-04, D-10 | Seeded empty row (`is_enabled=false, key_ciphertext=NULL`) → `get_provider_credential` returns None | unit | `pytest tests/test_credentials.py::test_disabled_or_empty_returns_none` | ⬜ |
-| 16 | credentials | 2 | SEC-08 | D-10 | Row with `is_enabled=false` and populated ciphertext still returns None | unit | `pytest tests/test_credentials.py::test_disabled_with_ciphertext_returns_none` | ⬜ |
-| 17 | credentials | 2 | SEC-08, SEC-09 | D-15 | Orphaned ciphertext (key removed from `APP_ENCRYPTION_KEY`) → `get_provider_credential` returns None AND emits `ENCRYPTION_DECRYPT_FAILED` event | unit | `pytest tests/test_credentials.py::test_orphan_ciphertext_returns_none_and_emits` | ⬜ |
-| 18 | credentials | 2 | SEC-08 | D-01 | Rotating an existing provider (`set_provider_credential` again) overwrites all four fields atomically; old ciphertext no longer present | unit | `pytest tests/test_credentials.py::test_rotation_overwrites_in_place` | ⬜ |
-| 19 | credentials | 2 | SEC-08 | D-08 | `set_provider_credential` emits `ADMIN_API_CREDENTIAL_SET` with `provider`, `last_four`, `model_name`, `by_user_id` — never logs `key` or `key_ciphertext` | unit | `pytest tests/test_credentials.py::test_set_emits_event_without_key` | ⬜ |
-| 20 | credentials | 2 | SEC-08 | D-14 | `rewrap_if_needed(db)` on first deploy with empty credentials no-ops, leaves fingerprint NULL | unit | `pytest tests/test_credentials.py::test_rewrap_no_credentials_noop` | ⬜ |
-| 21 | credentials | 2 | SEC-08 | D-14 | `rewrap_if_needed(db)` when fingerprint matches current primary no-ops (idempotent) | unit | `pytest tests/test_credentials.py::test_rewrap_idempotent_when_fingerprint_matches` | ⬜ |
-| 22 | credentials | 2 | SEC-08 | D-14 | `rewrap_if_needed(db)` on key rotation re-encrypts every populated row under new primary, writes new fingerprint, emits `ENCRYPTION_REWRAP_COMPLETED` with `row_count` | integration | `pytest tests/test_credentials.py::test_rewrap_rotates_ciphertexts_and_writes_fingerprint` | ⬜ |
-| 23 | migration | 1 | SEC-08 | D-04 | Alembic `upgrade head` creates `api_credentials` table with `(provider, key_ciphertext bytea, last_four, model_name, is_enabled, created_at, updated_at, updated_by_user_id)` and CHECK `provider IN ('anthropic','openai')` | integration | `pytest tests/test_migrations.py::test_phase3_creates_api_credentials` | ⬜ |
-| 24 | migration | 1 | SEC-08 | D-04 | Migration seeds two `api_credentials` rows: `('anthropic', NULL, NULL, NULL, false, ...)` and `('openai', NULL, NULL, NULL, false, ...)` | integration | `pytest tests/test_migrations.py::test_phase3_seeds_provider_rows` | ⬜ |
-| 25 | migration | 1 | SEC-08 | (specifics) | Migration adds `encryption_key_primary_fingerprint` row to `app_settings` with `value_type='null'`, `value=NULL` | integration | `pytest tests/test_migrations.py::test_phase3_adds_fingerprint_setting` | ⬜ |
-| 26 | lifespan | 3 | SEC-09 | D-16 | App startup executes `encryption.startup_check()` → `credentials.rewrap_if_needed(db)` → `settings.prewarm_cache(db)` in order; bad key short-circuits before DB I/O | integration | `pytest tests/test_lifespan.py::test_phase3_hooks_run_in_order` | ⬜ |
-| 27 | safety | — | SEC-08 (SEC-6) | (CLAUDE.md) | No Pydantic model in `app/` has `api_key` or decrypted-key field; `ApiCredential` model does not expose `key_ciphertext` to API responses | unit | `pytest tests/test_credentials.py::test_no_pydantic_carries_decrypted_key` (placeholder — Phase 12 owns the formal grep test per ROADMAP §3 Notes) | ⬜ |
+| 1 | 02 (impl) + 06 (test) | 1 | SEC-08 | D-09, D-12 | `decrypt(encrypt(b"x")) == b"x"` round-trip | unit | `pytest tests/services/test_encryption.py::test_encrypt_decrypt_roundtrip` | ✅ |
+| 2 | 02 (impl) + 06 (test) | 1 | SEC-08 | D-09 | Token encrypted under primary key K1 decrypts after rotation `(K2, K1)` (K1 now secondary) | unit | `pytest tests/services/test_encryption.py::test_rotation_decrypts_old_token` | ✅ |
+| 3 | 02 (impl) + 06 (test) | 1 | SEC-08 | D-12 | Token encrypted under K1 fails to decrypt when MultiFernet has only `[K3]` (`InvalidToken`) | unit | `pytest tests/services/test_encryption.py::test_unknown_key_raises_invalid_token` | ✅ |
+| 4 | 02 (impl) + 06 (test) | 1 | SEC-09 | D-13 | `startup_check()` raises `EncryptionStartupError` when `APP_ENCRYPTION_KEY` is empty/malformed | unit | `pytest tests/services/test_encryption.py::test_startup_check_fails_loudly_on_empty_key` | ✅ |
+| 5 | 02 (impl) + 06 (test) | 1 | SEC-09 | D-13 | `startup_check()` returns None and emits `event=ENCRYPTION_STARTUP_OK` on healthy key | unit | `pytest tests/services/test_encryption.py::test_startup_check_emits_ok_event` | ✅ |
+| 6 | 02 (impl) + 06 (test) | 1 | SEC-08 | D-14 | `primary_key_fingerprint()` returns deterministic SHA-256 hex of first key string | unit | `pytest tests/services/test_encryption.py::test_fingerprint_stable_and_hex` | ✅ |
+| 7 | 03 (impl) + 06 (test) | 1 | (substrate) | D-06 | `prewarm_cache(db)` loads every `app_settings` row into `_cache` with coerced values | unit | `pytest tests/services/test_settings.py::test_prewarm_loads_all_rows` | ✅ |
+| 8 | 03 (impl) + 06 (test) | 1 | (substrate) | D-05 | `get_str` / `get_int` / `get_bool` / `get_json` return coerced values; `'null'` rows → `None` | unit | `pytest tests/services/test_settings.py::test_typed_accessors_coerce` | ✅ |
+| 9 | 03 (impl) + 06 (test) | 1 | (substrate) | D-05 | Accessor type mismatch raises `SettingTypeError` (e.g., `get_int` on a string row) | unit | `pytest tests/services/test_settings.py::test_type_mismatch_raises` | ✅ |
+| 10 | 03 (impl) + 06 (test) | 1 | (substrate) | D-08 | `set_setting(db, key, value, *, by_user_id)` UPDATEs row, invalidates cache, next read returns new value | unit | `pytest tests/services/test_settings.py::test_write_through_invalidate` | ✅ |
+| 11 | 03 (impl) + 06 (test) | 1 | (substrate) | D-08 | `set_setting` emits structured event `ADMIN_APP_SETTING_CHANGED` with `setting_key`, `value_type`, `user_id` | unit | `pytest tests/services/test_settings.py::test_emits_admin_app_setting_changed_event` | ✅ |
+| 12 | 03 (impl) + 06 (test) | 1 | (substrate) | D-05 | Unknown key raises `SettingNotFoundError` | unit | `pytest tests/services/test_settings.py::test_unknown_key_raises_not_found` | ✅ |
+| 13 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-01, D-03 | `set_provider_credential(db, 'anthropic', key='sk-x', ...)` UPDATEs row with `key_ciphertext` (encrypted), `last_four='sk-x'[-4:]`, `is_enabled` unchanged unless explicitly set | unit | `pytest tests/services/test_credentials.py::test_set_provider_credential_writes_ciphertext_and_last_four` | ✅ |
+| 14 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-09, D-11 | `get_provider_credential(db, 'anthropic')` returns `ProviderCredential` with decrypted `key`, `model_name`, `last_four`; `frozen=True, slots=True` enforced | unit | `pytest tests/services/test_credentials.py::test_get_returns_frozen_dataclass` | ✅ |
+| 15 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-04, D-10 | Seeded empty row (`is_enabled=false, key_ciphertext=NULL`) → `get_provider_credential` returns None | unit | `pytest tests/services/test_credentials.py::test_disabled_or_empty_returns_none` | ✅ |
+| 16 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-10 | Row with `is_enabled=false` and populated ciphertext still returns None | unit | `pytest tests/services/test_credentials.py::test_disabled_with_ciphertext_returns_none` | ✅ |
+| 17 | 04 (impl) + 06 (test) | 2 | SEC-08, SEC-09 | D-15 | Orphaned ciphertext (key removed from `APP_ENCRYPTION_KEY`) → `get_provider_credential` returns None AND emits `ENCRYPTION_DECRYPT_FAILED` event | unit | `pytest tests/services/test_credentials.py::test_orphan_ciphertext_returns_none_and_emits` | ✅ |
+| 18 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-01 | Rotating an existing provider (`set_provider_credential` again) overwrites all four fields atomically; old ciphertext no longer present | unit | `pytest tests/services/test_credentials.py::test_rotation_overwrites_in_place` | ✅ |
+| 19 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-08 | `set_provider_credential` emits `ADMIN_API_CREDENTIAL_SET` with `provider`, `last_four`, `model_name`, `by_user_id` — never logs `key` or `key_ciphertext` | unit | `pytest tests/services/test_credentials.py::test_set_emits_event_without_key` | ✅ |
+| 20 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-14 | `rewrap_if_needed(db)` on first deploy with empty credentials no-ops, leaves fingerprint NULL | unit | `pytest tests/services/test_credentials.py::test_rewrap_no_credentials_noop` | ✅ |
+| 21 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-14 | `rewrap_if_needed(db)` when fingerprint matches current primary no-ops (idempotent) | unit | `pytest tests/services/test_credentials.py::test_rewrap_idempotent_when_fingerprint_matches` | ✅ |
+| 22 | 04 (impl) + 06 (test) | 2 | SEC-08 | D-14 | `rewrap_if_needed(db)` on key rotation re-encrypts every populated row under new primary, writes new fingerprint, emits `ENCRYPTION_REWRAP_COMPLETED` with `row_count` | integration | `pytest tests/services/test_credentials.py::test_rewrap_rotates_ciphertexts_and_writes_fingerprint` | ✅ |
+| 23 | 01 (impl) + 06 (test) | 1 | SEC-08 | D-04 | Alembic `upgrade head` creates `api_credentials` table with `(provider, key_ciphertext bytea, last_four, model_name, is_enabled, created_at, updated_at, updated_by_user_id)` and CHECK `provider IN ('anthropic','openai')` | integration | `pytest tests/test_migrations.py::test_api_credentials_table_exists tests/test_migrations.py::test_api_credentials_columns tests/test_migrations.py::test_api_credentials_provider_check_constraint` | ✅ |
+| 24 | 01 (impl) + 06 (test) | 1 | SEC-08 | D-04 | Migration seeds two `api_credentials` rows: `('anthropic', NULL, NULL, NULL, false, ...)` and `('openai', NULL, NULL, NULL, false, ...)` | integration | `pytest tests/test_migrations.py::test_api_credentials_seeded_with_two_rows` | ✅ |
+| 25 | 01 (impl) + 06 (test) | 1 | SEC-08 | (specifics) | Migration adds `encryption_key_primary_fingerprint` row to `app_settings` with `value_type='null'`, `value=NULL` | integration | `pytest tests/test_migrations.py::test_app_settings_has_encryption_key_primary_fingerprint_row` | ✅ |
+| 26 | 05 (impl) + 06 (test) | 3 | SEC-09 | D-16 | App startup executes `encryption.startup_check()` → `credentials.rewrap_if_needed(db)` → `settings.prewarm_cache(db)` in order; bad key short-circuits before DB I/O | integration | `pytest tests/test_lifespan_phase3.py::test_phase3_hooks_run_in_order` | ✅ |
+| 27 | 04 (impl) + 06 (test) | — | SEC-08 (SEC-6) | (CLAUDE.md) | No Pydantic model in `app/` has `api_key` or decrypted-key field; `ApiCredential` model does not expose `key_ciphertext` to API responses | unit | `pytest tests/services/test_credentials.py::test_no_pydantic_carries_decrypted_key` (placeholder — Phase 12 owns the formal grep test per ROADMAP §3 Notes) | ✅ |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -75,13 +75,13 @@ created: 2026-05-18
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_encryption.py` — new file; covers rows 1–6
-- [ ] `tests/test_settings.py` — new file; covers rows 7–12
-- [ ] `tests/test_credentials.py` — new file; covers rows 13–21, 27
-- [ ] `tests/test_migrations.py` — new file OR extend Phase 0's migration tests; covers rows 22–25
-- [ ] `tests/test_lifespan.py` — new file OR extend Phase 0/1 lifespan tests; covers row 26
-- [ ] `tests/conftest.py` — extend with `fernet_key`, `multi_fernet_with_keys`, `monkeypatched_app_encryption_key` fixtures (per RESEARCH.md test patterns)
-- [ ] No new framework install — pytest 9.x already present from Phase 0
+- [x] `tests/services/test_encryption.py` — new file; covers rows 1–6 (Plan 03-06 Task 2)
+- [x] `tests/services/test_settings.py` — new file; covers rows 7–12 (Plan 03-06 Task 3)
+- [x] `tests/services/test_credentials.py` — new file; covers rows 13–22, 27 (Plan 03-06 Task 4)
+- [x] `tests/test_migrations.py` — extended; covers rows 23–25 (Plan 03-06 Task 5)
+- [x] `tests/test_lifespan_phase3.py` — new file; covers row 26 (Plan 03-06 Task 6)
+- [x] `tests/conftest.py` — extended with `fernet_key`, `fernet_key_str`, `monkeypatched_app_encryption_key` fixtures (Plan 03-06 Task 1)
+- [x] No new framework install — pytest 9.x already present from Phase 0
 
 ---
 
@@ -96,11 +96,11 @@ created: 2026-05-18
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (5 new test files + conftest extensions)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s (quick command < 3s, full suite < 25s)
-- [ ] `nyquist_compliant: true` set in frontmatter after planner maps task IDs into the Per-Task Verification Map
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (5 new test files + conftest extensions)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s (quick command < 3s, full suite < 25s)
+- [x] `nyquist_compliant: true` set in frontmatter after planner maps task IDs into the Per-Task Verification Map
 
-**Approval:** pending
+**Approval:** approved 2026-05-18 (Plan 03-06 — every Validation Map row now has an automated test).
