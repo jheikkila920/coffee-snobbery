@@ -125,7 +125,14 @@ Plans:
   2. A missing or malformed `APP_ENCRYPTION_KEY` causes startup to fail loudly with a clear error message — the app does not boot into a state where encrypted writes would silently fail.
   3. `app_settings` table is queryable via `services/settings.py` with `value_type`-aware coercion (`string`, `integer`, `boolean`, `json`); reads are cached in-memory and invalidated on write.
   4. `api_credentials` rows persist key material only as ciphertext; reading a row through the service returns a transient dataclass holding the decrypted key — no Pydantic model includes the decrypted field, so `model_dump()` cannot leak it.
-**Plans:** TBD
+**Plans:** 6 plans
+Plans:
+- [x] 03-01-PLAN.md — `api_credentials` table + ApiCredential model + migration with 2-row seed and `encryption_key_primary_fingerprint` app_settings row (SEC-08)
+- [x] 03-02-PLAN.md — `app/services/encryption.py` MultiFernet primitives + `startup_check` + `primary_key_fingerprint`; 5 new event constants in `app/events.py` (SEC-08, SEC-09)
+- [x] 03-03-PLAN.md — `app/services/settings.py` typed reader + module-level cache + write-through invalidation + audit emit (SEC-08)
+- [ ] 03-04-PLAN.md — `app/services/credentials.py` CRUD + ProviderCredential frozen+slots dataclass + `rewrap_if_needed` (SEC-08, SEC-09)
+- [ ] 03-05-PLAN.md — `app/main.py` lifespan wires the three Phase 3 hooks in D-16 order (SEC-08, SEC-09)
+- [ ] 03-06-PLAN.md — Test files for encryption / settings / credentials / migrations / lifespan; flip `nyquist_compliant: true` (SEC-08, SEC-09)
 **Notes:** Carries SEC-2 (MultiFernet from day 1 — the cheapest moment to install rotation) and SEC-6 (no Pydantic model carries decrypted `api_key`; CI grep test for `model_dump\(\)` on `ApiCredential` lands in Phase 12). The `app_settings` seed rows (`recommendation_region`, `min_sessions_for_ai`, `min_flavor_notes_for_ai`, `ai_primary_max_searches`, `ai_broadened_max_searches`, `anthropic_web_search_tool_version`, `openai_web_search_tool_version`, `setup_completed`) ship in the Phase 0 migration; this phase wires the reader.
 
 ### Phase 4: Shared Catalog
