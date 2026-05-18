@@ -200,3 +200,108 @@ def test_redactor_scrubs_sensitive_keys() -> None:
     buf3, _ = _attach_capture_handler()
     structlog.get_logger("test").info("upper", PASSWORD="UPPER-SECRET")
     assert "UPPER-SECRET" not in buf3.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# Plan 02-10 — D-15 reason-field assertions for the real /login handler       #
+# --------------------------------------------------------------------------- #
+#
+# These tests were originally Task 5 of Plan 02-07; they were lifted into
+# Plan 02-10 during plan-checker revision so 02-07 stays under the 5-task
+# threshold. They target the real ``/login`` handler (Plan 02-07 Task 2)
+# so they cannot run until 02-07 is merged — which is the case in Wave 5.
+#
+# D-15 logging policy (Phase 1 carried, asserted here on the real handler):
+#   * auth.login_failed reason=user_not_found  → NO user_id, NO attempted_username
+#   * auth.login_failed reason=bad_password    → user_id, NO attempted_username
+#   * auth.login_failed reason=inactive        → user_id, NO attempted_username
+#
+# The handler emits the lines via ``log.info(AUTH_LOGIN_FAILED, ...)`` per
+# the contract in ``app/routers/auth.py`` module docstring.
+
+
+def test_login_failed_no_username_on_user_not_found(client) -> None:
+    """D-15: ``reason=user_not_found`` has NO ``user_id`` and NO ``attempted_username``."""
+    try:
+        from app.routers.auth import router  # noqa: F401
+    except ImportError:
+        pytest.skip("Wave 4 dep: app.routers.auth (Plan 02-07)")
+    configure_logging(format="json", level="INFO")
+    buf, _ = _attach_capture_handler()
+    # Prime the CSRF cookie via a safe GET so the POST is not blocked by
+    # CSRFMiddleware before the handler runs (sensitive_cookies only fires
+    # when session_id is present, but priming covers both code paths).
+    primer = client.get("/")
+    token = primer.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF cookie not primed by GET /")
+    client.post(
+        "/login",
+        data={
+            "X-CSRF-Token": token,
+            "username": "no-such-user-exists",
+            "password": "twelve-chars-min-password",
+        },
+        headers={"X-CSRF-Token": token},
+        cookies={"csrftoken": token},
+    )
+    # Find the auth.login_failed line emitted by the handler.
+    lines = [
+        json.loads(ln)
+        for ln in buf.getvalue().splitlines()
+        if ln.strip() and "auth.login_failed" in ln
+    ]
+    assert lines, f"no auth.login_failed event captured; raw buf: {buf.getvalue()!r}"
+    record = lines[-1]
+    assert record["event"] == "auth.login_failed"
+    assert record["reason"] == "user_not_found"
+    assert "user_id" not in record, (
+        "D-15: user_not_found branch must NOT log user_id; "
+        f"got record: {record!r}"
+    )
+    assert "attempted_username" not in record, (
+        "D-15: never log attempted_username; "
+        f"got record: {record!r}"
+    )
+
+
+def test_login_failed_includes_user_id_on_bad_password(
+    client, seeded_regular_user
+) -> None:
+    """D-15: ``reason=bad_password`` DOES include ``user_id`` (NO ``attempted_username``)."""
+    try:
+        from app.routers.auth import router  # noqa: F401
+    except ImportError:
+        pytest.skip("Wave 4 dep: app.routers.auth (Plan 02-07)")
+    configure_logging(format="json", level="INFO")
+    buf, _ = _attach_capture_handler()
+    primer = client.get("/")
+    token = primer.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF cookie not primed by GET /")
+    client.post(
+        "/login",
+        data={
+            "X-CSRF-Token": token,
+            "username": seeded_regular_user["user"].username,
+            "password": "WRONG-password-12345",
+        },
+        headers={"X-CSRF-Token": token},
+        cookies={"csrftoken": token},
+    )
+    lines = [
+        json.loads(ln)
+        for ln in buf.getvalue().splitlines()
+        if ln.strip() and "auth.login_failed" in ln
+    ]
+    assert lines, f"no auth.login_failed event captured; raw buf: {buf.getvalue()!r}"
+    record = lines[-1]
+    assert record["event"] == "auth.login_failed"
+    assert record["reason"] == "bad_password"
+    assert record.get("user_id") == seeded_regular_user["user"].id, (
+        f"D-15: bad_password branch must log user_id; got record: {record!r}"
+    )
+    assert "attempted_username" not in record, (
+        "D-15: never log attempted_username; "
+        f"got record: {record!r}"
+    )
