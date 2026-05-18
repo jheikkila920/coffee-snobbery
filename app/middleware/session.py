@@ -7,10 +7,14 @@ downstream router can read:
 
 * ``scope["state"]["session"]`` — the :class:`app.models.session.Session`
   row, or ``None`` when no live session exists.
-* ``scope["state"]["user"]`` — Phase 1 stub: ``{"user_id": int}`` dict
-  when a session exists, ``None`` otherwise. **Phase 2 replaces** the
-  stub with a real :class:`app.models.user.User` row lookup once
-  ``/login`` lands.
+* ``scope["state"]["user"]`` — the :class:`app.models.user.User` row
+  when a live session resolves to an active user; ``None`` otherwise.
+  Plan 02-06 D-09 swapped the Phase 1 ``{"user_id": int}`` stub for
+  the full User row so downstream routes and templates can read
+  ``.username`` / ``.is_admin`` / ``.email`` directly. D-10
+  fail-closed: when the user row is missing OR ``is_active=false``,
+  the session row is deleted, the cookie is cleared, and ``user`` is
+  ``None``.
 
 Pure ASGI (defines ``async def __call__(self, scope, receive, send)``).
 **Do not** wrap this class in Starlette's deprecated request-response
@@ -39,6 +43,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.services.sessions import (
@@ -175,20 +180,46 @@ class SessionMiddleware:
                         scope["state"]["user"] = None
                         scope["state"]["session"] = None
                     else:
-                        scope["state"]["session"] = session_row
-                        # TODO Phase 2: replace stub with full User row
-                        # lookup. /debug/whoami (the only Phase 1
-                        # consumer of request.state.user) treats the
-                        # presence of a dict as "authenticated" for now.
-                        scope["state"]["user"] = {"user_id": session_row.user_id}
+                        # D-09: load the FULL User row in the same async
+                        # session scope already open for the session
+                        # lookup. Local import keeps the model module
+                        # out of the middleware module's import graph
+                        # until needed (RESEARCH Open Q6 — defensive
+                        # against cyclic-import risk at app startup).
+                        from app.models.user import User
 
-                        # Write-throttled sliding refresh
-                        # (T-04-06 mitigation).
-                        elapsed = (
-                            datetime.now(UTC) - session_row.last_seen
-                        ).total_seconds()
-                        if elapsed > self.refresh_threshold_seconds:
-                            await refresh_last_seen(db, session_id)
+                        user_result = await db.execute(
+                            select(User).where(User.id == session_row.user_id)
+                        )
+                        user_row = user_result.scalar_one_or_none()
+
+                        if user_row is None or not user_row.is_active:
+                            # D-10: deleted-or-deactivated user →
+                            # fail-closed, mirroring the expired-session
+                            # branch above. Deactivating via the future
+                            # admin tool logs the user out on their
+                            # next request — no waiting for the 30-day
+                            # cookie. ASVS V3.3.2 (immediate revocation).
+                            await delete_session(db, session_id)
+                            clear_cookie = True
+                            scope["state"]["user"] = None
+                            scope["state"]["session"] = None
+                        else:
+                            scope["state"]["session"] = session_row
+                            # Public contract change: dict → User.
+                            # Downstream routes (/admin, /debug/proxy,
+                            # Phase 4+ catalog) read .username /
+                            # .is_admin / .email directly.
+                            scope["state"]["user"] = user_row
+
+                            # Write-throttled sliding refresh
+                            # (T-04-06 mitigation) — unchanged from
+                            # Phase 1.
+                            elapsed = (
+                                datetime.now(UTC) - session_row.last_seen
+                            ).total_seconds()
+                            if elapsed > self.refresh_threshold_seconds:
+                                await refresh_last_seen(db, session_id)
 
         async def send_wrapper(message: Message) -> None:
             """Inject a clear-cookie Set-Cookie header on the response start."""
