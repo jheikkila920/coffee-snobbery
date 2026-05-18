@@ -23,11 +23,14 @@ inside the fixture body keeps collection clean.
 
 from __future__ import annotations
 
+import asyncio
 import os
-from collections.abc import Iterator
+import uuid
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
+import pytest_asyncio
 
 # Wave 0 env-var stubs. Values are syntactically valid but not real secrets;
 # the test suite does not perform encryption / decryption round-trips in Wave 0.
@@ -159,3 +162,218 @@ def forwarded_headers() -> dict[str, str]:
         "X-Forwarded-Proto": "https",
         "X-Forwarded-For": "203.0.113.7",
     }
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2 fixtures (Plan 02-01)                                               #
+# --------------------------------------------------------------------------- #
+#
+# Wave 0 of Phase 2 lands the four fixtures every other Phase-2 plan depends
+# on. Each fixture wraps its Phase-2 dependency imports in ``try/except
+# ImportError`` so the conftest stays collectable BEFORE Plans 02 / 04 / etc.
+# land the symbols the seeded fixtures reach for. The contract is "every
+# test file is collectable, even if most tests skip" — same as Wave 0 of
+# Phase 1.
+
+
+@pytest_asyncio.fixture
+async def async_client(app: Any) -> AsyncIterator[Any]:
+    """``httpx.AsyncClient`` wired to the FastAPI ASGI app via ``ASGITransport``.
+
+    Required by AUTH-02 (concurrent ``/setup`` race) — the test fires two
+    ``async_client.post('/setup', ...)`` coroutines via ``asyncio.gather``
+    and asserts exactly one wins the ``FOR UPDATE`` lock. A sync
+    ``TestClient`` cannot exercise that path because it serialises
+    requests.
+
+    Lazy-imports ``httpx`` so a missing dev dep yields a clean skip rather
+    than a collection error (httpx is in requirements.txt as of Phase 0,
+    so this is defensive — not expected to fire).
+    """
+    try:
+        import httpx
+    except ImportError:
+        pytest.skip("httpx not installed (Phase 0 requirement)")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        yield ac
+
+
+@pytest.fixture(autouse=True)
+def fresh_db() -> Iterator[None]:
+    """Reset ``users`` + ``app_settings.setup_completed`` before each test.
+
+    AUTH-01 (zero-users happy path) and AUTH-02 (concurrent setup race)
+    BOTH require ``setup_completed='false'`` and zero rows in ``users``
+    at the start of the test. Without this autouse reset, a successful
+    AUTH-01 leaves a user row behind that breaks AUTH-02 on the same
+    pytest session — and vice versa.
+
+    Autouse for the whole test directory so every Phase-2 test starts
+    clean. Tests that don't touch the DB pay only the TRUNCATE cost
+    (~1 ms on an empty users table). The DB-connection block is wrapped
+    in ``try/except`` so unit-only runs (Postgres unreachable) don't
+    error here — the test that genuinely needs the DB will skip via
+    its own ``try/except ImportError`` / ``OperationalError`` probe.
+
+    TRUNCATE on ``users`` cascades to ``sessions`` via the FK from
+    ``sessions.user_id``; the explicit ``DELETE FROM sessions`` after
+    the TRUNCATE is a defensive belt-and-braces in case the schema
+    evolves to drop the cascade.
+    """
+    try:
+        from app.db import engine
+    except ImportError:
+        yield
+        return
+    try:
+        from sqlalchemy import text
+    except ImportError:
+        yield
+        return
+
+    # Fast-fail probe — psycopg's default connect timeout is OS-level
+    # (~30s on Linux, longer on Windows). When pytest runs on the host
+    # (no docker compose), every test would otherwise pay that timeout
+    # via the autouse path. A 0.5s TCP probe matches the household-scale
+    # "if Postgres isn't already reachable, skip cleanly" intent without
+    # adding any cost in docker (where the loopback socket is instant).
+    if not _postgres_reachable():
+        yield
+        return
+
+    try:
+        with engine.begin() as conn:
+            # Cascades to sessions (FK ON DELETE CASCADE per session model).
+            conn.execute(text("TRUNCATE TABLE users RESTART IDENTITY CASCADE"))
+            conn.execute(text("DELETE FROM sessions"))
+            conn.execute(
+                text("UPDATE app_settings SET value='false' WHERE key='setup_completed'")
+            )
+    except Exception:
+        # Postgres reachable but a table doesn't exist yet (e.g., the
+        # initial migration hasn't run in this test DB), or some other
+        # transient failure. Tests that need a real DB skip on their
+        # own probes; tests that don't are unaffected by the no-op.
+        pass
+
+    yield
+
+
+def _postgres_reachable() -> bool:
+    """Return True iff the configured Postgres host:port accepts a TCP connect.
+
+    Parses the host/port out of ``settings.DATABASE_URL`` and tries a 0.5s
+    socket connect. Returns False on any failure — DNS, refused, timeout,
+    parse error. Used by :func:`fresh_db` to skip the per-test TRUNCATE
+    when running on a host without docker compose.
+    """
+    try:
+        from urllib.parse import urlparse
+
+        from app.config import settings
+    except ImportError:
+        return False
+
+    try:
+        parsed = urlparse(settings.DATABASE_URL.replace("postgresql+psycopg://", "postgresql://"))
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 5432
+    except Exception:
+        return False
+
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except (OSError, socket.timeout):
+        return False
+
+
+def _seed_user(*, is_admin: bool) -> dict[str, Any]:
+    """Create a ``User`` + session row; return ``{user, session_id, signed_cookie}``.
+
+    Composition helper shared by :func:`seeded_admin_user` and
+    :func:`seeded_regular_user`. Pulls the password-hashing helper
+    (Plan 02-02 — ``app.services.auth``), the session-mint helper
+    (Phase 1 — ``app.services.sessions.regenerate_session``), and the
+    cookie signer (Phase 1 — ``app.signing.sign_session_id``).
+
+    Runs the async insert via ``asyncio.run`` because the calling
+    fixtures are SYNC — they support sync ``TestClient`` tests, not
+    async tests. ``asyncio.run`` opens a fresh event loop per call,
+    which is fine because pytest-asyncio only owns a loop during async
+    tests; sync fixtures execute outside any pytest-managed loop.
+    """
+    from app.main import async_session_factory
+    from app.models.user import User
+    from app.services.auth import hash_password
+    from app.services.sessions import regenerate_session
+    from app.signing import sign_session_id
+
+    async def _do() -> dict[str, Any]:
+        async with async_session_factory() as db:
+            suffix = uuid.uuid4().hex[:8]
+            uname = f"admin-{suffix}" if is_admin else f"user-{suffix}"
+            user = User(
+                username=uname,
+                email=f"{uname}@example.com",
+                password_hash=hash_password("twelve-chars-min-password"),
+                is_admin=is_admin,
+                is_active=True,
+            )
+            db.add(user)
+            await db.flush()
+            session_id = await regenerate_session(db, None, user.id)
+            await db.refresh(user)
+            return {
+                "user": user,
+                "session_id": session_id,
+                "signed_cookie": sign_session_id(session_id),
+            }
+
+    return asyncio.run(_do())
+
+
+@pytest.fixture
+def seeded_admin_user() -> dict[str, Any]:
+    """Create an ``is_admin=true`` user + live session.
+
+    Returns ``{"user": User, "session_id": uuid.UUID, "signed_cookie": str}``.
+    Tests pass ``cookies={"session_id": seeded_admin_user["signed_cookie"]}``
+    to ``client.get("/admin")`` to exercise the AUTH-09 admin-gate path.
+
+    Skips if either the Phase-2 ``hash_password`` (Plan 02) or the
+    Phase-1 ``regenerate_session`` is unavailable. The cookie signer
+    (``app.signing.sign_session_id``) lands in Phase 1 so is not
+    probed separately.
+    """
+    try:
+        from app.services.auth import hash_password  # noqa: F401
+    except ImportError:
+        pytest.skip("Wave 1 dependency: app.services.auth.hash_password (Plan 02)")
+    try:
+        from app.services.sessions import regenerate_session  # noqa: F401
+    except ImportError:
+        pytest.skip("Phase 1 dependency: app.services.sessions.regenerate_session")
+    return _seed_user(is_admin=True)
+
+
+@pytest.fixture
+def seeded_regular_user() -> dict[str, Any]:
+    """Create an ``is_admin=false`` user + live session.
+
+    Same shape as :func:`seeded_admin_user`. Exercises the AUTH-09
+    "non-admin → 403" branch of the three-state admin-gate test.
+    """
+    try:
+        from app.services.auth import hash_password  # noqa: F401
+    except ImportError:
+        pytest.skip("Wave 1 dependency: app.services.auth.hash_password (Plan 02)")
+    try:
+        from app.services.sessions import regenerate_session  # noqa: F401
+    except ImportError:
+        pytest.skip("Phase 1 dependency: app.services.sessions.regenerate_session")
+    return _seed_user(is_admin=False)
