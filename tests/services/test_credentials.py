@@ -67,14 +67,18 @@ def _reset_credentials_state(db) -> None:
     everything else NULL) and the fingerprint row back to value=NULL,
     value_type='null'.
     """
-    db.execute(text(
-        "UPDATE api_credentials SET key_ciphertext=NULL, last_four=NULL, "
-        "model_name=NULL, is_enabled=false, updated_by_user_id=NULL"
-    ))
-    db.execute(text(
-        "UPDATE app_settings SET value=NULL, value_type='null', "
-        "updated_by_user_id=NULL WHERE key='encryption_key_primary_fingerprint'"
-    ))
+    db.execute(
+        text(
+            "UPDATE api_credentials SET key_ciphertext=NULL, last_four=NULL, "
+            "model_name=NULL, is_enabled=false, updated_by_user_id=NULL"
+        )
+    )
+    db.execute(
+        text(
+            "UPDATE app_settings SET value=NULL, value_type='null', "
+            "updated_by_user_id=NULL WHERE key='encryption_key_primary_fingerprint'"
+        )
+    )
     db.commit()
     # The settings cache may hold a stale entry for the fingerprint row.
     # Force a fresh re-prewarm so the next test sees the typed-null
@@ -216,15 +220,11 @@ def test_disabled_with_ciphertext_returns_none(
                 model_name="m",
                 by_user_id=None,
             )
-            credentials_service.set_provider_enabled(
-                db, "anthropic", False, by_user_id=None
-            )
+            credentials_service.set_provider_enabled(db, "anthropic", False, by_user_id=None)
             row = db.execute(
                 select(ApiCredential).where(ApiCredential.provider == "anthropic")
             ).scalar_one()
-            assert row.key_ciphertext is not None, (
-                "ciphertext must survive a disable toggle"
-            )
+            assert row.key_ciphertext is not None, "ciphertext must survive a disable toggle"
             assert row.is_enabled is False
             assert credentials_service.get_provider_credential(db, "anthropic") is None
         finally:
@@ -273,15 +273,10 @@ def test_orphan_ciphertext_returns_none_and_emits(
             with structlog.testing.capture_logs() as captured:
                 result = credentials_service.get_provider_credential(db, "anthropic")
 
-            assert result is None, (
-                "orphan ciphertext (no key decrypts) must return None per D-15"
-            )
-            decrypt_failed = [
-                e for e in captured if e.get("event") == "encryption.decrypt_failed"
-            ]
+            assert result is None, "orphan ciphertext (no key decrypts) must return None per D-15"
+            decrypt_failed = [e for e in captured if e.get("event") == "encryption.decrypt_failed"]
             assert len(decrypt_failed) == 1, (
-                f"expected exactly one encryption.decrypt_failed; "
-                f"got {len(decrypt_failed)}"
+                f"expected exactly one encryption.decrypt_failed; got {len(decrypt_failed)}"
             )
             evt = decrypt_failed[0]
             assert evt.get("provider") == "anthropic"
@@ -392,9 +387,7 @@ def test_set_emits_event_without_key(
                     by_user_id=actor_id,
                 )
 
-            set_events = [
-                e for e in captured if e.get("event") == "admin.api_credential_set"
-            ]
+            set_events = [e for e in captured if e.get("event") == "admin.api_credential_set"]
             assert len(set_events) == 1, (
                 f"expected exactly one admin.api_credential_set; "
                 f"got {len(set_events)} (events: {[e.get('event') for e in captured]})"
@@ -465,14 +458,10 @@ def test_rewrap_no_credentials_noop(
                     AppSetting.key == "encryption_key_primary_fingerprint"
                 )
             ).one()
-            assert fp_after.value is None, (
-                "no-op rewrap must NOT write the fingerprint"
-            )
+            assert fp_after.value is None, "no-op rewrap must NOT write the fingerprint"
             assert fp_after.value_type == "null"
 
-            rewrap_events = [
-                e for e in captured if e.get("event") == "encryption.rewrap_completed"
-            ]
+            rewrap_events = [e for e in captured if e.get("event") == "encryption.rewrap_completed"]
             assert len(rewrap_events) == 0, (
                 f"no-op rewrap must NOT emit rewrap_completed; got {len(rewrap_events)}"
             )
@@ -577,9 +566,7 @@ def test_rewrap_rotates_ciphertexts_and_writes_fingerprint(
             # Stage 2: k2 is primary, k1 is secondary. Rewrap should
             # decrypt under k1 (still present), re-encrypt under k2 (new
             # primary), and write the new fingerprint.
-            monkeypatch.setattr(
-                "app.config.settings.APP_ENCRYPTION_KEY", f"{k2},{k1}"
-            )
+            monkeypatch.setattr("app.config.settings.APP_ENCRYPTION_KEY", f"{k2},{k1}")
             importlib.reload(enc_mod)
             # Force the settings cache to forget the pre-rotation
             # fingerprint so rewrap_if_needed sees stale_fp != new_fp.
@@ -609,9 +596,7 @@ def test_rewrap_rotates_ciphertexts_and_writes_fingerprint(
             assert cred is not None
             assert cred.key == "sk-rotate-test"
 
-            rewrap_events = [
-                e for e in captured if e.get("event") == "encryption.rewrap_completed"
-            ]
+            rewrap_events = [e for e in captured if e.get("event") == "encryption.rewrap_completed"]
             assert len(rewrap_events) == 1, (
                 f"expected one encryption.rewrap_completed; got {len(rewrap_events)}"
             )
@@ -624,6 +609,133 @@ def test_rewrap_rotates_ciphertexts_and_writes_fingerprint(
             # Restore the encryption module under a known-good key.
             monkeypatch.setattr("app.config.settings.APP_ENCRYPTION_KEY", k1)
             importlib.reload(enc_mod)
+
+
+def test_updated_at_advances_on_set_and_toggle(
+    monkeypatched_app_encryption_key: str,
+) -> None:
+    """Regression for CR-01: every write path advances ``updated_at``.
+
+    ``ApiCredential.updated_at`` is written via Core ``update()`` statements,
+    which bypass ORM ``onupdate=func.now()`` hooks. Each Core update site
+    must include ``updated_at=func.now()`` explicitly. This test exercises
+    ``set_provider_credential``, ``set_provider_enabled``, and the rewrap
+    path's ORM-style mutation.
+    """
+    _require_credentials_service()
+    _require_postgres()
+    import time
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.api_credential import ApiCredential
+    from app.services import credentials as credentials_service
+    from app.services import settings as settings_service
+
+    with SessionLocal() as db:
+        settings_service.prewarm_cache(db)
+        try:
+            seeded = db.execute(
+                select(ApiCredential.updated_at).where(ApiCredential.provider == "anthropic")
+            ).scalar_one()
+
+            credentials_service.set_provider_credential(
+                db,
+                "anthropic",
+                key="sk-test-aaaa",
+                model_name="m",
+                by_user_id=None,
+            )
+            db.expire_all()
+            after_set = db.execute(
+                select(ApiCredential.updated_at).where(ApiCredential.provider == "anthropic")
+            ).scalar_one()
+            assert after_set > seeded, (
+                f"updated_at must advance on set; seeded={seeded}, after_set={after_set}"
+            )
+
+            time.sleep(0.01)  # ensure now() advances at sub-second resolution
+            credentials_service.set_provider_enabled(db, "anthropic", False, by_user_id=None)
+            db.expire_all()
+            after_toggle = db.execute(
+                select(ApiCredential.updated_at).where(ApiCredential.provider == "anthropic")
+            ).scalar_one()
+            assert after_toggle > after_set, (
+                f"updated_at must advance on toggle; "
+                f"after_set={after_set}, after_toggle={after_toggle}"
+            )
+        finally:
+            _reset_credentials_state(db)
+
+
+def test_fingerprint_baseline_rewritten_on_every_set(
+    monkeypatched_app_encryption_key: str,
+) -> None:
+    """Regression for CR-02: fingerprint baseline is unconditionally rewritten on set.
+
+    A conditional ``if stored_fp is None`` guard left the fingerprint
+    stale after a mid-session APP_ENCRYPTION_KEY rotation. The invariant
+    "fingerprint == key the ciphertext is encrypted under" must hold
+    after every ``set_provider_credential`` call, not just the first.
+    """
+    _require_credentials_service()
+    _require_postgres()
+    import importlib
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.app_setting import AppSetting
+    from app.services import credentials as credentials_service
+    from app.services import encryption as enc_mod
+    from app.services import settings as settings_service
+
+    def _read_fp_from_db(session) -> str | None:
+        session.expire_all()
+        return session.execute(
+            select(AppSetting.value).where(AppSetting.key == "encryption_key_primary_fingerprint")
+        ).scalar_one()
+
+    with SessionLocal() as db:
+        settings_service.prewarm_cache(db)
+        try:
+            # First set establishes the baseline under key1.
+            credentials_service.set_provider_credential(
+                db, "anthropic", key="sk-aaaa1234", model_name="m", by_user_id=None
+            )
+            fp_after_first = _read_fp_from_db(db)
+            assert fp_after_first is not None, "first set must write fingerprint"
+
+            # Simulate mid-session key rotation: swap primary key, reload
+            # encryption module so primary_key_fingerprint returns the
+            # new value.
+            new_key = "v2EKHcGqDpyu1MEqLkUaCSEHM8nP7p9C28xX-PoMUjQ="
+            from app.config import settings as cfg
+
+            original_key = cfg.APP_ENCRYPTION_KEY
+            cfg.APP_ENCRYPTION_KEY = new_key
+            try:
+                importlib.reload(enc_mod)
+                expected_fp = enc_mod.primary_key_fingerprint()
+                assert expected_fp != fp_after_first, (
+                    "test sanity check: rotated key must yield a different fingerprint"
+                )
+
+                # Second set under the rotated key MUST rewrite the fingerprint.
+                credentials_service.set_provider_credential(
+                    db, "openai", key="sk-bbbb5678", model_name="gpt", by_user_id=None
+                )
+                fp_after_second = _read_fp_from_db(db)
+                assert fp_after_second == expected_fp, (
+                    f"fingerprint must reflect the current primary after every set; "
+                    f"expected {expected_fp}, got {fp_after_second}"
+                )
+            finally:
+                cfg.APP_ENCRYPTION_KEY = original_key
+                importlib.reload(enc_mod)
+        finally:
+            _reset_credentials_state(db)
 
 
 def test_no_pydantic_carries_decrypted_key() -> None:

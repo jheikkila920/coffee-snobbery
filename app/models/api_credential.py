@@ -64,11 +64,13 @@ class ApiCredential(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
+    # Note: no `onupdate=func.now()` — credentials.py writes via Core update()
+    # statements, which bypass ORM onupdate hooks. Every Core update in
+    # credentials.py must explicitly include `updated_at=func.now()` in values().
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
-        onupdate=func.now(),
     )
     updated_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger,

@@ -54,7 +54,7 @@ from typing import Literal
 
 import structlog
 from cryptography.fernet import InvalidToken
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.events import (
@@ -225,40 +225,33 @@ def set_provider_credential(
             model_name=model_name,
             is_enabled=True,
             updated_by_user_id=by_user_id,
+            updated_at=func.now(),
         )
     )
 
-    # Pitfall 6 (RESEARCH.md): first-credential-set fingerprint baseline.
-    # Without this, ``rewrap_if_needed`` would compare ``stored_fp=None``
-    # against the current ``new_fp`` on every lifespan boot, always
-    # decide "rotation in progress", and spam ``encryption.rewrap_completed``
-    # with a zero row count. The defensive catch of SettingNotFoundError
-    # covers the pre-prewarm path; ``get_str`` returns ``None`` for the
-    # seeded ``value_type='null'`` row when prewarm has run, so the
-    # ``stored_fp is None`` branch handles both cases uniformly.
-    try:
-        stored_fp = settings_service.get_str(_FINGERPRINT_KEY)
-    except settings_service.SettingNotFoundError:
-        stored_fp = None
-    if stored_fp is None:
-        # Documented exception: direct UPDATE bypasses ``set_setting``
-        # so the fingerprint and credential writes land in ONE
-        # transaction AND we can flip ``value_type`` from ``'null'`` to
-        # ``'string'`` (set_setting does NOT change ``value_type`` by
-        # contract — Plan 03-03 Task 1).
-        db.execute(
-            update(AppSetting)
-            .where(AppSetting.key == _FINGERPRINT_KEY)
-            .values(
-                value=encryption.primary_key_fingerprint(),
-                value_type="string",
-                updated_by_user_id=by_user_id,
-            )
+    # Fingerprint baseline write is unconditional: the ciphertext we just
+    # wrote is always encrypted under the current primary key, so the
+    # stored fingerprint must always reflect the current primary. A
+    # conditional ``if stored_fp is None`` guard left the fingerprint
+    # stale after a mid-session APP_ENCRYPTION_KEY rotation (rewrap on
+    # next restart self-heals, but the invariant is violated between
+    # the set and the restart).
+    #
+    # Documented exception: direct UPDATE bypasses ``set_setting`` so the
+    # fingerprint and credential writes land in ONE transaction AND we
+    # can flip ``value_type`` from ``'null'`` to ``'string'`` (set_setting
+    # does NOT change ``value_type`` by contract — Plan 03-03 Task 1).
+    db.execute(
+        update(AppSetting)
+        .where(AppSetting.key == _FINGERPRINT_KEY)
+        .values(
+            value=encryption.primary_key_fingerprint(),
+            value_type="string",
+            updated_by_user_id=by_user_id,
         )
-        # Write-through invalidation, mirroring set_setting's contract
-        # (commit-then-invalidate is fine here because the commit below
-        # is the single transaction owning BOTH UPDATEs).
-        settings_service.invalidate(_FINGERPRINT_KEY)
+    )
+    # Write-through invalidation, mirroring set_setting's contract.
+    settings_service.invalidate(_FINGERPRINT_KEY)
 
     db.commit()
     log.info(
@@ -290,7 +283,11 @@ def set_provider_enabled(
     db.execute(
         update(ApiCredential)
         .where(ApiCredential.provider == provider)
-        .values(is_enabled=enabled, updated_by_user_id=by_user_id)
+        .values(
+            is_enabled=enabled,
+            updated_by_user_id=by_user_id,
+            updated_at=func.now(),
+        )
     )
     db.commit()
     log.info(
@@ -381,6 +378,7 @@ def rewrap_if_needed(db: Session) -> None:
             )
             continue
         row.key_ciphertext = encryption.encrypt(plain)
+        row.updated_at = func.now()
         rewrapped_count += 1
 
     # Documented exception: direct UPDATE of the fingerprint row keeps
