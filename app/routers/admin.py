@@ -30,7 +30,7 @@ router = APIRouter()
 @router.get("/admin", response_class=HTMLResponse)
 def admin_stub(
     request: Request,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_admin),  # noqa: B008 — FastAPI canonical Form 1; Depends() in arg default is the framework idiom (see 02-RESEARCH §"Depends(require_admin) pattern").
 ) -> Response:
     """D-13: Admin stub — 200 with literal body, gated by is_admin.
 
