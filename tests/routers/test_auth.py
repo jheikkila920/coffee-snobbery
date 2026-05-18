@@ -7,13 +7,15 @@ Covers VALIDATION map rows for AUTH-01 / AUTH-02 / AUTH-03 / AUTH-06 /
 AUTH-07 plus D-07 (generic-error 200 re-render) and D-12 (POST-only
 ``/logout`` with CSRF).
 
-Runtime-xfail pattern (mirrors ``tests/routers/test_admin.py``)
----------------------------------------------------------------
+CSRF enforcement pattern (post Plan 02-10)
+------------------------------------------
 CSRF-gated negative tests (``test_login_csrf_blocked``,
-``test_logout_csrf_blocked``) cannot pass until **Plan 02-10** wires the
-``CSRFFormFieldShim`` into ``app.main``. Until then, a missing form-field
-token slips through; the assertions ``pytest.xfail`` with a note rather
-than failing.
+``test_logout_csrf_blocked``) send a placeholder ``session_id`` cookie to
+trigger ``CSRFMiddleware``'s ``sensitive_cookies={"session_id"}`` gate. The
+middleware then verifies the double-submit pair (cookie value vs header /
+form-field value); both are absent → 403. Plan 02-10 wires the
+``CSRFFormFieldShim`` so the form-field path is reachable; these negative
+tests prove the gate still fires when neither path is taken.
 
 ``_csrf_pair`` helper
 ---------------------
@@ -435,34 +437,38 @@ def test_logout_clears_session(client, seeded_regular_user) -> None:
 
 
 def test_login_csrf_blocked(client) -> None:
-    """CSRF: POST /login without token → 403 (xfails until Plan 02-10 shim wired)."""
+    """CSRF: POST /login without token → 403.
+
+    CSRFMiddleware (starlette-csrf 3.0) only enforces when a sensitive cookie
+    (``session_id``) is present — that is the double-submit-cookie pattern's
+    contract (see ``app/csrf.py:CSRF_SENSITIVE_COOKIES``). The test sends a
+    placeholder ``session_id`` cookie to trigger enforcement, then omits both
+    the header AND the form-field token so the shim has nothing to hoist.
+    Plan 02-10 wires the shim into ``app.main``; this test asserts that even
+    with the shim mounted, a CSRF-less POST is rejected with 403.
+    """
     _require_auth_router()
     r = client.post(
         "/login",
         data={"username": "x", "password": "y"},
+        cookies={"session_id": "placeholder-not-validated-csrf-fires-first"},
     )
-    # When CSRFMiddleware is wired (Phase 1) AND the CSRFFormFieldShim is
-    # mounted (Plan 02-10) AND a sensitive cookie ('session_id') triggers
-    # enforcement, a POST with no header AND no shim-hoisted form-field
-    # returns 403. Before Plan 02-10 the form-field route may slip through;
-    # xfail on that interim.
-    if r.status_code != 403:
-        pytest.xfail(
-            f"CSRF enforcement expected but got {r.status_code} — "
-            "Plan 02-10 wires the CSRFFormFieldShim into app.main; this test "
-            "turns green then."
-        )
     assert r.status_code == 403
 
 
 def test_logout_csrf_blocked(client) -> None:
-    """CSRF + D-12: POST /logout without token → 403 (xfails until Plan 02-10 shim wired)."""
+    """CSRF + D-12: POST /logout without token → 403.
+
+    Sends a placeholder ``session_id`` cookie to trigger CSRFMiddleware's
+    sensitive-cookie gate (see ``test_login_csrf_blocked`` rationale).
+    The CSRF check fires before the route handler — the placeholder cookie
+    value is never validated by SessionMiddleware because the 403 short-
+    circuits the chain.
+    """
     _require_auth_router()
-    r = client.post("/logout", data={})
-    if r.status_code != 403:
-        pytest.xfail(
-            f"CSRF enforcement expected but got {r.status_code} — "
-            "Plan 02-10 wires the CSRFFormFieldShim into app.main; this test "
-            "turns green then."
-        )
+    r = client.post(
+        "/logout",
+        data={},
+        cookies={"session_id": "placeholder-not-validated-csrf-fires-first"},
+    )
     assert r.status_code == 403

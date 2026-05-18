@@ -18,9 +18,10 @@ Middleware order (Starlette adds reverse-of-add; last added is OUTERMOST):
 
     1. SessionMiddleware            (INNERMOST — closest to route handler)
     2. CSRFMiddleware (starlette_csrf)
-    3. FragmentCacheHeadersMiddleware
-    4. SecurityHeadersMiddleware
-    5. RequestContextMiddleware     (OUTERMOST — closest to wire)
+    3. CSRFFormFieldShim            (NEW Phase 2 D-15 — hoists form field to header)
+    4. FragmentCacheHeadersMiddleware
+    5. SecurityHeadersMiddleware
+    6. RequestContextMiddleware     (OUTERMOST — closest to wire)
 
 Why this order (RESEARCH §3 + §13.4 + §18.2):
 
@@ -31,6 +32,13 @@ Why this order (RESEARCH §3 + §13.4 + §18.2):
   CSRFMiddleware runs FIRST (outside) and fail-fasts with 403 before the
   inner SessionMiddleware does any DB lookup — saves work on attack
   traffic (RESEARCH §3).
+- CSRFFormFieldShim added BETWEEN CSRFMiddleware (added 2nd, runs 5th on the
+  request path) and FragmentCacheHeadersMiddleware (added 3rd before shim
+  → now 4th). On the request path the shim therefore runs JUST BEFORE
+  CSRFMiddleware so its header injection is visible by the time
+  starlette-csrf's header-only check runs. The shim is a no-op on requests
+  that already have the X-CSRF-Token header (HTMX path), so the existing
+  Phase 1 CSRF behavior is unchanged.
 - SessionMiddleware INNERMOST so route handlers see ``request.state.user``
   already resolved when their handler body runs.
 
@@ -63,7 +71,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette_csrf import CSRFMiddleware
 
 from app.config import settings
-from app.csrf import csrf_middleware_kwargs
+from app.csrf import CSRFFormFieldShim, csrf_middleware_kwargs
 from app.db import dispose_engine, engine
 from app.logging_config import configure_logging
 from app.middleware import (
@@ -73,6 +81,7 @@ from app.middleware import (
     SessionMiddleware,
 )
 from app.rate_limit import register_rate_limiter
+from app.routers import admin as admin_router
 from app.routers import auth as auth_router
 from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
@@ -171,8 +180,13 @@ def create_app() -> FastAPI:
     app.state.templates = templates
 
     # Middleware stack — last added is OUTERMOST (Starlette reverse-of-add).
+    # Phase 2 D-15: CSRFFormFieldShim is added AFTER CSRFMiddleware so that on
+    # the request path the shim runs OUTSIDE / BEFORE CSRFMiddleware. The shim
+    # hoists the X-CSRF-Token form field into the request header before
+    # CSRFMiddleware's header-only token check sees the request.
     app.add_middleware(SessionMiddleware, session_factory=async_session_factory)
     app.add_middleware(CSRFMiddleware, **csrf_middleware_kwargs(settings.APP_SECRET_KEY))
+    app.add_middleware(CSRFFormFieldShim)
     app.add_middleware(FragmentCacheHeadersMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestContextMiddleware)
@@ -181,6 +195,7 @@ def create_app() -> FastAPI:
     app.include_router(csp_report_router.router)
     app.include_router(auth_router.router)
     app.include_router(debug_router.router)
+    app.include_router(admin_router.router)
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
