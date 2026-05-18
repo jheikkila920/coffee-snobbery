@@ -13,6 +13,7 @@ reuses an existing one.
 from __future__ import annotations
 
 from app.models.ai_recommendation import AIRecommendation
+from app.models.api_credential import ApiCredential
 from app.models.app_setting import AppSetting
 from app.models.bag import Bag
 from app.models.base import Base
@@ -21,11 +22,12 @@ from app.models.user import User
 from app.models.wishlist_entry import WishlistEntry
 
 __all__ = [
-    "Base",
-    "User",
-    "Bag",
-    "WishlistEntry",
     "AIRecommendation",
+    "ApiCredential",
     "AppSetting",
+    "Bag",
+    "Base",
     "Session",
+    "User",
+    "WishlistEntry",
 ]
