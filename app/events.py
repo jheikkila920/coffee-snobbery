@@ -46,6 +46,23 @@ ADMIN_USER_CREATED = "admin.user_created"
 ADMIN_USER_DELETED = "admin.user_deleted"
 ADMIN_PASSWORD_RESET = "admin.password_reset"  # noqa: S105 — event name, not a credential
 ADMIN_IS_ADMIN_TOGGLED = "admin.is_admin_toggled"
+# Phase 3 D-08: emitted by ``services/settings.set_setting`` on every
+# write to ``app_settings``. Field shape per CONTEXT D-08:
+# ``setting_key``, ``old_value``, ``new_value``, ``value_type``, ``user_id``.
+ADMIN_APP_SETTING_CHANGED = "admin.app_setting_changed"
+# Phase 3 D-08: emitted by ``services/credentials.set_provider_credential``
+# when an admin sets or rotates an AI provider key. Field shape:
+# ``provider``, ``last_four``, ``user_id``. The raw key is NEVER logged
+# (CLAUDE.md "never log API keys"); only the denormalized ``last_four``.
+ADMIN_API_CREDENTIAL_SET = "admin.api_credential_set"  # noqa: S105 — event name, not a credential
+
+# --- encryption.* (Phase 3) -----------------------------------------------
+# Lifespan-emitted events have no request_id (no request context); per
+# CONTEXT <specifics> "use request_id=None or omit". Operational events
+# the admin/operator reads to confirm key rotation and decrypt failures.
+ENCRYPTION_STARTUP_OK = "encryption.startup_ok"
+ENCRYPTION_REWRAP_COMPLETED = "encryption.rewrap_completed"
+ENCRYPTION_DECRYPT_FAILED = "encryption.decrypt_failed"
 
 # --- operational counters --------------------------------------------------
 # CSP violation report — emitted by ``app.routers.csp_report`` on every POST
@@ -59,6 +76,8 @@ RATE_LIMIT_EXCEEDED = "rate_limit.exceeded"
 
 
 __all__ = [
+    "ADMIN_API_CREDENTIAL_SET",
+    "ADMIN_APP_SETTING_CHANGED",
     "ADMIN_IS_ADMIN_TOGGLED",
     "ADMIN_PASSWORD_RESET",
     "ADMIN_USER_CREATED",
@@ -68,5 +87,8 @@ __all__ = [
     "AUTH_LOGIN_SUCCEEDED",
     "AUTH_LOGOUT",
     "CSP_VIOLATION",
+    "ENCRYPTION_DECRYPT_FAILED",
+    "ENCRYPTION_REWRAP_COMPLETED",
+    "ENCRYPTION_STARTUP_OK",
     "RATE_LIMIT_EXCEEDED",
 ]
