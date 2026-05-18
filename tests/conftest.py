@@ -383,3 +383,63 @@ def seeded_regular_user() -> dict[str, Any]:
     except ImportError:
         pytest.skip("Phase 1 dependency: app.services.sessions.regenerate_session")
     return _seed_user(is_admin=False)
+
+
+# --------------------------------------------------------------------------- #
+# Phase 3 fixtures (Plan 03-06)                                               #
+# --------------------------------------------------------------------------- #
+#
+# Phase 3 tests use real ``Fernet.generate_key()`` keys per test (CONTEXT.md
+# ``<specifics>`` — "Tests use Fernet.generate_key() per test — no shared
+# keys, no respx"). The three fixtures below give tests three layers of
+# convenience:
+#
+# - ``fernet_key`` returns raw ``bytes`` for tests that need the byte form.
+# - ``fernet_key_str`` returns the ASCII string form for env-var assignment
+#   via ``monkeypatch.setattr("app.config.settings.APP_ENCRYPTION_KEY", ...)``.
+# - ``monkeypatched_app_encryption_key`` patches the config AND reloads
+#   ``app.services.encryption`` so its module-level ``_multi_fernet`` is
+#   rebuilt with the fresh key. The reload mechanism is locked per
+#   CONTEXT.md ``<specifics>`` (planner pick between module reload vs a
+#   ``_rebuild_multi_fernet()`` helper — module reload wins because it keeps
+#   the production module's public surface unchanged).
+
+
+@pytest.fixture
+def fernet_key() -> bytes:
+    """Fresh Fernet key per test (CONTEXT.md <specifics> — no shared keys)."""
+    from cryptography.fernet import Fernet
+
+    return Fernet.generate_key()
+
+
+@pytest.fixture
+def fernet_key_str(fernet_key: bytes) -> str:
+    """ASCII str form of the per-test Fernet key for env-var assignment."""
+    return fernet_key.decode("ascii")
+
+
+@pytest.fixture
+def monkeypatched_app_encryption_key(
+    monkeypatch: pytest.MonkeyPatch, fernet_key_str: str
+) -> str:
+    """Patch ``APP_ENCRYPTION_KEY`` and rebuild encryption's ``_multi_fernet``.
+
+    Returns the patched key string so the test can read it back. After the
+    test, ``monkeypatch`` restores the original env value; the module's
+    ``_multi_fernet`` stays rebuilt with the test key, which is harmless
+    because every Phase 3 test that touches the singleton requests this
+    fixture (or its own override).
+
+    Uses ``importlib.reload`` per CONTEXT.md ``<specifics>`` — the locked
+    rebuild mechanism. The alternative ``_rebuild_multi_fernet()`` helper
+    inside the module is rejected because it pollutes the module's public
+    surface.
+    """
+    import importlib
+
+    monkeypatch.setattr("app.config.settings.APP_ENCRYPTION_KEY", fernet_key_str)
+    import app.services.encryption as enc_mod
+
+    importlib.reload(enc_mod)
+    return fernet_key_str
