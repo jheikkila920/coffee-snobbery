@@ -245,9 +245,15 @@ def fresh_db() -> Iterator[None]:
 
     try:
         with engine.begin() as conn:
-            # Cascades to sessions (FK ON DELETE CASCADE per session model).
-            conn.execute(text("TRUNCATE TABLE users RESTART IDENTITY CASCADE"))
+            # NOTE: TRUNCATE ... CASCADE in Postgres truncates every referencing
+            # table regardless of FK delete_rule. `app_settings.updated_by_user_id`
+            # FKs to `users.id` (ON DELETE SET NULL), so a TRUNCATE on users
+            # CASCADE would wipe the 19 seeded app_settings rows — breaking
+            # tests/test_migrations.py::test_app_settings_seeded_with_19_rows.
+            # Use explicit DELETE so ON DELETE SET NULL is honored.
             conn.execute(text("DELETE FROM sessions"))
+            conn.execute(text("DELETE FROM users"))
+            conn.execute(text("ALTER SEQUENCE users_id_seq RESTART WITH 1"))
             conn.execute(
                 text("UPDATE app_settings SET value='false' WHERE key='setup_completed'")
             )
