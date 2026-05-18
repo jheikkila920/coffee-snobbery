@@ -103,17 +103,17 @@ Plans:
   5. Smoke pass: cold container → `/setup` → auto-login → see a stub `/` page that prints "Signed in as <username>" in the footer (per CONTEXT D-03: setup's happy path auto-logs in via session-ID regen + 303 → /, skipping a separate /login step).
 **Plans:** 11 plans
 Plans:
-- [ ] 02-01-PLAN.md — Wave 0 conftest fixtures (async_client, fresh_db, seeded_admin/regular_user) + tests/dependencies package marker
-- [ ] 02-02-PLAN.md — app/services/auth.py: PasswordHasher singleton + hash_password + verify_password + dummy_verify (AUTH-04 + AUTH-03 user-not-found timing defense)
-- [ ] 02-03-PLAN.md — app/dependencies package: get_async_session + require_user + require_admin (AUTH-09 module location)
-- [ ] 02-04-PLAN.md — app/csrf.py: CSRFFormFieldShim ASGI middleware (D-15) + 5 test cases
-- [ ] 02-05-PLAN.md — app/services/setup.py: create_first_admin FOR UPDATE transaction (AUTH-02)
-- [ ] 02-06-PLAN.md — app/middleware/session.py: D-09 User-row load + D-10 fail-closed
-- [ ] 02-07-PLAN.md — app/routers/auth.py real /setup + /login + /logout + templates + schemas + replaces test_auth_stub.py (AUTH-01, AUTH-03, AUTH-06, AUTH-07)
-- [ ] 02-08-PLAN.md — app/routers/admin.py + /admin template (D-13, AUTH-09)
-- [ ] 02-09-PLAN.md — /debug/proxy admin-gate wrap + test_debug_proxy extension (D-14, AUTH-09)
-- [ ] 02-10-PLAN.md — app/main.py wire CSRFFormFieldShim + admin router; pages/index.html footer; tests/test_phase02_smoke.py; D-15 logging assertions on real /login handler
-- [ ] 02-11-PLAN.md — ROADMAP doc amendments per D-01 / D-03 + populate Plans list (this plan)
+- [x] 02-01-PLAN.md — Wave 0 conftest fixtures (async_client, fresh_db, seeded_admin/regular_user) + tests/dependencies package marker
+- [x] 02-02-PLAN.md — app/services/auth.py: PasswordHasher singleton + hash_password + verify_password + dummy_verify (AUTH-04 + AUTH-03 user-not-found timing defense)
+- [x] 02-03-PLAN.md — app/dependencies package: get_async_session + require_user + require_admin (AUTH-09 module location)
+- [x] 02-04-PLAN.md — app/csrf.py: CSRFFormFieldShim ASGI middleware (D-15) + 5 test cases
+- [x] 02-05-PLAN.md — app/services/setup.py: create_first_admin FOR UPDATE transaction (AUTH-02)
+- [x] 02-06-PLAN.md — app/middleware/session.py: D-09 User-row load + D-10 fail-closed
+- [x] 02-07-PLAN.md — app/routers/auth.py real /setup + /login + /logout + templates + schemas + replaces test_auth_stub.py (AUTH-01, AUTH-03, AUTH-06, AUTH-07)
+- [x] 02-08-PLAN.md — app/routers/admin.py + /admin template (D-13, AUTH-09)
+- [x] 02-09-PLAN.md — /debug/proxy admin-gate wrap + test_debug_proxy extension (D-14, AUTH-09)
+- [x] 02-10-PLAN.md — app/main.py wire CSRFFormFieldShim + admin router; pages/index.html footer; tests/test_phase02_smoke.py; D-15 logging assertions on real /login handler
+- [x] 02-11-PLAN.md — ROADMAP doc amendments per D-01 / D-03 + populate Plans list (this plan)
 **Notes:** Carries SEC-3 (session-ID regeneration) and SEC-5 (setup race via `FOR UPDATE` on `app_settings`). Argon2id parameters per spec: `memory_cost=64MB, time_cost=3, parallelism=4`. Argon2 verify runs even when the user is not found, to defend against user enumeration.
 
 ### Phase 3: Encryption + Settings
