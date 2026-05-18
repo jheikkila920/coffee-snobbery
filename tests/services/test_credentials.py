@@ -30,6 +30,7 @@ provide.
 from __future__ import annotations
 
 import dataclasses
+import uuid
 
 import pytest
 from sqlalchemy import text
@@ -366,6 +367,21 @@ def test_set_emits_event_without_key(
 
     with SessionLocal() as db:
         settings_service.prewarm_cache(db)
+        # Seed a user so updated_by_user_id satisfies the FK.
+        # Inline SQL keeps the test sync — async fixtures don't compose here.
+        suffix = uuid.uuid4().hex[:8]
+        actor_id = db.execute(
+            text(
+                "INSERT INTO users (username, email, password_hash, is_admin, is_active) "
+                "VALUES (:u, :e, :p, true, true) RETURNING id"
+            ),
+            {
+                "u": f"admin-{suffix}",
+                "e": f"admin-{suffix}@example.com",
+                "p": "$argon2id$v=19$m=65536,t=3,p=4$test$test",
+            },
+        ).scalar_one()
+        db.commit()
         try:
             with structlog.testing.capture_logs() as captured:
                 credentials_service.set_provider_credential(
@@ -373,7 +389,7 @@ def test_set_emits_event_without_key(
                     "anthropic",
                     key="sk-secret-XXXX",
                     model_name="m",
-                    by_user_id=42,
+                    by_user_id=actor_id,
                 )
 
             set_events = [
@@ -387,7 +403,7 @@ def test_set_emits_event_without_key(
             assert evt.get("provider") == "anthropic"
             assert evt.get("last_four") == "XXXX"
             assert evt.get("model_name") == "m"
-            assert evt.get("user_id") == 42
+            assert evt.get("user_id") == actor_id
 
             # Hard SEC-6 check: NO field carries the key or ciphertext.
             assert "key" not in evt, (
@@ -402,6 +418,8 @@ def test_set_emits_event_without_key(
             )
         finally:
             _reset_credentials_state(db)
+            db.execute(text("DELETE FROM users WHERE id = :id"), {"id": actor_id})
+            db.commit()
 
 
 def test_rewrap_no_credentials_noop(
