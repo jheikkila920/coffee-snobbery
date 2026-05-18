@@ -10,6 +10,10 @@ alembic>=1.18,<2.0
 psycopg[binary]>=3.3,<3.4
 pydantic>=2.13,<3.0
 pydantic-settings>=2.14,<3.0
+# Required by ``pydantic.EmailStr`` (lazy-validated at model-class build time).
+# Phase 2 Plan 02-07 introduced the first ``EmailStr`` usage in
+# ``app/schemas/auth.py:SetupForm.email``.
+email-validator>=2,<3
 jinja2>=3.1.6,<4
 structlog>=25.5,<26
 python-multipart>=0.0.28,<0.1
