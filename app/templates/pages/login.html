@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block page_title %}Sign in{% endblock %}
+{% block content %}
+  <main class="mx-auto max-w-prose px-6 py-12">
+    <h1 class="text-2xl font-semibold">Sign in to Snobbery</h1>
+    {% if error %}<p class="mt-4 text-red-700">{{ error }}</p>{% endif %}
+    <form method="post" action="/login" class="mt-6 flex flex-col gap-4">
+      {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+      <label class="flex flex-col">Username
+        <input name="username" required value="{{ username or '' }}" class="rounded border px-2 py-1">
+      </label>
+      <label class="flex flex-col">Password
+        <input name="password" type="password" required class="rounded border px-2 py-1">
+      </label>
+      <button type="submit" class="mt-2 self-start rounded bg-espresso-900 px-4 py-2 text-cream-50">
+        Sign in
+      </button>
+    </form>
+  </main>
+{% endblock %}
