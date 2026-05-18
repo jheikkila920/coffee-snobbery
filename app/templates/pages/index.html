@@ -4,5 +4,16 @@
   <main class="mx-auto max-w-prose px-6 py-12">
     <h1 class="text-2xl font-semibold">Snobbery</h1>
     <p>Snobbery — setup pending. POST /setup once auth lands.</p>
+    <footer class="mt-12 text-sm">
+      {% if request.state.user %}
+        Signed in as {{ request.state.user.username }}
+        <form method="post" action="/logout" class="inline">
+          <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+          <button type="submit">Sign out</button>
+        </form>
+      {% else %}
+        <a href="/login">Sign in</a>
+      {% endif %}
+    </footer>
   </main>
 {% endblock %}
