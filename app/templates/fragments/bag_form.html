@@ -1,0 +1,98 @@
+{# Inline-expand bag form (D-02 / D-04). Two modes set by the router:
+     - mode="create" → POST /coffees/{coffee_id}/bags, target #bag-form-mount
+     - mode="edit"   → POST /bags/{bag_id}, target closest [data-row]
+   On validation failure the router re-renders this same fragment at HTTP 200
+   with `errors` populated and `values` carrying the user's submitted text.
+   Cancel hits /coffees/{id} (full page round-trip is heavier than the bag
+   create's worth; we use an inline target instead — Alpine-free, CSP-safe).
+   All inputs use `text-base` (16px) to prevent iOS focus-zoom (MX-1).
+#}
+{% set is_edit = mode == "edit" %}
+{% if is_edit %}
+  {% set form_action = "/bags/" ~ bag_id %}
+  {% set form_target = "closest [data-row]" %}
+  {% set form_swap = "outerHTML" %}
+{% else %}
+  {% set form_action = "/coffees/" ~ coffee_id ~ "/bags" %}
+  {% set form_target = "#bag-list" %}
+  {% set form_swap = "afterbegin" %}
+{% endif %}
+<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <form hx-post="{{ form_action }}"
+        hx-target="{{ form_target }}"
+        hx-swap="{{ form_swap }}"
+        class="flex flex-col gap-4">
+    {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    <input type="hidden" name="coffee_id" value="{{ coffee_id }}">
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Roast date</span>
+      <input type="date"
+             name="roast_date"
+             value="{{ values.get('roast_date', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('roast_date') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('roast_date') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['roast_date'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Weight (grams)</span>
+      <input type="number"
+             inputmode="decimal"
+             name="weight_grams"
+             min="1"
+             max="10000"
+             value="{{ values.get('weight_grams', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('weight_grams') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('weight_grams') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['weight_grams'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Opened at</span>
+      <input type="datetime-local"
+             name="opened_at"
+             value="{{ values.get('opened_at', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('opened_at') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('opened_at') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['opened_at'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Finished at</span>
+      <input type="datetime-local"
+             name="finished_at"
+             value="{{ values.get('finished_at', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('finished_at') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('finished_at') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['finished_at'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Notes</span>
+      <textarea name="notes"
+                rows="3"
+                maxlength="4000"
+                class="rounded border px-2 py-2 text-base{% if errors.get('notes') %} border-red-300{% else %} border-espresso-200{% endif %}">{{ values.get('notes', '') }}</textarea>
+      {% if errors.get('notes') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['notes'] }}</p>
+      {% endif %}
+    </label>
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
+    {% endif %}
+    <div class="flex gap-3 mt-2">
+      <button type="button"
+              hx-get="/coffees/empty-form"
+              hx-target="#bag-form-mount"
+              hx-swap="innerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Save
+      </button>
+    </div>
+  </form>
+</div>

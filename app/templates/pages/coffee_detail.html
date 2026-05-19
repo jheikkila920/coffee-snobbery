@@ -94,25 +94,9 @@
       <div id="bag-form-mount" class="mb-3"></div>
       <div id="bag-list">
         {% if bags %}
-          <ul class="space-y-2">
-            {% for bag in bags %}
-              <li id="bag-{{ bag.id }}" data-row class="rounded-lg border border-espresso-200 bg-cream-100 p-3 text-base dark:bg-espresso-900 dark:border-espresso-800">
-                <div class="text-sm">
-                  {% if bag.opened_at %}
-                    Opened {{ bag.opened_at.strftime('%Y-%m-%d') }}
-                  {% else %}
-                    Not yet opened
-                  {% endif %}
-                  {% if bag.roast_date %}
-                    · roasted {{ bag.roast_date.strftime('%Y-%m-%d') }}
-                  {% endif %}
-                  {% if bag.weight_grams %}
-                    · {{ bag.weight_grams }}g
-                  {% endif %}
-                </div>
-              </li>
-            {% endfor %}
-          </ul>
+          {% for bag in bags %}
+            {% include "fragments/bag_row.html" with context %}
+          {% endfor %}
         {% else %}
           <p class="text-espresso-600 italic dark:text-cream-300">
             No bags yet. "Open new bag" to start logging brews against this coffee.
