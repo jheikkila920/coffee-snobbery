@@ -1,0 +1,50 @@
+{# Coffee list — UI-SPEC §"List-vs-Card Layout" CAT-07.
+   Desktop (md+): table — Name · Roaster · Origin · Process · Roast level ·
+   Flavor notes · Actions.
+   Mobile (<md): cards. Both delegate to fragments/coffee_row.html with
+   a `mode` flag ("row" or "card").
+
+   Context contract (passed by GET /coffees + the HX-Request fragment branch):
+     - coffees:               list[Coffee]
+     - flavor_note_names:     dict[int, str] — id → name for pill resolution
+     - roaster_name_map:      dict[int, str] — coffee.roaster_id → name
+     - filters:               echoed back (used by HX-Request fragment for
+                               filter-bar state — kept for symmetry; the
+                               filter form lives on the page template).
+
+   Empty state copy: UX-04 snobbery tone. #}
+{% if coffees %}
+  <div class="hidden md:block">
+    <table class="w-full text-base">
+      <thead>
+        <tr class="text-sm font-semibold border-b border-espresso-200">
+          <th class="text-left py-2">Name</th>
+          <th class="text-left py-2">Roaster</th>
+          <th class="text-left py-2">Origin</th>
+          <th class="text-left py-2">Process</th>
+          <th class="text-left py-2">Roast level</th>
+          <th class="text-left py-2">Flavor notes</th>
+          <th class="text-right py-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for coffee in coffees %}
+          {% with mode = "row" %}
+            {% include "fragments/coffee_row.html" %}
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="md:hidden space-y-3">
+    {% for coffee in coffees %}
+      {% with mode = "card" %}
+        {% include "fragments/coffee_row.html" %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-espresso-600 italic dark:text-cream-300">
+    No coffees yet. Click "Add coffee" to begin building the catalog.
+  </p>
+{% endif %}

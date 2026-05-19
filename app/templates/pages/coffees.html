@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block page_title %}Coffees{% endblock %}
+{% block content %}
+  {# Wider container than other catalog pages — the coffees table is
+     data-dense (Name + Roaster + Origin + Process + Roast + Flavor pills
+     + Actions). UI-SPEC §"Coffees — `/coffees`" calls for max-w-6xl. #}
+  <main class="mx-auto max-w-6xl px-6 py-12">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-semibold">Coffees</h1>
+      <button type="button"
+              hx-get="/coffees/new"
+              hx-target="#coffee-form-mount"
+              hx-swap="innerHTML"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Add coffee
+      </button>
+    </header>
+
+    {# CAT-07 filter bar — D-03 hx-push-url so the browser URL reflects
+       the active filters and back/forward replays them. The form does
+       NOT submit normally; HTMX intercepts `change` on every select and
+       the archived checkbox and fires `GET /coffees?...` with all named
+       inputs included (hx-include="this"). The target is the list mount
+       so the filter swap is fragment-only, not a full-page reload. #}
+    <form id="coffee-filters"
+          class="mb-4 flex flex-wrap gap-3 items-end"
+          hx-get="/coffees"
+          hx-trigger="change from:select, change from:input[type='checkbox']"
+          hx-push-url="true"
+          hx-target="#coffee-list"
+          hx-swap="innerHTML"
+          hx-include="this">
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Roaster</span>
+        <select name="roaster_id" class="rounded border border-espresso-200 px-2 py-2 text-base dark:border-espresso-700">
+          <option value="">All</option>
+          {% for r in roasters %}
+            <option value="{{ r.id }}"{% if filters.roaster_id == r.id %} selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Country</span>
+        <select name="country" class="rounded border border-espresso-200 px-2 py-2 text-base dark:border-espresso-700">
+          <option value="">All</option>
+          {% for c in countries %}
+            <option value="{{ c }}"{% if filters.country == c %} selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Process</span>
+        <select name="process" class="rounded border border-espresso-200 px-2 py-2 text-base dark:border-espresso-700">
+          <option value="">All</option>
+          {% for p in processes %}
+            <option value="{{ p }}"{% if filters.process == p %} selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="flex items-center gap-2 mt-6">
+        <input type="checkbox" name="archived" value="true"{% if filters.archived %} checked{% endif %}>
+        <span class="text-sm">Show archived</span>
+      </label>
+    </form>
+
+    <div id="coffee-form-mount" class="mb-4"></div>
+    <div id="coffee-list">
+      {% include "fragments/coffee_list.html" %}
+    </div>
+  </main>
+{% endblock %}

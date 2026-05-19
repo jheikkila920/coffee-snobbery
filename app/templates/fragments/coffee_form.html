@@ -1,0 +1,237 @@
+{# Inline-expand coffee form (D-02 / D-04).
+   Two modes:
+     - mode="create" → POST /coffees,         target #coffee-form-mount
+     - mode="edit"   → POST /coffees/{id},    target closest [data-row]
+   On validation failure the router re-renders this fragment at HTTP 200
+   with `errors` populated and `values` carrying the user's submitted text.
+   Cancel hits /coffees/empty-form which returns fragments/empty.html
+   (no inline onclick — CSP-strict per Phase 1 D-04).
+
+   Context contract (locked here for plan 04-11's chip-builder + autocomplete
+   wiring — DO NOT change without updating 04-07-SUMMARY):
+     - values:                  dict (form field name → user-submitted string
+                                 OR list[str] for advertised_flavor_note_ids).
+     - errors:                  dict (form field name → message).
+     - mode:                    "create" | "edit".
+     - coffee_id:               int (edit mode only).
+     - processes:               tuple[str, ...] — locked 6-value enum.
+     - roast_levels:            tuple[str, ...] — locked 6-value enum.
+     - roaster_name:            str (resolved at render time so the roaster
+                                 autocomplete text input shows the name on edit).
+     - selected_flavor_notes:   list[{id, name}] — pre-resolved server-side
+                                 so seeded chips render BEFORE Alpine hydrates
+                                 (plan 04-11 takes over from there).
+
+   Autocomplete fields (D-13 + D-14 + HX-4 mitigation):
+     - roaster_query input:     hx-trigger="input changed delay:350ms[target.value.length >= 2]"
+                                hx-sync="this:replace"
+                                hx-target="#roaster-dropdown"
+     - flavor_note_query input: same trigger + sync attrs;
+                                target="#flavor-note-dropdown".
+     Plan 04-11 adds the `focus once` re-fetch + the
+     `HX-Trigger: roaster-created` listener for pre-select.
+
+   Chip-builder integration contract (plan 04-11 mounts on these IDs):
+     - <div id="flavor-note-chips" class="flavor-note-chips-field">
+       (plan 04-11 adds x-data="flavorNoteChips" attribute)
+     - <div id="flavor-note-chip-list">
+       (visible chip pills; 04-07 server-renders seeded chips here; 04-11
+       replaces children with an Alpine <template x-for> over `selectedChips`)
+     - <div id="flavor-note-hidden-inputs">
+       (one hidden input per selected id, name="advertised_flavor_note_ids";
+       04-07 server-renders seeds; 04-11 mirrors via a parallel x-for)
+     - <input name="flavor_note_query" ...> (the autocomplete text input)
+#}
+{% set is_edit = mode == "edit" %}
+{% if is_edit %}
+  {% set form_action = "/coffees/" ~ coffee_id %}
+  {% set form_target = "closest [data-row]" %}
+  {% set form_swap = "outerHTML" %}
+{% else %}
+  {% set form_action = "/coffees" %}
+  {% set form_target = "#coffee-form-mount" %}
+  {% set form_swap = "innerHTML" %}
+{% endif %}
+<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <form hx-post="{{ form_action }}"
+        hx-target="{{ form_target }}"
+        hx-swap="{{ form_swap }}"
+        class="flex flex-col gap-4">
+    {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Name</span>
+      <input name="name"
+             required
+             maxlength="200"
+             value="{{ values.get('name', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('name') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('name') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['name'] }}</p>
+      {% endif %}
+    </label>
+
+    {# Roaster autocomplete (D-13 + HX-4 mitigation).
+       - `roaster_query` is the visible text input — autocompleted via /roasters/list.
+       - `roaster_id`    is the hidden input that actually submits the FK id.
+       Plan 04-11 wires the Alpine `autocomplete` component that watches the
+       dropdown selection + the `HX-Trigger: roaster-created` event to
+       pre-select after the mini-modal closes. #}
+    <div class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Roaster</span>
+      <div class="relative">
+        <input type="text"
+               name="roaster_query"
+               value="{{ roaster_name }}"
+               autocomplete="off"
+               hx-get="/roasters/list"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2]"
+               hx-sync="this:replace"
+               hx-target="#roaster-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars to search…"
+               class="w-full rounded border px-2 py-2 text-base{% if errors.get('roaster_id') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        <input type="hidden" name="roaster_id" value="{{ values.get('roaster_id', '') }}">
+        <div id="roaster-dropdown" class="absolute top-full left-0 right-0 z-10"></div>
+      </div>
+      {% if errors.get('roaster_id') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['roaster_id'] }}</p>
+      {% endif %}
+    </div>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Country</span>
+      <input name="country"
+             maxlength="80"
+             value="{{ values.get('country', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('country') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('country') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['country'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Origin</span>
+      <input name="origin"
+             maxlength="120"
+             value="{{ values.get('origin', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('origin') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('origin') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['origin'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Process</span>
+      <select name="process"
+              class="rounded border px-2 py-2 text-base{% if errors.get('process') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        <option value=""{% if not values.get('process') %} selected{% endif %}>—</option>
+        {% for p in processes %}
+          <option value="{{ p }}"{% if values.get('process') == p %} selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('process') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['process'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Roast level</span>
+      <select name="roast_level"
+              class="rounded border px-2 py-2 text-base{% if errors.get('roast_level') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        <option value=""{% if not values.get('roast_level') %} selected{% endif %}>—</option>
+        {% for rl in roast_levels %}
+          <option value="{{ rl }}"{% if values.get('roast_level') == rl %} selected{% endif %}>{{ rl }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('roast_level') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['roast_level'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Varietal</span>
+      <input name="varietal"
+             maxlength="120"
+             value="{{ values.get('varietal', '') or '' }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('varietal') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('varietal') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['varietal'] }}</p>
+      {% endif %}
+    </label>
+
+    {# Advertised flavor notes — chip-builder shell.
+       Plan 04-07 ships the INERT markup + server-rendered seed chips so
+       validation re-render survives without Alpine. Plan 04-11 mounts
+       `x-data="flavorNoteChips"` here and wires:
+         - chip add (autocomplete <li role="option" @click ...>)
+         - chip remove (button @click splices selectedChips)
+         - hidden-input mirroring (parallel <template x-for>)
+         - flavor-note-created HX-Trigger listener (pre-select after mini-modal)
+       DO NOT change the element IDs below without updating the chip-widget
+       contract in 04-07-SUMMARY. #}
+    <div id="flavor-note-chips" class="flavor-note-chips-field flex flex-col gap-1">
+      <span class="text-sm font-semibold">Advertised flavor notes</span>
+      <div id="flavor-note-chip-list" class="flex flex-wrap gap-2 mb-2">
+        {% for chip in selected_flavor_notes %}
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200"
+                data-chip
+                data-chip-id="{{ chip.id }}">
+            {{ chip.name }}
+          </span>
+        {% endfor %}
+      </div>
+      <div id="flavor-note-hidden-inputs">
+        {% for chip in selected_flavor_notes %}
+          <input type="hidden" name="advertised_flavor_note_ids" value="{{ chip.id }}">
+        {% endfor %}
+      </div>
+      <div class="relative">
+        <input type="text"
+               name="flavor_note_query"
+               autocomplete="off"
+               hx-get="/flavor-notes/datalist"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2]"
+               hx-sync="this:replace"
+               hx-target="#flavor-note-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars to add a flavor note…"
+               class="w-full rounded border px-2 py-2 text-base{% if errors.get('advertised_flavor_note_ids') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        <div id="flavor-note-dropdown" class="absolute top-full left-0 right-0 z-10"></div>
+      </div>
+      {% if errors.get('advertised_flavor_note_ids') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['advertised_flavor_note_ids'] }}</p>
+      {% endif %}
+    </div>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Notes</span>
+      <textarea name="notes"
+                rows="4"
+                maxlength="2000"
+                class="rounded border px-2 py-2 text-base{% if errors.get('notes') %} border-red-300{% else %} border-espresso-200{% endif %}">{{ values.get('notes', '') }}</textarea>
+      {% if errors.get('notes') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['notes'] }}</p>
+      {% endif %}
+    </label>
+
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
+    {% endif %}
+
+    <div class="flex gap-3 mt-2">
+      <button type="button"
+              hx-get="/coffees/empty-form"
+              hx-target="#coffee-form-mount"
+              hx-swap="innerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Save
+      </button>
+    </div>
+  </form>
+</div>

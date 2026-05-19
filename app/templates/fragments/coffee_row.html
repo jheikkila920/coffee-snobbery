@@ -1,0 +1,155 @@
+{# Coffee row fragment — one of two shapes selected by `mode`:
+   - mode="row"  → <tr> inside the desktop table tbody
+   - mode="card" → <div> mobile card
+
+   Both carry data-row + id="coffee-{{ coffee.id }}" so HTMX edit/archive
+   swaps work in either layout. Archived rows render italic + an "Archived"
+   pill per UI-SPEC §"Archived rows".
+
+   Advertised-flavor-note pills: up to 3 rendered, then a "+N more" affordance
+   if more exist (UI-SPEC §"Coffees — flavor pill rendering"). The names come
+   from the pre-resolved `flavor_note_names: dict[int, str]` map the router
+   builds in one query — avoids N+1 in the template.
+
+   Roaster name comes from the pre-resolved `roaster_name_map: dict[int, str]`
+   built the same way; if the coffee's roaster has been hard-deleted the
+   roaster_id is NULL (FK SET NULL — model docstring) and we render "—".
+
+   Archive confirm copy from UI-SPEC §Microcopy Lock:
+   "Archive coffee — stops appearing in selectors but keeps brew history." #}
+{% set archive_confirm = "Archive coffee — stops appearing in selectors but keeps brew history." %}
+{% set advertised_ids = coffee.advertised_flavor_note_ids or [] %}
+{% set roaster_name = roaster_name_map.get(coffee.roaster_id) if coffee.roaster_id else None %}
+{% if mode == "card" %}
+  <div id="coffee-{{ coffee.id }}"
+       data-row
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800{% if coffee.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <div class="font-semibold">
+      <a href="/coffees/{{ coffee.id }}" class="hover:underline">{{ coffee.name }}</a>
+      {% if coffee.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </div>
+    {% if roaster_name %}
+      <div class="text-sm">{{ roaster_name }}</div>
+    {% endif %}
+    {% if coffee.country or coffee.origin %}
+      <div class="text-sm">
+        {% if coffee.country %}{{ coffee.country }}{% endif %}
+        {% if coffee.country and coffee.origin %} · {% endif %}
+        {% if coffee.origin %}{{ coffee.origin }}{% endif %}
+      </div>
+    {% endif %}
+    <div class="mt-1 flex flex-wrap gap-2">
+      {% if coffee.process %}
+        <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ coffee.process }}</span>
+      {% endif %}
+      {% if coffee.roast_level %}
+        <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ coffee.roast_level }}</span>
+      {% endif %}
+    </div>
+    {% if advertised_ids %}
+      <div class="mt-2 flex flex-wrap gap-1">
+        {% set shown = namespace(count=0) %}
+        {% for fid in advertised_ids %}
+          {% set fname = flavor_note_names.get(fid) %}
+          {% if fname and shown.count < 3 %}
+            <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ fname }}</span>
+            {% set shown.count = shown.count + 1 %}
+          {% endif %}
+        {% endfor %}
+        {% set extras = advertised_ids|length - shown.count %}
+        {% if extras > 0 %}
+          <span class="inline-flex px-2 py-1 rounded text-sm text-espresso-700 dark:text-cream-300">+{{ extras }} more</span>
+        {% endif %}
+      </div>
+    {% endif %}
+    <div class="mt-3 flex gap-3">
+      <button type="button"
+              hx-get="/coffees/{{ coffee.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not coffee.archived %}
+        <button type="button"
+                hx-post="/coffees/{{ coffee.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <tr id="coffee-{{ coffee.id }}"
+      data-row
+      class="border-b border-espresso-100{% if coffee.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <td class="py-2">
+      <a href="/coffees/{{ coffee.id }}" class="hover:underline">{{ coffee.name }}</a>
+      {% if coffee.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </td>
+    <td class="py-2">{{ roaster_name or "—" }}</td>
+    <td class="py-2">
+      {% if coffee.country %}{{ coffee.country }}{% endif %}
+      {% if coffee.country and coffee.origin %} · {% endif %}
+      {% if coffee.origin %}{{ coffee.origin }}{% endif %}
+    </td>
+    <td class="py-2">
+      {% if coffee.process %}
+        <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ coffee.process }}</span>
+      {% endif %}
+    </td>
+    <td class="py-2">
+      {% if coffee.roast_level %}
+        <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ coffee.roast_level }}</span>
+      {% endif %}
+    </td>
+    <td class="py-2">
+      {% if advertised_ids %}
+        <div class="flex flex-wrap gap-1">
+          {% set shown = namespace(count=0) %}
+          {% for fid in advertised_ids %}
+            {% set fname = flavor_note_names.get(fid) %}
+            {% if fname and shown.count < 3 %}
+              <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ fname }}</span>
+              {% set shown.count = shown.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {% set extras = advertised_ids|length - shown.count %}
+          {% if extras > 0 %}
+            <span class="inline-flex px-2 py-1 rounded text-sm text-espresso-700 dark:text-cream-300">+{{ extras }} more</span>
+          {% endif %}
+        </div>
+      {% endif %}
+    </td>
+    <td class="py-2 text-right">
+      <button type="button"
+              hx-get="/coffees/{{ coffee.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not coffee.archived %}
+        <button type="button"
+                hx-post="/coffees/{{ coffee.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="ml-1 rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </td>
+  </tr>
+{% endif %}
+{% if include_oob_form_clear %}
+  {# 04-RESEARCH Pattern 2: clear the form mount on successful create. #}
+  <div id="coffee-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}

@@ -1,0 +1,56 @@
+{# Coffee filter dropdown panel (CAT-07 / 04-RESEARCH Open Question 2).
+
+   Same shape as the inline filter form on `pages/coffees.html` but
+   rendered as a swappable fragment for HTMX-fetched refresh — useful
+   when a new roaster is created via the mini-modal and the filter
+   dropdowns need updating without a full page reload.
+
+   Context contract (passed by GET /coffees/filters-panel):
+     - roasters:  list[Roaster] — active roasters only.
+     - countries: list[str]      — distinct non-null countries.
+     - processes: tuple[str, ...] — locked 6-value enum.
+     - filters:   dict — echoed back so the swap preserves selection
+                          (kept for symmetry; the refresh use case
+                          may pass {roaster_id: None, ...} for a clean
+                          reset).
+#}
+<form id="coffee-filters"
+      class="mb-4 flex flex-wrap gap-3 items-end"
+      hx-get="/coffees"
+      hx-trigger="change from:select, change from:input[type='checkbox']"
+      hx-push-url="true"
+      hx-target="#coffee-list"
+      hx-swap="innerHTML"
+      hx-include="this">
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Roaster</span>
+    <select name="roaster_id" class="rounded border border-espresso-200 px-2 py-2 text-base dark:border-espresso-700">
+      <option value="">All</option>
+      {% for r in roasters %}
+        <option value="{{ r.id }}"{% if filters.roaster_id == r.id %} selected{% endif %}>{{ r.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Country</span>
+    <select name="country" class="rounded border border-espresso-200 px-2 py-2 text-base dark:border-espresso-700">
+      <option value="">All</option>
+      {% for c in countries %}
+        <option value="{{ c }}"{% if filters.country == c %} selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Process</span>
+    <select name="process" class="rounded border border-espresso-200 px-2 py-2 text-base dark:border-espresso-700">
+      <option value="">All</option>
+      {% for p in processes %}
+        <option value="{{ p }}"{% if filters.process == p %} selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="flex items-center gap-2 mt-6">
+    <input type="checkbox" name="archived" value="true"{% if filters.archived %} checked{% endif %}>
+    <span class="text-sm">Show archived</span>
+  </label>
+</form>
