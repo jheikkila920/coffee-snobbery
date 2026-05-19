@@ -74,6 +74,46 @@ ENCRYPTION_DECRYPT_FAILED = "encryption.decrypt_failed"
 CSP_VIOLATION = "csp.violation"
 RATE_LIMIT_EXCEEDED = "rate_limit.exceeded"
 
+# --- catalog.* (Phase 4) ---------------------------------------------------
+# Shared-catalog write events. Per D-14 taxonomy ``<category>.<action>``;
+# the catalog category groups the five shared entities (coffee, roaster,
+# flavor_note, equipment, recipe) plus bag lifecycle and the photo
+# pipeline. Emitted by per-entity service modules (Phase 4 plans 04-04
+# through 04-10) at the end of each successful write transaction.
+#
+# Field shapes the downstream JSON-log queries depend on:
+# - ``catalog.<entity>.created/updated/archived`` carry ``<entity>_id``
+#   (e.g. ``coffee_id``) and ``user_id``.
+# - ``catalog.recipe.duplicated`` adds ``source_id`` to the
+#   ``recipe.created`` shape.
+# - ``catalog.bag.photo_uploaded`` / ``.photo_deleted`` carry
+#   ``bag_id``, ``filename``, ``user_id``.
+# - ``catalog.photo.orphan_swept`` is operator-facing (no user_id);
+#   emitted by ``app.services.photos.sweep_orphans`` with ``count`` +
+#   ``total_on_disk`` fields.
+CATALOG_COFFEE_CREATED = "catalog.coffee.created"
+CATALOG_COFFEE_UPDATED = "catalog.coffee.updated"
+CATALOG_COFFEE_ARCHIVED = "catalog.coffee.archived"
+CATALOG_ROASTER_CREATED = "catalog.roaster.created"
+CATALOG_ROASTER_UPDATED = "catalog.roaster.updated"
+CATALOG_ROASTER_ARCHIVED = "catalog.roaster.archived"
+CATALOG_FLAVOR_NOTE_CREATED = "catalog.flavor_note.created"
+CATALOG_FLAVOR_NOTE_UPDATED = "catalog.flavor_note.updated"
+CATALOG_FLAVOR_NOTE_ARCHIVED = "catalog.flavor_note.archived"
+CATALOG_EQUIPMENT_CREATED = "catalog.equipment.created"
+CATALOG_EQUIPMENT_UPDATED = "catalog.equipment.updated"
+CATALOG_EQUIPMENT_ARCHIVED = "catalog.equipment.archived"
+CATALOG_RECIPE_CREATED = "catalog.recipe.created"
+CATALOG_RECIPE_UPDATED = "catalog.recipe.updated"
+CATALOG_RECIPE_ARCHIVED = "catalog.recipe.archived"
+CATALOG_RECIPE_DUPLICATED = "catalog.recipe.duplicated"
+CATALOG_BAG_CREATED = "catalog.bag.created"
+CATALOG_BAG_UPDATED = "catalog.bag.updated"
+CATALOG_BAG_ARCHIVED = "catalog.bag.archived"
+CATALOG_BAG_PHOTO_UPLOADED = "catalog.bag.photo_uploaded"
+CATALOG_BAG_PHOTO_DELETED = "catalog.bag.photo_deleted"
+CATALOG_PHOTO_ORPHAN_SWEPT = "catalog.photo.orphan_swept"
+
 
 __all__ = [
     "ADMIN_API_CREDENTIAL_SET",
@@ -86,6 +126,28 @@ __all__ = [
     "AUTH_LOGIN_FAILED",
     "AUTH_LOGIN_SUCCEEDED",
     "AUTH_LOGOUT",
+    "CATALOG_BAG_ARCHIVED",
+    "CATALOG_BAG_CREATED",
+    "CATALOG_BAG_PHOTO_DELETED",
+    "CATALOG_BAG_PHOTO_UPLOADED",
+    "CATALOG_BAG_UPDATED",
+    "CATALOG_COFFEE_ARCHIVED",
+    "CATALOG_COFFEE_CREATED",
+    "CATALOG_COFFEE_UPDATED",
+    "CATALOG_EQUIPMENT_ARCHIVED",
+    "CATALOG_EQUIPMENT_CREATED",
+    "CATALOG_EQUIPMENT_UPDATED",
+    "CATALOG_FLAVOR_NOTE_ARCHIVED",
+    "CATALOG_FLAVOR_NOTE_CREATED",
+    "CATALOG_FLAVOR_NOTE_UPDATED",
+    "CATALOG_PHOTO_ORPHAN_SWEPT",
+    "CATALOG_RECIPE_ARCHIVED",
+    "CATALOG_RECIPE_CREATED",
+    "CATALOG_RECIPE_DUPLICATED",
+    "CATALOG_RECIPE_UPDATED",
+    "CATALOG_ROASTER_ARCHIVED",
+    "CATALOG_ROASTER_CREATED",
+    "CATALOG_ROASTER_UPDATED",
     "CSP_VIOLATION",
     "ENCRYPTION_DECRYPT_FAILED",
     "ENCRYPTION_REWRAP_COMPLETED",
