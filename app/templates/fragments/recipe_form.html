@@ -1,0 +1,140 @@
+{# Inline-expand recipe form (D-02 / D-04 / D-09).
+   Modes set by the router:
+     - mode="create" → POST /recipes,           target #recipe-form-mount
+     - mode="edit"   → POST /recipes/{id},      target closest [data-row]
+   On validation failure the router re-renders this same fragment at HTTP 200
+   with `errors` populated, `values` carrying the user's submitted text, and
+   `steps_json` re-seeding the Alpine step-builder with what the user typed.
+
+   The single wrapping <div> carries x-data="recipeStepBuilder" so the step
+   builder, the hidden steps input, AND the pour-timeline preview all share
+   one Alpine scope (D-09 zero round-trips during editing). The
+   `data-initial-steps` attribute is the seed payload Alpine reads in init().
+
+   Cancel hits /recipes/empty-form which returns fragments/empty.html (no
+   inline onclick — CSP-strict per Phase 1 D-04).
+#}
+{% set is_edit = mode == "edit" %}
+{% if is_edit %}
+  {% set form_action = "/recipes/" ~ recipe_id %}
+  {% set form_target = "closest [data-row]" %}
+  {% set form_swap = "outerHTML" %}
+{% else %}
+  {% set form_action = "/recipes" %}
+  {% set form_target = "#recipe-form-mount" %}
+  {% set form_swap = "innerHTML" %}
+{% endif %}
+<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800"
+     x-data="recipeStepBuilder"
+     data-initial-steps="{{ steps_json }}">
+  <form hx-post="{{ form_action }}"
+        hx-target="{{ form_target }}"
+        hx-swap="{{ form_swap }}"
+        class="flex flex-col gap-4">
+    {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Name</span>
+      <input name="name"
+             required
+             maxlength="200"
+             value="{{ values.get('name', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('name') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('name') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['name'] }}</p>
+      {% endif %}
+    </label>
+
+    <div class="flex flex-wrap gap-4">
+      <label class="flex flex-col gap-1 flex-1 min-w-[6rem]">
+        <span class="text-sm font-semibold">Dose (g)</span>
+        <input name="dose_grams"
+               type="number"
+               inputmode="decimal"
+               min="1" max="200"
+               required
+               value="{{ values.get('dose_grams', '') }}"
+               class="rounded border px-2 py-2 text-base{% if errors.get('dose_grams') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        {% if errors.get('dose_grams') %}
+          <p class="text-sm text-red-700 mt-1">{{ errors['dose_grams'] }}</p>
+        {% endif %}
+      </label>
+      <label class="flex flex-col gap-1 flex-1 min-w-[6rem]">
+        <span class="text-sm font-semibold">Water (g)</span>
+        <input name="water_grams"
+               type="number"
+               inputmode="decimal"
+               min="1" max="3000"
+               required
+               value="{{ values.get('water_grams', '') }}"
+               class="rounded border px-2 py-2 text-base{% if errors.get('water_grams') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        {% if errors.get('water_grams') %}
+          <p class="text-sm text-red-700 mt-1">{{ errors['water_grams'] }}</p>
+        {% endif %}
+      </label>
+      <label class="flex flex-col gap-1 flex-1 min-w-[6rem]">
+        <span class="text-sm font-semibold">Temp (°C)</span>
+        <input name="water_temp_c"
+               type="number"
+               inputmode="decimal"
+               min="0" max="100"
+               required
+               value="{{ values.get('water_temp_c', '') }}"
+               class="rounded border px-2 py-2 text-base{% if errors.get('water_temp_c') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        {% if errors.get('water_temp_c') %}
+          <p class="text-sm text-red-700 mt-1">{{ errors['water_temp_c'] }}</p>
+        {% endif %}
+      </label>
+    </div>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Grind setting</span>
+      <input name="grind_setting"
+             maxlength="200"
+             value="{{ values.get('grind_setting', '') }}"
+             placeholder="e.g., Comandante click 22"
+             class="rounded border px-2 py-2 text-base{% if errors.get('grind_setting') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('grind_setting') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['grind_setting'] }}</p>
+      {% endif %}
+    </label>
+
+    {% if errors.get('_steps') %}
+      <div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-700/40 dark:text-red-300">
+        {{ errors['_steps'] }}
+      </div>
+    {% endif %}
+
+    <div class="flex flex-col md:flex-row md:gap-6">
+      <div class="md:basis-2/3">
+        {% include "fragments/recipe_step_builder.html" %}
+      </div>
+      <div class="md:basis-1/3 md:ml-6 mt-4 md:mt-0">
+        {% include "fragments/pour_timeline.html" %}
+      </div>
+    </div>
+
+    {# D-09 submit convention: hidden input carries the JSON-serialised
+       step array; the Alpine getter `stepsJson` keeps it in sync. #}
+    <input type="hidden" name="steps" :value="stepsJson">
+
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
+    {% endif %}
+
+    <div class="flex gap-3 mt-2">
+      <button type="button"
+              hx-get="/recipes/empty-form"
+              hx-target="#recipe-form-mount"
+              hx-swap="innerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Save
+      </button>
+    </div>
+  </form>
+</div>

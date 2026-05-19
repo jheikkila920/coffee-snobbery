@@ -1,0 +1,37 @@
+{# Pour-timeline preview — UI-SPEC §"Pour-Timeline Preview" (D-11).
+
+   Vertical bar with proportional segments. Lives INSIDE the
+   x-data="recipeStepBuilder" scope set by recipe_form.html so the
+   timeline reacts to step add/remove/reorder/edit with no round-trips.
+
+   Approach: stacked div segments (NOT SVG). Each segment's flex-basis
+   is the step's time-delta ratio; a min-height keeps very-short segments
+   visible. Alternating shades of the espresso ramp distinguish steps
+   without rainbow colors. The approach choice is documented in SUMMARY.
+
+   Empty / zero-time state: friendly placeholder rendered via x-if so a
+   new recipe with one Bloom step still shows something useful.
+#}
+<div class="flex flex-col gap-1">
+  <p class="text-sm font-semibold text-espresso-700 dark:text-cream-200">Pour timeline</p>
+  <template x-if="totalTime === 0">
+    <div class="rounded-md border border-espresso-200 dark:border-espresso-800 px-4 py-8 text-center">
+      <p class="text-sm text-espresso-600 dark:text-cream-300">Add a step to see the pour timeline</p>
+    </div>
+  </template>
+  <template x-if="totalTime > 0">
+    <div class="flex flex-col rounded-md border border-espresso-200 dark:border-espresso-800 overflow-hidden">
+      <template x-for="(seg, idx) in timelineSegments" :key="idx">
+        <div class="flex items-center justify-between gap-3 px-3 text-sm text-cream-50"
+             :class="(idx % 2 === 0) ? 'bg-espresso-700' : 'bg-espresso-500'"
+             :style="'min-height: 32px; flex-basis: ' + Math.max(seg.ratio, 4) + '%;'">
+          <span class="truncate" x-text="seg.label"></span>
+          <span class="tabular-nums whitespace-nowrap" x-text="seg.water + 'g · ' + formatTime(seg.end)"></span>
+        </div>
+      </template>
+    </div>
+  </template>
+  <p class="text-sm text-espresso-700 dark:text-cream-200 tabular-nums"
+     x-show="totalTime > 0"
+     x-text="'Total: ' + totalWater + 'g over ' + formatTime(totalTime)"></p>
+</div>

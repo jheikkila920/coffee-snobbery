@@ -88,6 +88,7 @@ from app.routers import debug as debug_router
 from app.routers import equipment as equipment_router
 from app.routers import flavor_notes as flavor_notes_router
 from app.routers import photos as photos_router
+from app.routers import recipes as recipes_router
 from app.routers import roasters as roasters_router
 from app.services import credentials
 from app.services import settings as settings_service
@@ -219,6 +220,7 @@ def create_app() -> FastAPI:
     app.include_router(roasters_router.router)
     app.include_router(flavor_notes_router.router)
     app.include_router(equipment_router.router)
+    app.include_router(recipes_router.router)
     app.include_router(photos_router.router)
 
     @app.get("/healthz")
