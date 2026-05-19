@@ -31,7 +31,7 @@ document.addEventListener('alpine:init', () => {
   // --------------------------------------------------------------------- //
   // Single-value autocomplete (roaster input on the coffee form).         //
   // --------------------------------------------------------------------- //
-  Alpine.data('autocomplete', (config) => ({
+  Alpine.data('autocomplete', () => ({
     entityKey: '',
     hiddenInputName: '',
     selectedId: null,
@@ -41,11 +41,15 @@ document.addEventListener('alpine:init', () => {
     highlightIdx: -1,
 
     init() {
-      const cfg = config || {};
-      this.entityKey = cfg.entityKey || '';
-      this.hiddenInputName = cfg.hiddenInputName || '';
-      this.selectedId = cfg.initialId || null;
-      this.selectedLabel = cfg.initialName || '';
+      // Config comes from data-* attributes on the wrapper (CSP-safe — the
+      // @alpinejs/csp build cannot parse object-literal x-data arguments;
+      // this mirrors recipeStepBuilder's data-initial-steps pattern).
+      const ds = this.$root.dataset;
+      this.entityKey = ds.entityKey || '';
+      this.hiddenInputName = ds.hiddenInputName || '';
+      const rawId = parseInt(ds.initialId, 10);
+      this.selectedId = Number.isFinite(rawId) ? rawId : null;
+      this.selectedLabel = ds.initialName || '';
       this.query = this.selectedLabel;
 
       // D-16: HX-Trigger {entity}-created → pre-select. The payload key
@@ -105,6 +109,14 @@ document.addEventListener('alpine:init', () => {
       this.highlightIdx = -1;
     },
 
+    // Uniform dropdown-item commit: reads id+name off the clicked <li>'s
+    // data-* attributes (set by autocomplete_list.html) so the template
+    // handler stays a CSP-safe `commitItem($el)` with no string literals.
+    commitItem(el) {
+      const id = parseInt(el.dataset.itemId, 10);
+      this.select(Number.isFinite(id) ? id : null, el.dataset.itemName || '');
+    },
+
     onKeydown(e) {
       // The dropdown <ul> is rendered as a sibling of the input inside
       // the wrapper. Read its <li role="option"> children for keyboard
@@ -152,20 +164,27 @@ document.addEventListener('alpine:init', () => {
   // submit time. FastAPI's Form(default_factory=list) collects the        //
   // repeated keys natively — no comma-separated string fallback.          //
   // --------------------------------------------------------------------- //
-  Alpine.data('flavorNoteChips', (config) => ({
+  Alpine.data('flavorNoteChips', () => ({
     selectedChips: [],
     query: '',
     open: false,
     highlightIdx: -1,
 
     init() {
-      const cfg = config || {};
       // Server seeds the chip list via the form context's
       // `selected_flavor_notes` list of {id, name} dicts so the form
       // survives a 200 validation re-render BEFORE Alpine hydrates
-      // (plan 04-07 contract). Pass that list through cfg.initialChips.
-      this.selectedChips = Array.isArray(cfg.initialChips)
-        ? cfg.initialChips.slice()
+      // (plan 04-07 contract). Passed as JSON in data-initial-chips
+      // (CSP-safe — the @alpinejs/csp build cannot parse object-literal
+      // x-data arguments; mirrors recipeStepBuilder's data-* pattern).
+      let initialChips = [];
+      try {
+        initialChips = JSON.parse(this.$root.dataset.initialChips || '[]');
+      } catch (_err) {
+        initialChips = [];
+      }
+      this.selectedChips = Array.isArray(initialChips)
+        ? initialChips.slice()
         : [];
 
       // Plan 04-11: the form fragment also renders the server seed as
@@ -227,6 +246,15 @@ document.addEventListener('alpine:init', () => {
       this.query = '';
       this.open = false;
       this.highlightIdx = -1;
+    },
+
+    // Uniform dropdown-item commit (mirrors autocomplete.commitItem): reads
+    // id+name off the clicked <li>'s data-* attributes so the template
+    // handler stays a CSP-safe `commitItem($el)`.
+    commitItem(el) {
+      const id = parseInt(el.dataset.itemId, 10);
+      if (!Number.isFinite(id)) return;
+      this.addChip(id, el.dataset.itemName || '');
     },
 
     removeChip(id) {

@@ -246,7 +246,7 @@ def test_datalist_short_query_empty(
     """len(q) < 2 → empty body (debounce-cheap)."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/flavor-notes/datalist?q=a")
+    resp = authed_client.get("/flavor-notes/datalist?flavor_note_query=a")
     assert resp.status_code == 200
     assert resp.text.strip() == ""
 
@@ -259,7 +259,7 @@ def test_datalist_returns_matches(
     _require_p4_migration_applied()
     _seed_flavor_note(name="Bergamot", category="fruit")
     _seed_flavor_note(name="Jasmine", category="floral")
-    resp = authed_client.get("/flavor-notes/datalist?q=ber")
+    resp = authed_client.get("/flavor-notes/datalist?flavor_note_query=ber")
     assert resp.status_code == 200
     body = resp.text
     assert '<li role="option"' in body
@@ -276,7 +276,7 @@ def test_datalist_create_new_when_no_match(
     """No exact match for q → "+ Create new flavor note" affordance appears."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/flavor-notes/datalist?q=watermelon")
+    resp = authed_client.get("/flavor-notes/datalist?flavor_note_query=watermelon")
     assert resp.status_code == 200
     assert '+ Create new flavor note: "watermelon"' in resp.text
 

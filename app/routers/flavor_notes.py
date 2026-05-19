@@ -363,7 +363,7 @@ def archive_flavor_note_handler(
 @router.get("/datalist", response_class=HTMLResponse)
 def flavor_note_autocomplete(
     request: Request,
-    q: str = "",
+    flavor_note_query: str = "",
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
@@ -377,7 +377,12 @@ def flavor_note_autocomplete(
     Reuses the shared ``fragments/autocomplete_list.html`` from plan
     04-04 — context shape: ``items, query, entity, exact_match,
     create_new_endpoint``.
+
+    The query param is ``flavor_note_query`` — the coffee form's
+    autocomplete input is ``name="flavor_note_query"`` so HTMX sends it
+    under that key.
     """
+    q = flavor_note_query
     if len(q) < 2:
         return HTMLResponse("", status_code=200)
     matches = flavor_notes_service.search_by_prefix(db, query=q)

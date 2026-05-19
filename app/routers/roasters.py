@@ -389,7 +389,7 @@ def archive_roaster_handler(
 @router.get("/list", response_class=HTMLResponse)
 def roaster_autocomplete(
     request: Request,
-    q: str = "",
+    roaster_query: str = "",
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
@@ -399,7 +399,11 @@ def roaster_autocomplete(
     cheap. Otherwise an ``<ul role="listbox">`` with up to 50 matches.
     Appends a "+ Create new roaster" affordance when no exact match
     exists, opening the mini-modal substrate path.
+
+    The query param is ``roaster_query`` — the coffee form's autocomplete
+    input is ``name="roaster_query"`` so HTMX sends it under that key.
     """
+    q = roaster_query
     if len(q) < 2:
         return HTMLResponse("", status_code=200)
     matches = roasters_service.search_by_prefix(db, query=q)

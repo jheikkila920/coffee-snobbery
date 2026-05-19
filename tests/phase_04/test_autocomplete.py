@@ -185,7 +185,7 @@ def test_autocomplete_list_create_new_targets_modal_mount(
     """The autocomplete-list fragment's "+ Create new" <li> targets #modal-mount."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/roasters/list?q=neverseenname")
+    resp = authed_client.get("/roasters/list?roaster_query=neverseenname")
     assert resp.status_code == 200
     body = resp.text
     assert 'hx-target="#modal-mount"' in body
@@ -198,7 +198,7 @@ def test_autocomplete_list_create_new_passes_prefill(
     """The "+ Create new" hx-get URL includes prefill=<query> so the modal pre-populates."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/roasters/list?q=spectremill")
+    resp = authed_client.get("/roasters/list?roaster_query=spectremill")
     body = resp.text
     # The fragment's hx-get URL must include prefill=spectremill so the
     # modal opens with the Name input pre-populated.
@@ -211,7 +211,7 @@ def test_autocomplete_list_flavor_note_create_new_passes_prefill(
     """Parallel check for the flavor-notes datalist."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/flavor-notes/datalist?q=ozonefruit")
+    resp = authed_client.get("/flavor-notes/datalist?flavor_note_query=ozonefruit")
     body = resp.text
     assert 'hx-target="#modal-mount"' in body
     assert "+ Create new flavor note:" in body
@@ -398,7 +398,7 @@ def test_roaster_autocomplete_response_has_no_hx_swap_oob(
     _require_postgres()
     _require_p4_migration_applied()
     _seed_roaster(name="Onyx Roasters")
-    resp = authed_client.get("/roasters/list?q=onyx")
+    resp = authed_client.get("/roasters/list?roaster_query=onyx")
     assert resp.status_code == 200
     assert "hx-swap-oob" not in resp.text
 
@@ -409,7 +409,7 @@ def test_flavor_note_autocomplete_response_has_no_hx_swap_oob(
     """Same contract for the flavor-notes datalist."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/flavor-notes/datalist?q=ber")
+    resp = authed_client.get("/flavor-notes/datalist?flavor_note_query=ber")
     assert resp.status_code == 200
     assert "hx-swap-oob" not in resp.text
 
@@ -422,30 +422,33 @@ def test_flavor_note_autocomplete_response_has_no_hx_swap_oob(
 def test_autocomplete_list_items_carry_alpine_click_handler_for_roaster(
     authed_client: Any, clean_catalog: None
 ) -> None:
-    """Each <li role="option"> in the roaster autocomplete calls select(id, name).
+    """Each <li role="option"> commits the choice via the CSP-safe handler.
 
-    The Alpine `autocomplete` component (single-value picker) exposes a
-    `select` method; autocomplete_list.html's per-item x-on:click
-    commits the user's choice via `select(id, "name")` when entity is
-    NOT "flavor note".
+    The shared autocomplete_list.html binds a uniform
+    ``x-on:click="commitItem($el)"`` and carries the id+name on
+    ``data-item-id`` / ``data-item-name`` attributes (the @alpinejs/csp
+    build cannot parse inline string-literal method args, so the id+name
+    travel via data-* attributes the component reads off ``$el``).
     """
     _require_postgres()
     _require_p4_migration_applied()
     rid = _seed_roaster(name="Onyx Roasters")
-    resp = authed_client.get("/roasters/list?q=onyx")
+    resp = authed_client.get("/roasters/list?roaster_query=onyx")
     body = resp.text
-    assert f"select({rid}," in body
+    assert 'x-on:click="commitItem($el)"' in body
+    assert f'data-item-id="{rid}"' in body
 
 
 def test_autocomplete_list_items_carry_alpine_click_handler_for_flavor_note(
     authed_client: Any, clean_catalog: None
 ) -> None:
-    """Each <li role="option"> in the flavor-note datalist calls addChip(id, name).
+    """Flavor-note datalist items commit via the same CSP-safe handler.
 
-    Plan 04-11 locks the chip widget as multi-value via
-    Alpine.data('flavorNoteChips') — its commit method is `addChip` (not
-    `select`), called from autocomplete_list.html's per-item handler
-    when entity == "flavor note".
+    Plan 04-11's chip widget (Alpine.data('flavorNoteChips')) and the
+    single-value picker share the uniform ``commitItem($el)`` handler;
+    the component variant decides select-vs-addChip. The dropdown markup
+    carries the id+name on data-* attributes (CSP-safe — no inline
+    string-literal method args).
     """
     _require_postgres()
     _require_p4_migration_applied()
@@ -457,6 +460,7 @@ def test_autocomplete_list_items_carry_alpine_click_handler_for_flavor_note(
             db, name="Bergamot", category="fruit", by_user_id=0
         )
         fn_id = fn.id
-    resp = authed_client.get("/flavor-notes/datalist?q=ber")
+    resp = authed_client.get("/flavor-notes/datalist?flavor_note_query=ber")
     body = resp.text
-    assert f"addChip({fn_id}," in body
+    assert 'x-on:click="commitItem($el)"' in body
+    assert f'data-item-id="{fn_id}"' in body

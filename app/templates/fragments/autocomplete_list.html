@@ -28,16 +28,19 @@
    parent-side `hx-trigger="focus once from:closest .field"` re-fetch on
    the input element.
 #}
-{# Pick the commit-method name based on the entity. Flavor notes are a
-   multi-value chip widget (Alpine.data('flavorNoteChips') has addChip);
-   roasters are single-value (Alpine.data('autocomplete') has select). #}
-{% set commit_method = "addChip" if entity == "flavor note" else "select" %}
+{# Per-item commit handler. Both components expose a uniform `commitItem($el)`
+   that reads data-item-id / data-item-name off the clicked <li>. Passing the
+   id+name via data-* attributes (autoescaped) instead of inline string-literal
+   args avoids quote-nesting in the handler attribute and keeps the expression
+   CSP-safe (a method call with the `$el` magic — no string literals). #}
 <ul role="listbox" class="bg-cream-100 border border-espresso-200 rounded-lg max-h-64 overflow-y-auto dark:bg-espresso-900 dark:border-espresso-800">
   {% for item in items %}
     {% set lower = item.name|lower %}
     {% set q_lower = query|lower %}
     <li role="option"
-        x-on:click="{{ commit_method }}({{ item.id }}, {{ item.name|tojson }})"
+        x-on:click="commitItem($el)"
+        data-item-id="{{ item.id }}"
+        data-item-name="{{ item.name }}"
         class="px-3 py-2 text-base hover:bg-cream-200 dark:hover:bg-espresso-800 cursor-pointer min-h-[44px]">
       {% if q_lower in lower %}
         {% set idx = lower.find(q_lower) %}

@@ -82,7 +82,11 @@
        sets selectedId + selectedLabel + query, the visible label updates via
        :value="query", the hidden input updates via :value="selectedId". #}
     <div class="field flex flex-col gap-1"
-         x-data="autocomplete({ entityKey: 'roaster', hiddenInputName: 'roaster_id', initialId: {{ values.get('roaster_id') or 'null' }}, initialName: {{ (roaster_name or '')|tojson }} })">
+         x-data="autocomplete"
+         data-entity-key="roaster"
+         data-hidden-input-name="roaster_id"
+         data-initial-id="{{ values.get('roaster_id') or '' }}"
+         data-initial-name="{{ roaster_name or '' }}">
       <span class="text-sm font-semibold">Roaster</span>
       <div class="relative">
         <input type="text"
@@ -201,7 +205,8 @@
        chip-widget contract in 04-07-SUMMARY. #}
     <div id="flavor-note-chips"
          class="field flavor-note-chips-field flex flex-col gap-1"
-         x-data="flavorNoteChips({ initialChips: {{ selected_flavor_notes|tojson }} })">
+         x-data="flavorNoteChips"
+         data-initial-chips='{{ selected_flavor_notes|tojson }}'>
       <span class="text-sm font-semibold">Advertised flavor notes</span>
       {# Two render paths:
            1. No-JS / pre-hydration: the static `<span data-server-chip>`

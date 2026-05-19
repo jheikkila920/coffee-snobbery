@@ -323,7 +323,7 @@ def test_autocomplete_short_query_returns_empty(
     """len(q) < 2 → empty body (debounce-cheap)."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/roasters/list?q=a")
+    resp = authed_client.get("/roasters/list?roaster_query=a")
     assert resp.status_code == 200
     assert resp.text.strip() == ""
 
@@ -336,7 +336,7 @@ def test_autocomplete_returns_matches(
     _require_p4_migration_applied()
     _seed_roaster(name="Onyx")
     _seed_roaster(name="Heart")
-    resp = authed_client.get("/roasters/list?q=on")
+    resp = authed_client.get("/roasters/list?roaster_query=on")
     assert resp.status_code == 200
     body = resp.text
     assert '<li role="option"' in body
@@ -355,7 +355,7 @@ def test_autocomplete_appends_create_new_when_no_exact_match(
     """No exact match for q → "+ Create new roaster" affordance appears."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = authed_client.get("/roasters/list?q=newname")
+    resp = authed_client.get("/roasters/list?roaster_query=newname")
     assert resp.status_code == 200
     assert '+ Create new roaster: "newname"' in resp.text
 
@@ -367,7 +367,7 @@ def test_autocomplete_no_create_new_when_exact_match(
     _require_postgres()
     _require_p4_migration_applied()
     _seed_roaster(name="Onyx")
-    resp = authed_client.get("/roasters/list?q=Onyx")
+    resp = authed_client.get("/roasters/list?roaster_query=Onyx")
     assert resp.status_code == 200
     assert "+ Create new roaster:" not in resp.text
 

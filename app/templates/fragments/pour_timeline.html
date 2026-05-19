@@ -23,10 +23,10 @@
     <div class="flex flex-col rounded-md border border-espresso-200 dark:border-espresso-800 overflow-hidden">
       <template x-for="(seg, idx) in timelineSegments" :key="idx">
         <div class="flex items-center justify-between gap-3 px-3 text-sm text-cream-50"
-             :class="(idx % 2 === 0) ? 'bg-espresso-700' : 'bg-espresso-500'"
-             :style="'min-height: 32px; flex-basis: ' + Math.max(seg.ratio, 4) + '%;'">
+             :class="seg.shadeClass"
+             :style="seg.barStyle">
           <span class="truncate" x-text="seg.label"></span>
-          <span class="tabular-nums whitespace-nowrap" x-text="seg.water + 'g · ' + formatTime(seg.end)"></span>
+          <span class="tabular-nums whitespace-nowrap" x-text="seg.summary"></span>
         </div>
       </template>
     </div>

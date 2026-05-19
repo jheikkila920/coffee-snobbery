@@ -149,15 +149,24 @@ document.addEventListener('alpine:init', () => {
         const end = step.time_seconds || 0;
         const delta = Math.max(0, end - start);
         prevTime = end;
+        const ratio = (delta / total) * 100;
         return {
           label: step.label || ('Step ' + (idx + 1)),
           water: step.water_grams || 0,
           start: start,
           end: end,
           delta: delta,
-          // ratio as a 0–100 percentage; min-height in the template
-          // keeps very-short segments visible.
-          ratio: (delta / total) * 100,
+          // ratio as a 0–100 percentage; min-height keeps very-short
+          // segments visible.
+          ratio: ratio,
+          // Precomputed here (not in the template) because the @alpinejs/csp
+          // build forbids the `Math` global in template expressions.
+          barStyle: 'min-height: 32px; flex-basis: ' + Math.max(ratio, 4) + '%;',
+          // 0-based alternating shade — precomputed so the template binds a
+          // bare property instead of an inline `idx % 2` expression.
+          shadeClass: idx % 2 === 0 ? 'bg-espresso-700' : 'bg-espresso-500',
+          // Right-aligned summary string (water + cumulative time).
+          summary: (step.water_grams || 0) + 'g · ' + this.formatTime(end),
         };
       });
     },
