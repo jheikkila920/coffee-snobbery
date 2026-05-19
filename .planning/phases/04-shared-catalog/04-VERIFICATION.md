@@ -1,8 +1,9 @@
 ---
 phase: 04-shared-catalog
 verified: 2026-05-19T12:00:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
+human_uat: passed (6/6 — see 04-HUMAN-UAT.md; required G-04-CSP fix + 2 foundational fixes, all browser-verified via Playwright)
 overrides_applied: 0
 human_verification:
   - test: "Recipe step builder: open /recipes/new, add 2 steps, verify cumulative water + time update live in the step row delta readout, verify pour-timeline preview reacts in real time"

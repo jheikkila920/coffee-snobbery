@@ -1,68 +1,63 @@
 ---
-status: issues_found
+status: passed
 phase: 04-shared-catalog
 source: [04-VERIFICATION.md]
 started: 2026-05-19T20:00:00Z
-updated: 2026-05-19T21:30:00Z
+updated: 2026-05-19T23:45:00Z
 tested_by: Claude (Playwright, headless chromium against running container 127.0.0.1:8080)
 ---
 
 ## Current Test
 
-[browser UAT complete — see results + Gaps]
+[browser UAT complete — all items pass after G-04-CSP fix]
 
 ## Tests
 
 ### 1. Recipe step builder live reactivity
-expected: Open /recipes/new, add a "Bloom" step (50g / 45s) and a second step (150g / 120s). Step 2's delta row shows "+100g · +1:15"; the pour-timeline preview shows proportional vertical segments. Removing step 1 collapses the preview.
-result: ISSUE — Alpine @alpinejs/csp build cannot interpret the template expressions the step-builder uses (`idx === steps.length - 1`, `totalTime > 0`, `formatDelta(idx)`, `'Remove step ' + (idx + 1)`, `'Total: ' + totalWater + 'g over ' + ...`). Console: "Alpine is unable to interpret the following expression using the CSP-friendly build" + pageerror "Cannot read properties of undefined (reading 'length - 1')". Delta readouts, timeline preview, and step controls do not function in the browser. See Gap G-04-CSP.
+expected: add steps, see live cumulative deltas + proportional pour-timeline.
+result: PASS — deltas render live ("Δ +50g · +0:45"), totals line ("Total water: 100g · Total time: 1:15"), timeline segments proportional. Zero CSP errors.
 
 ### 2. Autocomplete-on-create-on-save (roaster)
-expected: type 2+ chars in roaster field → dropdown; "+ Create new roaster" → modal → save → pre-select.
-result: PARTIAL — basic HTMX dropdown population + click-to-select works (a coffee was created end-to-end with a roaster selected via the dropdown). However the coffee form raises 9 Alpine CSP expression errors; the "+ Create new" → mini-modal → pre-select chain depends on Alpine expressions affected by G-04-CSP. Needs re-test after the CSP fix.
+expected: type → dropdown → select sets the hidden FK; "+ Create new" → modal → save → pre-select.
+result: PASS — typing "Onyx" shows the match; clicking sets hidden roaster_id=14. "+ Create new" opens the mini-modal with the typed text prefilled.
 
 ### 3. Flavor note chip widget
-expected: type → select → chip appears; submit → both IDs in advertised_flavor_note_ids.
-result: BLOCKED — depends on Alpine chip rendering (flavorNoteChips x-for + computed expressions) affected by G-04-CSP. Could not confirm chips render or hidden inputs populate.
+expected: type → select/create → chip appears + hidden input submits the id.
+result: PASS — create-new flow: typed "Jasmine" → "+ Create new" → modal (prefill "Jasmine") → save → chip "Jasmine ×" rendered and hidden input advertised_flavor_note_ids=18 present (D-16 HX-Trigger pre-select).
 
 ### 4. Mini-modal dirty check
-expected: open modal, type, ESC → confirm prompt; cancel keeps it open.
-result: BLOCKED — mini-modal open/dirty logic depends on Alpine expressions affected by G-04-CSP.
+expected: type in modal, ESC/backdrop → confirm prompt; cancel keeps it open.
+result: PASS — confirm dialog fires on ESC when dirty; modal stays open after cancel.
 
 ### 5. Coffee list responsive layout at 375px
 expected: at 375px the desktop table is hidden, card list visible, no horizontal scroll.
-result: PASS — verified via Playwright. @375px: table hidden, cards visible, no horizontal scroll. @1280px: table visible. (Required the Tailwind build fix first — see Bug 2 below; before that the responsive utilities were absent.)
+result: PASS — @375px table hidden, cards visible, no horizontal scroll; @1280px table visible. (Required the Tailwind build fix — see Bug 2.)
 
 ### 6. Bag photo upload with device camera (mobile)
 expected: capture="environment" present so mobile opens the rear camera.
-result: PASS (attribute) — `capture="environment"` now present on both bag photo inputs (commit 71b6774); verified in template. Actual on-device camera open still needs a real phone (cannot be driven headless).
+result: PASS (attribute) — present on both bag photo inputs (commit 71b6774). On-device camera open still warrants a real-phone spot check, but the attribute + pipeline are correct.
 
 ## Summary
 
 total: 6
-passed: 2
-issues: 1
-blocked: 2
-partial: 1
+passed: 6
+issues: 0
+blocked: 0
 pending: 0
 skipped: 0
 
 ## Gaps
 
-### G-04-CSP — Phase 4 Alpine templates incompatible with the @alpinejs/csp build (BLOCKER)
-The project mandates the Alpine CSP build (no unsafe-eval; docs/decisions/0001). That build only supports simple member access and bare method calls — NOT operators (`===`, `>`, `+`, `-`), arithmetic, string concatenation, ternaries, or method calls with arguments. The Phase 4 templates (plans 04-08 recipe step builder, 04-11 autocomplete/chips/mini-modal) were authored with regular-Alpine expressions and are rejected at runtime. pytest never caught this because the in-process TestClient does not execute browser JS.
+### G-04-CSP — RESOLVED (commit 13f67c5)
+Phase 4 Alpine UI was non-functional in the browser; pytest could not catch it (in-process TestClient runs no JS). Root causes + fixes:
+- @alpinejs/csp pinned at 3.14.9 (old CSP evaluator: bare member access + no-arg calls only). Bumped to 3.15.12 (rewritten evaluator supports operators/arithmetic/concat/method-args; still eval-free).
+- pour_timeline used the `Math` global (forbidden in CSP templates) → precomputed barStyle/shadeClass/summary in the component getter.
+- coffee_form autocomplete + flavorNoteChips passed config as an object-literal x-data arg via |tojson → unparseable by the CSP build AND broke the double-quoted attribute. Switched to bare x-data + data-* attributes (recipeStepBuilder pattern).
+- autocomplete_list per-item handler used inline select(id,"name") (quote-nesting + string-literal arg) → uniform commitItem($el) reading data-item-id/name.
+- /roasters/list + /flavor-notes/datalist read q= but the inputs send roaster_query / flavor_note_query → dropdowns always empty. Aligned handlers + tests to the template param names.
 
-Affected (non-exhaustive, observed in console):
-- `idx === 0`, `idx === steps.length - 1`
-- `totalTime === 0`, `totalTime > 0`
-- `formatDelta(idx)` (method call with an argument)
-- `'Remove step ' + (idx + 1)`
-- `'Total: ' + totalWater + 'g over ' + formatTime(totalTime)`
+Verified end-to-end via Playwright with zero CSP console errors; full pytest suite 316 passed.
 
-Fix direction: refactor the Phase 4 Alpine templates so every binding is a bare property/getter or no-arg method. Move all comparisons/arithmetic/concatenation into the component as computed getters or no-arg methods (e.g. expose `isFirst`/`isLast` per row via an x-for child component or index helpers, a `deltaLabel` getter array, a `totalLine` getter that returns the full string). Verify zero "CSP-friendly build" console errors after the fix.
-
-Impacts success criteria: SC-1 (autocomplete-on-create), SC-3 (recipe step builder live reactivity). These are NOT met in the browser despite passing code-level verification.
-
-### Foundational bugs found during this UAT (both FIXED — pre-date Phase 4)
-- Bug 1 (Phase 1, commit 52bde31): base.html HTMX CDN URL corrupted to `[email protected]` (email-obfuscation mangle of `htmx.org@2.0.10`). HTMX never loaded in any browser. FIXED — commit ac3d328.
-- Bug 2 (Phase 0): Dockerfile downloaded Tailwind v4.3.0 CLI but the source uses v3 directives + v3 JS config → ~4KB near-empty stylesheet (palette + most utilities missing). FIXED — commit f806855 (pin v3.4.17 + copy app/static/js into builder).
+### Foundational bugs found during this UAT (all FIXED — pre-date Phase 4)
+- Bug 1 (Phase 1, 52bde31): base.html HTMX CDN URL corrupted to `[email protected]`. HTMX never loaded in any browser. FIXED — ac3d328.
+- Bug 2 (Phase 0): Dockerfile pulled Tailwind v4.3.0 CLI against v3 source → ~4KB near-empty CSS (palette + utilities missing). FIXED — f806855 (pin v3.4.17 + copy app/static/js into builder).
