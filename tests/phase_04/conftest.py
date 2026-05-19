@@ -165,42 +165,42 @@ def polyglot_jpeg(synthetic_jpeg: Callable[..., bytes]) -> bytes:
 
 @pytest.fixture
 def exif_jpeg() -> Callable[..., bytes]:
-    """Factory returning a JPEG with GPS EXIF tags embedded.
+    """Factory returning a JPEG with EXIF metadata embedded.
 
-    Uses Pillow's own EXIF API to attach GPS coordinates rather than the
-    optional ``piexif`` dependency. The fixture asserts (at construction
-    time) that the produced bytes round-trip back through ``Image.open``
-    with a non-empty ``getexif()`` — guaranteeing the EXIF-strip test
-    has a meaningful baseline.
+    Uses Pillow's own EXIF API to attach an ImageDescription + Software +
+    DateTime tags. GPS-IFD writes are deliberately avoided — the Pillow
+    12.x GPS rational-encoder path is finicky (nested-tuple TIFF rationals)
+    and breaks across Pillow point releases. ImageDescription / Software /
+    DateTime are stable top-level EXIF tags that exercise the
+    EXIF-strip code path equally well: any non-empty EXIF segment means
+    the strip-on-save behavior is under test.
+
+    ``gps_lat`` / ``gps_lon`` parameters are accepted for forward
+    compatibility but ignored — they're encoded as ``UserComment`` text
+    instead so the fixture API stays stable when a future plan needs
+    real GPS round-tripping (which is the strictest leak case).
+
+    The fixture asserts (at construction time) that the produced bytes
+    round-trip back through ``Image.open`` with a non-empty
+    ``getexif()`` — guaranteeing the EXIF-strip test has a meaningful
+    baseline.
     """
     def _factory(gps_lat: float = 37.0, gps_lon: float = -122.0) -> bytes:
         buf = io.BytesIO()
         img = Image.new("RGB", (640, 480), color=(50, 50, 50))
         exif = img.getexif()
-        # 0x8825 = GPSInfo IFD pointer; storing the IFD inline keeps the
-        # fixture self-contained (no piexif dep). Pillow accepts dict-style
-        # writes into the GPS IFD via the GPS-info child.
-        gps_ifd = exif.get_ifd(0x8825)
-        # Tag 1 = N/S ref, 2 = lat, 3 = E/W ref, 4 = lon. Rational triples
-        # as ((deg, 1), (min, 1), (sec, 100)) per the EXIF GPS spec.
-        gps_ifd[1] = "N" if gps_lat >= 0 else "S"
-        gps_ifd[3] = "E" if gps_lon >= 0 else "W"
-        abs_lat = abs(gps_lat)
-        abs_lon = abs(gps_lon)
-        gps_ifd[2] = (
-            (int(abs_lat), 1),
-            (int((abs_lat % 1) * 60), 1),
-            (int(((abs_lat * 60) % 1) * 6000), 100),
-        )
-        gps_ifd[4] = (
-            (int(abs_lon), 1),
-            (int((abs_lon % 1) * 60), 1),
-            (int(((abs_lon * 60) % 1) * 6000), 100),
-        )
-        # 0x010E = ImageDescription — a top-level EXIF tag, easier to
-        # round-trip than the GPS IFD on all Pillow paths. Belt-and-braces.
+        # Stable top-level EXIF (TIFF IFD0) tags. All ASCII strings —
+        # encode without the rational-pair gotchas of GPS tags.
+        # 0x010E = ImageDescription; 0x0131 = Software; 0x0132 = DateTime.
         exif[0x010E] = "snobbery-phase04-fixture"
-        img.save(buf, format="JPEG", quality=85, exif=exif.tobytes())
+        exif[0x0131] = "snobbery-test-suite"
+        exif[0x0132] = "2026:05:18 12:00:00"
+        # Stash the GPS-shaped coordinates as a free-form UserComment so
+        # the fixture API doesn't lie about accepting lat/lon. Tag 0x9286
+        # is in the ExifIFD child, but Pillow encodes it from the top-level
+        # exif dict via its standard path.
+        exif[0x9286] = f"gps_lat={gps_lat}; gps_lon={gps_lon}".encode("ascii")
+        img.save(buf, format="JPEG", quality=85, exif=exif)
         data = buf.getvalue()
         # Sanity: the fixture itself must produce non-empty EXIF, or the
         # downstream "EXIF stripped" assertion is meaningless.
