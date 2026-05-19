@@ -17,6 +17,11 @@ from app.models.api_credential import ApiCredential
 from app.models.app_setting import AppSetting
 from app.models.bag import Bag
 from app.models.base import Base
+from app.models.coffee import Coffee
+from app.models.equipment import Equipment
+from app.models.flavor_note import FlavorNote
+from app.models.recipe import Recipe
+from app.models.roaster import Roaster
 from app.models.session import Session
 from app.models.user import User
 from app.models.wishlist_entry import WishlistEntry
@@ -27,6 +32,11 @@ __all__ = [
     "AppSetting",
     "Bag",
     "Base",
+    "Coffee",
+    "Equipment",
+    "FlavorNote",
+    "Recipe",
+    "Roaster",
     "Session",
     "User",
     "WishlistEntry",
