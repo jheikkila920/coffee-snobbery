@@ -1,17 +1,470 @@
-"""Wave 0 stub — real tests land in plan 04-07 (coffees CRUD).
+"""Real router tests for plan 04-07 (replaces the Wave-0 stub).
 
-Per ``.planning/phases/04-shared-catalog/04-VALIDATION.md`` §"Wave 0
-Requirements" the file must exist so the sampling-rate command
-``pytest -q tests/phase_04/ -x`` is runnable from this commit forward.
-The validation prose suggests ``pytest.fail`` but a ``pytest.skip``
-keeps the suite green during interleaved development — see the plan
-04-01 Task 1 action body for the recorded deviation rationale.
+Cases per 04-VALIDATION.md row 04-07-NN. Mirrors the structure of
+``tests/phase_04/test_routers_roasters.py``.
+
+Uses:
+
+* ``authed_client`` — session cookie preloaded; we re-arm the CSRF token
+  per-test via ``_prime_csrf`` (the conftest fixture's literal placeholder
+  fails starlette-csrf's signed-token check).
+* ``csrf_client`` — same session but the cookie/header are intentionally
+  mismatched (negative-CSRF probe).
+* ``clean_catalog`` — local fixture: wipes the bag/coffee/flavor/roaster
+  chain before AND after each test.
+
+Most tests require Postgres + the p4_shared_catalog migration. Uses the
+same ``_require_*`` helpers as ``test_routers_roasters.py``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import Any
+
 import pytest
 
 
-def test_wave_0_stub() -> None:
-    pytest.skip("Wave 0 stub — fill in during subsequent plans.")
+def _require_postgres() -> None:
+    try:
+        from tests.conftest import _postgres_reachable
+    except ImportError:
+        pytest.skip("postgres reachability probe missing from conftest")
+    if not _postgres_reachable():
+        pytest.skip("Postgres not reachable — Phase 4 router test needs the DB")
+
+
+def _require_p4_migration_applied() -> None:
+    try:
+        from sqlalchemy import text
+
+        from app.db import engine
+    except ImportError:
+        pytest.skip("app.db not importable")
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT to_regclass('public.coffees')")).scalar()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
+    if row is None:
+        pytest.skip("p4_shared_catalog migration not applied")
+
+
+def _prime_csrf(client: Any) -> str:
+    """GET ``/`` to mint a real, signed csrftoken; wire it onto the client.
+
+    Same shape as the helper in ``test_routers_roasters.py``.
+    """
+    client.cookies.delete("csrftoken")
+    response = client.get("/")
+    token = response.cookies.get("csrftoken") or client.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+    client.cookies.set("csrftoken", token)
+    client.headers["X-CSRF-Token"] = token
+    return token
+
+
+@pytest.fixture
+def clean_catalog() -> Iterator[None]:
+    """Wipe the catalog chain before AND after each router test.
+
+    Reset order respects FKs: bags → coffees → flavor_notes → roasters.
+    """
+    from sqlalchemy import text
+
+    from app.db import engine
+
+    def _reset() -> None:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM bags"))
+            conn.execute(text("DELETE FROM coffees"))
+            conn.execute(text("DELETE FROM flavor_notes"))
+            conn.execute(text("DELETE FROM roasters"))
+
+    _reset()
+    yield
+    _reset()
+
+
+def _seed_roaster(**kwargs: Any) -> int:
+    from app.db import SessionLocal
+    from app.services import roasters as roasters_service
+
+    defaults = {
+        "name": kwargs.pop("name", "Onyx"),
+        "location": kwargs.pop("location", None),
+        "website": kwargs.pop("website", None),
+        "notes": kwargs.pop("notes", ""),
+        "by_user_id": kwargs.pop("by_user_id", 0),
+    }
+    with SessionLocal() as db:
+        return roasters_service.create_roaster(db, **defaults).id
+
+
+def _seed_flavor_note(**kwargs: Any) -> int:
+    from app.db import SessionLocal
+    from app.services import flavor_notes as flavor_notes_service
+
+    defaults = {
+        "name": kwargs.pop("name", "Bergamot"),
+        "category": kwargs.pop("category", "fruit"),
+        "by_user_id": kwargs.pop("by_user_id", 0),
+    }
+    with SessionLocal() as db:
+        return flavor_notes_service.create_flavor_note(db, **defaults).id
+
+
+def _seed_coffee(**kwargs: Any) -> int:
+    from app.db import SessionLocal
+    from app.services import coffees as coffees_service
+
+    defaults: dict[str, Any] = {
+        "name": kwargs.pop("name", "Geometry"),
+        "roaster_id": kwargs.pop("roaster_id", None),
+        "country": kwargs.pop("country", None),
+        "origin": kwargs.pop("origin", None),
+        "process": kwargs.pop("process", None),
+        "roast_level": kwargs.pop("roast_level", None),
+        "varietal": kwargs.pop("varietal", None),
+        "notes": kwargs.pop("notes", ""),
+        "advertised_flavor_note_ids": kwargs.pop("advertised_flavor_note_ids", []),
+        "by_user_id": kwargs.pop("by_user_id", 0),
+    }
+    with SessionLocal() as db:
+        return coffees_service.create_coffee(db, **defaults).id
+
+
+def _seed_bag(coffee_id: int) -> int:
+    from sqlalchemy import text
+
+    from app.db import engine
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("INSERT INTO bags (coffee_id) VALUES (:cid) RETURNING id"),
+            {"cid": coffee_id},
+        ).scalar_one()
+    return int(row)
+
+
+# --------------------------------------------------------------------------- #
+# GET /coffees — list page                                                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_list_coffees_renders_page(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """Authed GET /coffees → 200 + page HTML with h1 + Coffees + filter bar."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    resp = authed_client.get("/coffees")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "<h1" in body
+    assert "Coffees" in body
+    assert 'id="coffee-filters"' in body
+
+
+def test_list_coffees_hx_request_returns_fragment_only(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """HX-Request: true → fragment without <html>/<!doctype>."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    resp = authed_client.get("/coffees", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "<html" not in resp.text
+    assert "<!doctype" not in resp.text.lower()
+
+
+def test_list_coffees_includes_responsive_layout_markers(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """Body includes BOTH `hidden md:block` desktop AND `md:hidden` mobile markers."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    rid = _seed_roaster(name="Onyx")
+    _seed_coffee(name="Geometry", roaster_id=rid)
+    resp = authed_client.get("/coffees")
+    assert resp.status_code == 200
+    body = resp.text
+    # The desktop table wrapper uses `hidden md:block`; the mobile card
+    # list uses `md:hidden`. CAT-07 dual-layout shipped.
+    assert "hidden md:block" in body
+    assert "md:hidden" in body
+
+
+# --------------------------------------------------------------------------- #
+# POST /coffees — create                                                      #
+# --------------------------------------------------------------------------- #
+
+
+def test_create_coffee_minimal_valid(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """POST minimal valid form → 200 + row fragment."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/coffees",
+        data={
+            "name": "Geometry",
+            "process": "washed",
+            "roast_level": "light",
+            "notes": "",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert 'id="coffee-' in resp.text
+    # OOB form-clear hits on create.
+    assert "coffee-form-mount" in resp.text
+
+
+def test_create_coffee_with_array_round_trip(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """POST with advertised_flavor_note_ids → array preserved on get_coffee."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    fn1 = _seed_flavor_note(name="Blueberry", category="fruit")
+    fn2 = _seed_flavor_note(name="Jasmine", category="floral")
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/coffees",
+        data=[
+            ("name", "Geometry"),
+            ("notes", ""),
+            ("advertised_flavor_note_ids", str(fn1)),
+            ("advertised_flavor_note_ids", str(fn2)),
+        ],
+    )
+    assert resp.status_code == 200, resp.text
+
+    from app.db import SessionLocal
+    from app.services import coffees as coffees_service
+
+    with SessionLocal() as db:
+        rows = coffees_service.list_coffees(db)
+    assert len(rows) == 1
+    assert rows[0].advertised_flavor_note_ids == [fn1, fn2]
+
+
+def test_create_coffee_rejects_unknown_process(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """POST with process=cold_brewed → 200 + form re-render with error."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/coffees",
+        data={
+            "name": "Bogus",
+            "process": "cold_brewed",
+            "notes": "",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.text
+    assert "text-red-700" in body
+    # Submitted name preserved on re-render (D-04).
+    assert "Bogus" in body
+
+
+def test_create_coffee_rejects_blank_name(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """POST with name="" → 200 + form re-render with error on `name`."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/coffees",
+        data={
+            "name": "",
+            "country": "Ethiopia",
+            "notes": "",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.text
+    assert "text-red-700" in body
+    # Submitted country preserved on re-render (D-04).
+    assert "Ethiopia" in body
+
+
+def test_create_coffee_extra_field_rejected(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """Extra form field → 200 + form re-render (T-04-MASS via extra='forbid')."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/coffees",
+        data={
+            "name": "Geometry",
+            "is_admin": "true",  # not in CoffeeCreate — must be rejected.
+            "notes": "",
+        },
+    )
+    assert resp.status_code == 200
+    assert "text-red-700" in resp.text
+
+
+# --------------------------------------------------------------------------- #
+# GET /coffees/{id} — detail page                                             #
+# --------------------------------------------------------------------------- #
+
+
+def test_coffee_detail_page_renders(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """Seed coffee + bag → GET /coffees/{id} → body has name + Bags + Open new bag."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    cid = _seed_coffee(name="Geometry")
+    _seed_bag(coffee_id=cid)
+    resp = authed_client.get(f"/coffees/{cid}")
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "Geometry" in body
+    # Section heading for bags
+    assert "Bags" in body
+    # Open new bag affordance is present
+    assert "Open new bag" in body
+    # Mount div for plan 04-09 to consume
+    assert 'id="bag-form-mount"' in body
+
+
+def test_coffee_detail_page_404_for_unknown_id(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """GET /coffees/999999 → 404."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    resp = authed_client.get("/coffees/999999")
+    assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# GET /coffees/{id}/edit + POST update                                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_edit_pre_populates_advertised_array(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """Seed coffee with [id1, id2] → GET /{id}/edit body has hidden inputs for both."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    fn1 = _seed_flavor_note(name="Blueberry", category="fruit")
+    fn2 = _seed_flavor_note(name="Jasmine", category="floral")
+    cid = _seed_coffee(name="Geometry", advertised_flavor_note_ids=[fn1, fn2])
+    resp = authed_client.get(f"/coffees/{cid}/edit")
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert (
+        f'<input type="hidden" name="advertised_flavor_note_ids" value="{fn1}">'
+        in body
+    )
+    assert (
+        f'<input type="hidden" name="advertised_flavor_note_ids" value="{fn2}">'
+        in body
+    )
+
+
+def test_update_persists_array_change(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """POST /{id} with [id1] only → array becomes [id1]."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    fn1 = _seed_flavor_note(name="Blueberry", category="fruit")
+    fn2 = _seed_flavor_note(name="Jasmine", category="floral")
+    cid = _seed_coffee(name="Geometry", advertised_flavor_note_ids=[fn1, fn2])
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        f"/coffees/{cid}",
+        data=[
+            ("name", "Geometry"),
+            ("notes", ""),
+            ("advertised_flavor_note_ids", str(fn1)),
+        ],
+    )
+    assert resp.status_code == 200, resp.text
+
+    from app.db import SessionLocal
+    from app.services import coffees as coffees_service
+
+    with SessionLocal() as db:
+        row = coffees_service.get_coffee(db, coffee_id=cid)
+    assert row is not None
+    assert row.advertised_flavor_note_ids == [fn1]
+
+
+# --------------------------------------------------------------------------- #
+# POST /coffees/{id}/archive                                                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_archive_marks_archived(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """POST /{id}/archive → DB row.archived=True."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    cid = _seed_coffee(name="Geometry")
+    _prime_csrf(authed_client)
+    resp = authed_client.post(f"/coffees/{cid}/archive")
+    assert resp.status_code == 200, resp.text
+
+    from app.db import SessionLocal
+    from app.services import coffees as coffees_service
+
+    with SessionLocal() as db:
+        row = coffees_service.get_coffee(db, coffee_id=cid)
+    assert row is not None
+    assert row.archived is True
+
+
+# --------------------------------------------------------------------------- #
+# CSRF                                                                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_csrf_missing_returns_403(
+    csrf_client: Any, clean_catalog: None
+) -> None:
+    """POST /coffees with mismatched CSRF → 403."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    resp = csrf_client.post("/coffees", data={"name": "X"})
+    assert resp.status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# Form autocomplete attributes (HX-4 + D-13 contract)                         #
+# --------------------------------------------------------------------------- #
+
+
+def test_form_renders_roaster_autocomplete_attributes(
+    authed_client: Any, clean_catalog: None
+) -> None:
+    """GET /coffees/new → body has the locked HX-4 + D-13 autocomplete attrs."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    resp = authed_client.get("/coffees/new")
+    assert resp.status_code == 200
+    body = resp.text
+    # D-13 + HX-4 mitigation locked in template.
+    assert (
+        'hx-trigger="input changed delay:350ms[target.value.length >= 2]"' in body
+    )
+    assert 'hx-sync="this:replace"' in body
+    # Roaster autocomplete target + hidden id field.
+    assert 'id="roaster-dropdown"' in body
+    assert 'name="roaster_id"' in body

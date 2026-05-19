@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block page_title %}{{ coffee.name }} — Snobbery{% endblock %}
+{% block content %}
+  <main class="mx-auto max-w-3xl px-6 py-12">
+    <nav class="mb-4 text-sm">
+      <a href="/coffees" class="text-espresso-700 underline hover:text-espresso-900 dark:text-cream-200">
+        ← Back to coffees
+      </a>
+    </nav>
+    <header class="mb-6">
+      <div class="flex items-start justify-between gap-3">
+        <h1 class="text-2xl font-semibold{% if coffee.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+          {{ coffee.name }}
+          {% if coffee.archived %}
+            <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+          {% endif %}
+        </h1>
+        <div class="flex gap-3 shrink-0">
+          <button type="button"
+                  hx-get="/coffees/{{ coffee.id }}/edit"
+                  hx-target="#coffee-form-mount"
+                  hx-swap="innerHTML"
+                  class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+            Edit
+          </button>
+          {% if not coffee.archived %}
+            <button type="button"
+                    hx-post="/coffees/{{ coffee.id }}/archive"
+                    hx-target="closest header"
+                    hx-swap="none"
+                    hx-confirm="Archive coffee — stops appearing in selectors but keeps brew history."
+                    class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+              Archive
+            </button>
+          {% endif %}
+        </div>
+      </div>
+      {% if roaster %}
+        <p class="mt-2 text-base">
+          <span class="text-sm text-espresso-600 dark:text-cream-300">Roaster:</span>
+          {{ roaster.name }}
+        </p>
+      {% endif %}
+      <dl class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-base">
+        {% if coffee.country %}
+          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Country:</dt> <dd class="inline">{{ coffee.country }}</dd></div>
+        {% endif %}
+        {% if coffee.origin %}
+          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Origin:</dt> <dd class="inline">{{ coffee.origin }}</dd></div>
+        {% endif %}
+        {% if coffee.process %}
+          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Process:</dt> <dd class="inline">{{ coffee.process }}</dd></div>
+        {% endif %}
+        {% if coffee.roast_level %}
+          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Roast level:</dt> <dd class="inline">{{ coffee.roast_level }}</dd></div>
+        {% endif %}
+        {% if coffee.varietal %}
+          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Varietal:</dt> <dd class="inline">{{ coffee.varietal }}</dd></div>
+        {% endif %}
+      </dl>
+      {% if coffee.advertised_flavor_note_ids %}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for fid in coffee.advertised_flavor_note_ids %}
+            {% set fname = flavor_note_names.get(fid) %}
+            {% if fname %}
+              <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ fname }}</span>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if coffee.notes %}
+        <p class="mt-4 text-base whitespace-pre-line">{{ coffee.notes }}</p>
+      {% endif %}
+    </header>
+    <div id="coffee-form-mount" class="mb-4"></div>
+
+    {# Bags section — plan 04-09 ships bag CRUD + the bag_row fragment.
+       Until then, we render the list-or-empty + the "Open new bag" CTA
+       with its mount div. The CTA contract for 04-09:
+         GET /coffees/{id}/bags/new → fragments/bag_form.html
+         POST /coffees/{id}/bags    → fragments/bag_row.html
+       The mount div id is #bag-form-mount; the list mount is #bag-list. #}
+    <section class="mt-8">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold">Bags</h2>
+        <button type="button"
+                hx-get="/coffees/{{ coffee.id }}/bags/new"
+                hx-target="#bag-form-mount"
+                hx-swap="innerHTML"
+                class="rounded bg-espresso-700 px-3 py-1 text-sm text-cream-50 hover:bg-espresso-800">
+          Open new bag
+        </button>
+      </div>
+      <div id="bag-form-mount" class="mb-3"></div>
+      <div id="bag-list">
+        {% if bags %}
+          <ul class="space-y-2">
+            {% for bag in bags %}
+              <li id="bag-{{ bag.id }}" data-row class="rounded-lg border border-espresso-200 bg-cream-100 p-3 text-base dark:bg-espresso-900 dark:border-espresso-800">
+                <div class="text-sm">
+                  {% if bag.opened_at %}
+                    Opened {{ bag.opened_at.strftime('%Y-%m-%d') }}
+                  {% else %}
+                    Not yet opened
+                  {% endif %}
+                  {% if bag.roast_date %}
+                    · roasted {{ bag.roast_date.strftime('%Y-%m-%d') }}
+                  {% endif %}
+                  {% if bag.weight_grams %}
+                    · {{ bag.weight_grams }}g
+                  {% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-espresso-600 italic dark:text-cream-300">
+            No bags yet. "Open new bag" to start logging brews against this coffee.
+          </p>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+{% endblock %}
