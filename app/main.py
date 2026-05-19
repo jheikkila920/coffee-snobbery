@@ -76,6 +76,7 @@ from app.rate_limit import register_rate_limiter
 from app.routers import auth as auth_router
 from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
+from app.routers import equipment as equipment_router
 from app.templates_setup import templates
 
 # Configure logging at module import so uvicorn's first log line already
@@ -181,6 +182,7 @@ def create_app() -> FastAPI:
     app.include_router(csp_report_router.router)
     app.include_router(auth_router.router)
     app.include_router(debug_router.router)
+    app.include_router(equipment_router.router)
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
