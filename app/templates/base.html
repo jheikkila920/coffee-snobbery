@@ -21,6 +21,8 @@
     <script defer src="https://unpkg.com/[email protected]" nonce="{{ csp_nonce(request) }}"></script>
     {# Local HTMX listeners (Plan 01-05) — MUST load AFTER the htmx core script so htmx.config.allowEval=false runs after htmx is defined. #}
     <script defer src="/static/js/htmx-listeners.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Photo upload Canvas downscale (Plan 04-09 / D-05). Capture-phase form submit listener + DataTransfer file swap. Load order non-critical since the listener is not HTMX-event-based, but kept after htmx-listeners.js for the CSRF header handler to fire on the retrigger. #}
+    <script defer src="/static/js/photo-upload.js" nonce="{{ csp_nonce(request) }}"></script>
   </head>
   <body class="bg-cream-50 text-espresso-900 dark:bg-espresso-950 dark:text-cream-100">
     {% block content %}{% endblock %}

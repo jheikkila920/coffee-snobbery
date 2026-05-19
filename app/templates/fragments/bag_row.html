@@ -1,0 +1,72 @@
+{# Bag row fragment — renders inside #bag-list on the coffee detail page.
+
+   Carries data-row + id="bag-{{ bag.id }}" so HTMX edit/archive swaps work
+   via hx-target="closest [data-row]" hx-swap="outerHTML".
+
+   The Phase 4 archive surrogate (finished_at IS NOT NULL) renders an
+   "Archived" pill and hides the "Mark finished" affordance. The photo
+   zone is always included; the zone fragment itself branches on
+   bag.photo_filename to render either the thumbnail or the upload form.
+
+   On successful create the row response also emits the OOB swap that
+   clears #bag-form-mount (Pattern 2 from 04-RESEARCH).
+#}
+{% set is_finished = bag.finished_at is not none %}
+<div id="bag-{{ bag.id }}"
+     data-row
+     class="rounded-lg border border-espresso-200 bg-cream-100 p-4 mb-3 dark:bg-espresso-900 dark:border-espresso-800{% if is_finished %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+  <div class="flex items-start justify-between gap-3">
+    <div class="flex flex-col">
+      <div class="text-base font-semibold">
+        {% if bag.roast_date %}
+          Roasted {{ bag.roast_date.strftime('%Y-%m-%d') }}
+        {% else %}
+          Roast date unknown
+        {% endif %}
+        {% if bag.weight_grams %}
+          · {{ bag.weight_grams }}g
+        {% endif %}
+        {% if is_finished %}
+          <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Finished</span>
+        {% endif %}
+      </div>
+      <div class="text-sm">
+        {% if bag.opened_at %}
+          Opened {{ bag.opened_at.strftime('%Y-%m-%d') }}
+        {% else %}
+          Not yet opened
+        {% endif %}
+        {% if bag.finished_at %}
+          · finished {{ bag.finished_at.strftime('%Y-%m-%d') }}
+        {% endif %}
+      </div>
+      {% if bag.notes %}
+        <p class="mt-2 text-sm text-espresso-700 dark:text-cream-200 truncate max-w-prose">{{ bag.notes }}</p>
+      {% endif %}
+    </div>
+    <div class="flex gap-2 shrink-0">
+      <button type="button"
+              hx-get="/bags/{{ bag.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not is_finished %}
+        <button type="button"
+                hx-post="/bags/{{ bag.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="Mark this bag finished — stops it from appearing in active brewing options."
+                class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Mark finished
+        </button>
+      {% endif %}
+    </div>
+  </div>
+  {% include "fragments/photo_upload_zone.html" with context %}
+</div>
+{% if include_oob_form_clear %}
+  {# 04-RESEARCH Pattern 2: clear the bag form mount on successful create. #}
+  <div id="bag-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}

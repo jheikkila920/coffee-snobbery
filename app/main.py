@@ -83,6 +83,7 @@ from app.middleware import (
 from app.rate_limit import register_rate_limiter
 from app.routers import admin as admin_router
 from app.routers import auth as auth_router
+from app.routers import bags as bags_router
 from app.routers import coffees as coffees_router
 from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
@@ -223,6 +224,7 @@ def create_app() -> FastAPI:
     app.include_router(coffees_router.router)
     app.include_router(equipment_router.router)
     app.include_router(recipes_router.router)
+    app.include_router(bags_router.router)
     app.include_router(photos_router.router)
 
     @app.get("/healthz")
