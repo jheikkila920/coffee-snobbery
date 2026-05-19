@@ -1,0 +1,77 @@
+{# Inline-expand flavor-note form (D-02 / D-04).
+   Three modes:
+     - mode="create" → POST /flavor-notes, target #flavor-note-form-mount
+     - mode="edit"   → POST /flavor-notes/{id}, target closest [data-row]
+     - mode="modal"  → POST /flavor-notes with as_modal=true, target #modal-body
+   Validation failure → 200 + this fragment re-rendered with `errors`
+   populated and `values` preserving the user's submitted text.
+   Cancel hits /flavor-notes/empty-form (no inline onclick — CSP D-04).
+
+   `categories` is the 9-value enum tuple passed by the router; the
+   <select> renders one <option> per value and pre-selects on edit.
+#}
+{% set is_edit = mode == "edit" %}
+{% set is_modal = mode == "modal" %}
+{% if is_edit %}
+  {% set form_action = "/flavor-notes/" ~ flavor_note_id %}
+  {% set form_target = "closest [data-row]" %}
+  {% set form_swap = "outerHTML" %}
+{% else %}
+  {% set form_action = "/flavor-notes" %}
+  {% set form_target = "#flavor-note-form-mount" %}
+  {% set form_swap = "innerHTML" %}
+{% endif %}
+<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <form hx-post="{{ form_action }}"
+        hx-target="{{ form_target }}"
+        hx-swap="{{ form_swap }}"
+        class="flex flex-col gap-4">
+    {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    {% if is_modal %}
+      <input type="hidden" name="as_modal" value="true">
+    {% endif %}
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Name</span>
+      <input name="name"
+             required
+             maxlength="80"
+             value="{{ values.get('name', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('name') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('name') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['name'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Category</span>
+      {# MOB-07: native <select> for short (≤10) option lists. #}
+      <select name="category"
+              required
+              class="rounded border px-2 py-2 text-base{% if errors.get('category') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        <option value="" {% if not values.get('category') %}selected{% endif %} disabled>Select a category…</option>
+        {% for category in categories %}
+          <option value="{{ category }}"{% if values.get('category') == category %} selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('category') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['category'] }}</p>
+      {% endif %}
+    </label>
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
+    {% endif %}
+    <div class="flex gap-3 mt-2">
+      <button type="button"
+              hx-get="/flavor-notes/empty-form"
+              hx-target="#flavor-note-form-mount"
+              hx-swap="innerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Save
+      </button>
+    </div>
+  </form>
+</div>

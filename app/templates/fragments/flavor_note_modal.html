@@ -1,0 +1,32 @@
+{# Mini-modal body (D-15) — UI-SPEC §"Mini-Modal Pattern".
+   Swapped into #modal-mount when the parent autocomplete's "+ Create new"
+   option fires `hx-get /flavor-notes/new?as_modal=true`. The Alpine
+   miniModal component (plan 04-11) drives open/close + ESC + backdrop.
+   Phase 4-05 ships the static fragment; Phase 4-11 wires the behavior.
+
+   The form's POST sends `as_modal=true` so the router emits the
+   `HX-Trigger: flavor-note-created` header for D-16 parent-form
+   consumption (pre-selects the new flavor note as a chip in the parent
+   coffee form's tag input).
+#}
+<div class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40">
+  <div class="w-full max-w-md rounded-t-2xl md:rounded-2xl bg-cream-50 dark:bg-espresso-950 p-6 shadow-lg">
+    <header class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold">New flavor note</h2>
+      <button type="button"
+              aria-label="Close new flavor note dialog"
+              hx-get="/flavor-notes/empty-form"
+              hx-target="#modal-mount"
+              hx-swap="innerHTML"
+              class="w-11 h-11 rounded text-espresso-900 hover:bg-cream-100 dark:text-cream-100 dark:hover:bg-espresso-900">
+        &times;
+      </button>
+    </header>
+    {# Embed the same form body with mode="modal" so the form template
+       adds the hidden as_modal=true input and the POST flow returns
+       empty body + HX-Trigger header for the parent listener. #}
+    {% with mode = "modal" %}
+      {% include "fragments/flavor_note_form.html" %}
+    {% endwith %}
+  </div>
+</div>
