@@ -1,0 +1,48 @@
+{# Equipment list — UI-SPEC §"Equipment — `/equipment`".
+   Grouped by `type`. Each group renders as a labeled section with
+   group heading `text-lg font-semibold mt-8 mb-3` (first group `mt-0`).
+   Desktop columns: Brand · Model · Notes (truncated 60ch) · Usage count · Actions.
+   Mobile card: Brand + Model (strong, one line) · Type pill · Notes truncated ·
+   "{N} sessions" · [Edit][Archive].
+
+   `groups` is an ordered ``{type: [Equipment, ...]}`` dict from
+   :func:`app.services.equipment.list_equipment_grouped_by_type`.
+#}
+{% if groups %}
+  {% for type, items in groups.items() %}
+    <section>
+      <h2 class="text-lg font-semibold mb-3 {% if loop.first %}mt-0{% else %}mt-8{% endif %}">{{ type }}</h2>
+      <div class="hidden md:block">
+        <table class="w-full text-base">
+          <thead>
+            <tr class="text-sm font-semibold border-b border-espresso-200">
+              <th class="text-left py-2">Brand</th>
+              <th class="text-left py-2">Model</th>
+              <th class="text-left py-2">Notes</th>
+              <th class="text-left py-2">Usage count</th>
+              <th class="text-right py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for equipment in items %}
+              {% with mode = "row" %}
+                {% include "fragments/equipment_row.html" %}
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="md:hidden space-y-3">
+        {% for equipment in items %}
+          {% with mode = "card" %}
+            {% include "fragments/equipment_row.html" %}
+          {% endwith %}
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+{% else %}
+  <p class="text-espresso-700 dark:text-cream-200">
+    No equipment yet. Add your brewer, grinder, or kettle to start.
+  </p>
+{% endif %}

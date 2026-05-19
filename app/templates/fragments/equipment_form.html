@@ -1,0 +1,93 @@
+{# Inline-expand equipment form (D-02 / D-04).
+   Two modes (no modal — equipment isn't picked from another form):
+     - mode="create" → POST /equipment, target #equipment-form-mount
+     - mode="edit"   → POST /equipment/{id}, target closest [data-row]
+   Validation failure → 200 + this fragment re-rendered with `errors`
+   populated and `values` preserving the user's submitted text.
+   Cancel hits /equipment/empty-form (no inline onclick — CSP D-04).
+
+   `types` is the 6-value enum tuple passed by the router; the
+   <select> renders one <option> per value and pre-selects on edit.
+#}
+{% set is_edit = mode == "edit" %}
+{% if is_edit %}
+  {% set form_action = "/equipment/" ~ equipment_id %}
+  {% set form_target = "closest [data-row]" %}
+  {% set form_swap = "outerHTML" %}
+{% else %}
+  {% set form_action = "/equipment" %}
+  {% set form_target = "#equipment-form-mount" %}
+  {% set form_swap = "innerHTML" %}
+{% endif %}
+<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <form hx-post="{{ form_action }}"
+        hx-target="{{ form_target }}"
+        hx-swap="{{ form_swap }}"
+        class="flex flex-col gap-4">
+    {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Type</span>
+      {# MOB-07: native <select> for short (≤10) option lists. #}
+      <select name="type"
+              required
+              class="rounded border px-2 py-2 text-base{% if errors.get('type') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        <option value="" {% if not values.get('type') %}selected{% endif %} disabled>Select a type…</option>
+        {% for type_option in types %}
+          <option value="{{ type_option }}"{% if values.get('type') == type_option %} selected{% endif %}>{{ type_option }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.get('type') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['type'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Brand</span>
+      <input name="brand"
+             required
+             maxlength="200"
+             value="{{ values.get('brand', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('brand') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('brand') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['brand'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Model</span>
+      <input name="model"
+             required
+             maxlength="200"
+             value="{{ values.get('model', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('model') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('model') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['model'] }}</p>
+      {% endif %}
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Notes</span>
+      <textarea name="notes"
+                rows="3"
+                maxlength="4000"
+                class="rounded border px-2 py-2 text-base{% if errors.get('notes') %} border-red-300{% else %} border-espresso-200{% endif %}">{{ values.get('notes', '') }}</textarea>
+      {% if errors.get('notes') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['notes'] }}</p>
+      {% endif %}
+    </label>
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
+    {% endif %}
+    <div class="flex gap-3 mt-2">
+      <button type="button"
+              hx-get="/equipment/empty-form"
+              hx-target="#equipment-form-mount"
+              hx-swap="innerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Save
+      </button>
+    </div>
+  </form>
+</div>

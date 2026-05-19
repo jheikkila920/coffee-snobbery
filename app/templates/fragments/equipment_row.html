@@ -1,0 +1,91 @@
+{# Equipment row fragment — one of two shapes selected by `mode`:
+   - mode="row"  → <tr> inside the desktop table tbody
+   - mode="card" → <div> mobile card
+
+   Both carry data-row + id="equipment-{{ equipment.id }}" so HTMX
+   edit/archive swaps work in either layout. Archived rows render italic
+   + an "Archived" pill per UI-SPEC §"Archived rows".
+
+   Notes are truncated at 60ch on desktop via `max-w-[60ch] truncate`
+   per UI-SPEC §Equipment. Type pill style:
+   `inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900`.
+
+   Archive confirm copy from UI-SPEC §Microcopy Lock:
+   "Archive equipment — stops appearing in selectors but keeps brew history."
+#}
+{% set archive_confirm = "Archive equipment — stops appearing in selectors but keeps brew history." %}
+{% if mode == "card" %}
+  <div id="equipment-{{ equipment.id }}"
+       data-row
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800{% if equipment.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <div class="font-semibold">
+      {{ equipment.brand }} {{ equipment.model }}
+      {% if equipment.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </div>
+    <div class="mt-1">
+      <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ equipment.type }}</span>
+    </div>
+    {% if equipment.notes %}
+      <div class="text-sm mt-1 truncate">{{ equipment.notes }}</div>
+    {% endif %}
+    <div class="text-sm mt-1">{{ equipment.usage_count }} session{% if equipment.usage_count != 1 %}s{% endif %}</div>
+    <div class="mt-3 flex gap-3">
+      <button type="button"
+              hx-get="/equipment/{{ equipment.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not equipment.archived %}
+        <button type="button"
+                hx-post="/equipment/{{ equipment.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <tr id="equipment-{{ equipment.id }}"
+      data-row
+      class="border-b border-espresso-100{% if equipment.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <td class="py-2">
+      {{ equipment.brand }}
+      {% if equipment.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </td>
+    <td class="py-2">{{ equipment.model }}</td>
+    <td class="py-2 max-w-[60ch] truncate">{{ equipment.notes }}</td>
+    <td class="py-2">{{ equipment.usage_count }}</td>
+    <td class="py-2 text-right">
+      <button type="button"
+              hx-get="/equipment/{{ equipment.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not equipment.archived %}
+        <button type="button"
+                hx-post="/equipment/{{ equipment.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="ml-1 rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </td>
+  </tr>
+{% endif %}
+{% if include_oob_form_clear %}
+  {# 04-RESEARCH Pattern 2: clear the form mount on successful create. #}
+  <div id="equipment-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}
