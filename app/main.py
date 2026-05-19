@@ -85,6 +85,7 @@ from app.routers import admin as admin_router
 from app.routers import auth as auth_router
 from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
+from app.routers import photos as photos_router
 from app.routers import roasters as roasters_router
 from app.services import credentials
 from app.services import settings as settings_service
@@ -214,6 +215,7 @@ def create_app() -> FastAPI:
     app.include_router(debug_router.router)
     app.include_router(admin_router.router)
     app.include_router(roasters_router.router)
+    app.include_router(photos_router.router)
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
