@@ -1,6 +1,16 @@
-"""FastAPI dependency that hands route handlers a fresh ``AsyncSession``.
+"""FastAPI dependencies that hand route handlers a fresh DB session.
 
-Two design choices recorded here:
+Two siblings live here, each owned by a different surface area:
+
+* :func:`get_async_session` — yields an ``AsyncSession``. Used by Phase 2
+  auth routes (the only async surface in the app today).
+* :func:`get_session` — yields a sync :class:`sqlalchemy.orm.Session` from
+  :data:`app.db.SessionLocal`. Used by Phase 4+ catalog routes per Phase 3
+  D-07 ("sync DB for the catalog surface"). Synchronous because the catalog
+  routes are CPU-bound on Jinja + Pydantic; ``AsyncSession`` adds ceremony
+  without ROI at household scale.
+
+Two design choices preserved from the async version:
 
 * **Lazy import of ``async_session_factory``.** The factory currently lives
   at :mod:`app.main` (Phase 1 lock; ``app/main.py:88-95`` records the
@@ -18,15 +28,18 @@ Two design choices recorded here:
   ``async with`` exits.
 
 Plan 02-07 / 02-08 will write ``db: AsyncSession = Depends(get_async_session)``
-in every handler that touches the DB; Phase 4+ inherits this dependency for
-catalog routes.
+in every handler that touches the DB; Phase 4+ inherits the sync
+:func:`get_session` for catalog routes.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
+from app.db import SessionLocal
 
 
 async def get_async_session() -> AsyncIterator[AsyncSession]:
@@ -45,4 +58,16 @@ async def get_async_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-__all__ = ["get_async_session"]
+def get_session() -> Iterator[Session]:
+    """Yield a fresh sync :class:`Session` for the request lifetime.
+
+    Phase 4+ catalog routes consume this dep; Phase 2 auth routes use
+    :func:`get_async_session` instead. Sync per Phase 3 D-07 — catalog
+    routes are CPU-bound on Jinja + Pydantic; AsyncSession adds
+    ceremony without ROI at household scale.
+    """
+    with SessionLocal() as session:
+        yield session
+
+
+__all__ = ["get_async_session", "get_session"]
