@@ -147,17 +147,17 @@ Plans:
   5. Every form (coffee, equipment, recipe, roaster, flavor note, bag) round-trips through a Pydantic v2 schema with explicit numeric ranges — temp 0–100°C, dose/water in sensible ranges, rating constraints not yet active here but the validator pattern is in place for Phase 5.
 **Plans:** 11 plans
 Plans:
-- [ ] 04-01-PLAN.md — Phase 4 test scaffolding + app/services/photos.py (Pillow pipeline + sweep_orphans) + events.catalog.* taxonomy (SEC-07)
-- [ ] 04-02-PLAN.md — Six Pydantic v2 form schemas + form_validation.errors_by_field helper + sync get_session dep (SEC-06)
-- [ ] 04-03-PLAN.md — Five new Mapped[...] models + bag FK/photo_filename + single alembic migration with GIN index (CAT-01..03, 05, 06, 08)
-- [ ] 04-04-PLAN.md — Roasters CRUD + autocomplete + HX-Trigger mini-modal substrate; establishes catalog CRUD template (CAT-01)
-- [ ] 04-05-PLAN.md — Flavor notes CRUD + autocomplete; reuses shared autocomplete_list.html fragment (CAT-02)
-- [ ] 04-06-PLAN.md — Equipment CRUD with type-grouped list (CAT-05)
-- [ ] 04-07-PLAN.md — Coffees CRUD with 4-dim hx-push-url filter bar + desktop/card responsive layout + coffee detail page + bag-form-mount (CAT-03, CAT-07)
-- [ ] 04-08-PLAN.md — Recipes CRUD + Alpine recipe-step-builder + pour-timeline preview + HX-Redirect duplicate (CAT-06)
-- [ ] 04-09-PLAN.md — Bags nested CRUD under coffee detail + photo upload pipeline (magic-byte/Pillow/EXIF/atomic replace) + photo-upload.js Canvas downscale (CAT-08)
-- [ ] 04-10-PLAN.md — app/routers/photos.py auth-gated serve route with D-06 header contract (SEC-07)
-- [ ] 04-11-PLAN.md — Wire D-13..D-16: mini-modal + autocomplete Alpine components + parent-form pre-select on HX-Trigger (CAT-01, CAT-02)
+- [x] 04-01-PLAN.md — Phase 4 test scaffolding + app/services/photos.py (Pillow pipeline + sweep_orphans) + events.catalog.* taxonomy (SEC-07)
+- [x] 04-02-PLAN.md — Six Pydantic v2 form schemas + form_validation.errors_by_field helper + sync get_session dep (SEC-06)
+- [x] 04-03-PLAN.md — Five new Mapped[...] models + bag FK/photo_filename + single alembic migration with GIN index (CAT-01..03, 05, 06, 08)
+- [x] 04-04-PLAN.md — Roasters CRUD + autocomplete + HX-Trigger mini-modal substrate; establishes catalog CRUD template (CAT-01)
+- [x] 04-05-PLAN.md — Flavor notes CRUD + autocomplete; reuses shared autocomplete_list.html fragment (CAT-02)
+- [x] 04-06-PLAN.md — Equipment CRUD with type-grouped list (CAT-05)
+- [x] 04-07-PLAN.md — Coffees CRUD with 4-dim hx-push-url filter bar + desktop/card responsive layout + coffee detail page + bag-form-mount (CAT-03, CAT-07)
+- [x] 04-08-PLAN.md — Recipes CRUD + Alpine recipe-step-builder + pour-timeline preview + HX-Redirect duplicate (CAT-06)
+- [x] 04-09-PLAN.md — Bags nested CRUD under coffee detail + photo upload pipeline (magic-byte/Pillow/EXIF/atomic replace) + photo-upload.js Canvas downscale (CAT-08)
+- [x] 04-10-PLAN.md — app/routers/photos.py auth-gated serve route with D-06 header contract (SEC-07)
+- [x] 04-11-PLAN.md — Wire D-13..D-16: mini-modal + autocomplete Alpine components + parent-form pre-select on HX-Trigger (CAT-01, CAT-02)
 **Notes:** Carries SEC-4 (polyglot upload — `img.save(new_path, format=img.format)` after decode strips trailing data; serve with `nosniff` + `Content-Disposition: inline`). CAT-04 (bags) table is already in place from Phase 0; the bag CRUD UI ("open new bag of this coffee" action from coffee detail) lands as a derived task in this phase even though the REQ-ID is owned by Phase 0. HX-3 (`hx-swap-oob` duplicate-ID footgun on the flavor-notes datalist) — prefer `hx-get` on focus over OOB swap.
 
 ### Phase 5: Brew Sessions
