@@ -1,0 +1,39 @@
+{# Recipe list — UI-SPEC §"Recipes — /recipes".
+   Desktop (md+): table with Name · Dose · Water · Ratio · Brewer · Actions.
+   Mobile (<md): cards. Both delegate to recipe_row.html with a `mode` flag.
+   The Brewer column is a Phase 5 hook (brew_sessions link recipes to
+   equipment via session history); Phase 4 renders the literal "—". #}
+{% if recipes %}
+  <div class="hidden md:block">
+    <table class="w-full text-base">
+      <thead>
+        <tr class="text-sm font-semibold border-b border-espresso-200">
+          <th class="text-left py-2">Name</th>
+          <th class="text-right py-2">Dose</th>
+          <th class="text-right py-2">Water</th>
+          <th class="text-right py-2">Ratio</th>
+          <th class="text-left py-2">Brewer</th>
+          <th class="text-right py-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for recipe in recipes %}
+          {% with mode = "row" %}
+            {% include "fragments/recipe_row.html" %}
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="md:hidden space-y-3">
+    {% for recipe in recipes %}
+      {% with mode = "card" %}
+        {% include "fragments/recipe_row.html" %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-espresso-700 dark:text-cream-200">
+    No recipes yet. Add your first to start tracking your pours.
+  </p>
+{% endif %}

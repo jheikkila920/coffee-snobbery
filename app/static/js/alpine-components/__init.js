@@ -18,14 +18,19 @@
  *
  * Phase 4+ adds real components here. This __init.js file is the
  * convention example only — it contains zero live registrations, just
- * a commented-out pattern reference. Phase 4 will wire this file (or
- * its successors) into base.html with a
+ * a commented-out pattern reference.
  *
- *   <script defer src="/static/js/alpine-components/__init.js"
- *           nonce="{{ csp_nonce(request) }}"></script>
+ * Live components (loaded directly by base.html, each with its own
+ * <script defer> tag BEFORE the @alpinejs/csp core script so the
+ * Alpine.data registrations are present when Alpine boots):
  *
- * tag, loaded BEFORE the @alpinejs/csp CDN script so the registrations
- * are present when Alpine boots.
+ *   - recipe-step-builder.js  (Phase 4 plan 04-08) — Alpine.data(
+ *     'recipeStepBuilder', ...) for the multi-step pour timeline + live
+ *     cumulative water/time readouts + zero-round-trip add/remove/reorder.
+ *
+ * Future plans (e.g., plan 04-11 mini-modal + autocomplete) add more
+ * component files here following the same pattern: one file per
+ * Alpine.data factory, loaded via its own <script defer> in base.html.
  *
  * Pattern reference (commented out — DO NOT uncomment until Phase 4
  * wires the script tag in base.html):

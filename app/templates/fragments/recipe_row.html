@@ -1,0 +1,102 @@
+{# Recipe row fragment — one of two shapes selected by `mode`:
+   - mode="row"   → <tr> inside the desktop table tbody
+   - mode="card"  → <div> mobile card
+
+   Both carry data-row + id="recipe-{{ recipe.id }}" so HTMX edit/archive/
+   duplicate swaps work in either layout. Archived rows render italic + an
+   "Archived" pill per UI-SPEC §"Archived rows".
+
+   Duplicate (D-12) is a NON-destructive copy and lives next to Edit (per
+   UI-SPEC §"Recipes" — "appears next to Edit, not in the destructive zone").
+   The duplicate button POSTs and the server returns 200 + HX-Redirect to
+   /recipes/{new_id}/edit; HTMX 2 consumes the header and navigates the
+   browser.
+
+   If `include_oob_form_clear` is set, append the OOB swap that empties the
+   form mount after a successful create.
+#}
+{% set archive_confirm = "Archive recipe — stops appearing in selectors but keeps brew history." %}
+{% set ratio = (recipe.water_grams / recipe.dose_grams) | round(1) if recipe.dose_grams else 0 %}
+{% if mode == "card" %}
+  <div id="recipe-{{ recipe.id }}"
+       data-row
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800{% if recipe.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <div class="font-semibold">
+      {{ recipe.name }}
+      {% if recipe.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </div>
+    <div class="text-sm tabular-nums">
+      {{ recipe.dose_grams }}g · {{ recipe.water_grams }}g · 1:{{ ratio }} · {{ recipe.water_temp_c }}°C
+    </div>
+    <div class="text-sm text-espresso-700 dark:text-cream-200">—</div>
+    <div class="mt-3 flex gap-3 flex-wrap">
+      <button type="button"
+              hx-get="/recipes/{{ recipe.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      <button type="button"
+              hx-post="/recipes/{{ recipe.id }}/duplicate"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Duplicate
+      </button>
+      {% if not recipe.archived %}
+        <button type="button"
+                hx-post="/recipes/{{ recipe.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <tr id="recipe-{{ recipe.id }}"
+      data-row
+      class="border-b border-espresso-100{% if recipe.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <td class="py-2">
+      {{ recipe.name }}
+      {% if recipe.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </td>
+    <td class="py-2 text-right tabular-nums">{{ recipe.dose_grams }}g</td>
+    <td class="py-2 text-right tabular-nums">{{ recipe.water_grams }}g</td>
+    <td class="py-2 text-right tabular-nums">1:{{ ratio }}</td>
+    <td class="py-2">—</td>
+    <td class="py-2 text-right whitespace-nowrap">
+      <button type="button"
+              hx-get="/recipes/{{ recipe.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      <button type="button"
+              hx-post="/recipes/{{ recipe.id }}/duplicate"
+              class="ml-1 rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Duplicate
+      </button>
+      {% if not recipe.archived %}
+        <button type="button"
+                hx-post="/recipes/{{ recipe.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="ml-1 rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </td>
+  </tr>
+{% endif %}
+{% if include_oob_form_clear %}
+  {# 04-RESEARCH Pattern 2: clear the form mount on successful create. #}
+  <div id="recipe-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}

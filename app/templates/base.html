@@ -10,6 +10,11 @@
     <meta name="csrf-token" content="{{ request.cookies.get('csrftoken', '') }}">
     <title>Snobbery — {% block page_title %}{% endblock %}{% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="{{ tailwind_css_path }}">
+    {# Alpine.data() component registrations — MUST load BEFORE the alpine-csp core
+       script so registrations are present when Alpine boots and walks the DOM
+       for x-data bindings. Each component is a separate file under
+       /static/js/alpine-components/ per docs/decisions/0001 + Phase 4 plan 04-08. #}
+    <script defer src="/static/js/alpine-components/recipe-step-builder.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Alpine CSP build — declarative-only (no eval). Pin 3.14.9 — RESEARCH §1. #}
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.14.9/dist/cdn.min.js" nonce="{{ csp_nonce(request) }}"></script>
     {# HTMX 2.0.10 core — exact version pin per RESEARCH §1 + STACK.md §1. #}
