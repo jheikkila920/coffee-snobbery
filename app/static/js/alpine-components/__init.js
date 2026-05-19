@@ -27,10 +27,18 @@
  *   - recipe-step-builder.js  (Phase 4 plan 04-08) — Alpine.data(
  *     'recipeStepBuilder', ...) for the multi-step pour timeline + live
  *     cumulative water/time readouts + zero-round-trip add/remove/reorder.
- *
- * Future plans (e.g., plan 04-11 mini-modal + autocomplete) add more
- * component files here following the same pattern: one file per
- * Alpine.data factory, loaded via its own <script defer> in base.html.
+ *   - mini-modal.js           (Phase 4 plan 04-11) — Alpine.data(
+ *     'miniModal', ...) for the "+ Create new roaster / flavor note"
+ *     mini-modal flow launched from inside the coffee form's autocomplete
+ *     dropdowns. ESC + backdrop + dirty check. Close-on-success driven by
+ *     the global HX-Trigger {entity}-created listeners emptying
+ *     #modal-mount.
+ *   - autocomplete.js         (Phase 4 plan 04-11) — Alpine.data(
+ *     'autocomplete', ...) for single-value pickers (roaster) +
+ *     Alpine.data('flavorNoteChips', ...) for multi-value chip widgets
+ *     (advertised_flavor_note_ids). Keyboard nav + HX-Trigger pre-select
+ *     consumer. Two registrations from one file because they share the
+ *     same keyboard-handler shape.
  *
  * Pattern reference (commented out — DO NOT uncomment until Phase 4
  * wires the script tag in base.html):

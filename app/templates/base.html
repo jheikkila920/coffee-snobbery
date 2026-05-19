@@ -15,6 +15,8 @@
        for x-data bindings. Each component is a separate file under
        /static/js/alpine-components/ per docs/decisions/0001 + Phase 4 plan 04-08. #}
     <script defer src="/static/js/alpine-components/recipe-step-builder.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/mini-modal.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/autocomplete.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Alpine CSP build — declarative-only (no eval). Pin 3.14.9 — RESEARCH §1. #}
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.14.9/dist/cdn.min.js" nonce="{{ csp_nonce(request) }}"></script>
     {# HTMX 2.0.10 core — exact version pin per RESEARCH §1 + STACK.md §1. #}
@@ -26,5 +28,12 @@
   </head>
   <body class="bg-cream-50 text-espresso-900 dark:bg-espresso-950 dark:text-cream-100">
     {% block content %}{% endblock %}
+    {# Global mini-modal mount point (D-15 / plan 04-11). "+ Create new"
+       affordances inside coffee-form autocomplete dropdowns swap their
+       modal-body fragment in here via hx-target="#modal-mount". The
+       Alpine miniModal component owns ESC/backdrop close + dirty check;
+       the global roaster-created / flavor-note-created HX-Trigger
+       listeners empty this div on successful submit (close == empty). #}
+    <div id="modal-mount"></div>
   </body>
 </html>
