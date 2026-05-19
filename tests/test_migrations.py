@@ -125,21 +125,41 @@ def test_bags_columns(pg_session: Connection) -> None:
         )
 
 
-def test_bags_coffee_id_has_no_foreign_key(pg_session: Connection) -> None:
-    """CAT-04 + CONTEXT: bags.coffee_id has NO FK constraint in Phase 0.
+def test_bags_coffee_id_fk_to_coffees_restrict(pg_session: Connection) -> None:
+    """CAT-04 + CAT-08: Phase 4 added the FK on bags.coffee_id with ON DELETE RESTRICT.
 
-    Phase 4's migration ADDs the FK once the ``coffees`` table exists. If a
-    future planner accidentally adds the FK here, this assertion guards
-    against the regression.
+    Until plan 04-03 ships, this assertion guarded the inverse — Phase 0
+    intentionally LEFT the FK off because the ``coffees`` table didn't
+    exist yet (see ``app/migrations/versions/0001_initial.py:95-99``).
+    Plan 04-03's ``p4_shared_catalog`` migration is the canonical landing
+    spot for the FK; once that migration has run, the FK must exist with
+    ``ON DELETE RESTRICT`` (not CASCADE) so a hard-delete of a coffee
+    referenced by any bag fails loudly with IntegrityError. This is the
+    DB-side backstop for the archive-only policy in plan 04-04.
+
+    Test asserts the FK constraint by name (``fk_bags_coffee_id``) so
+    future migrations can target it safely.
     """
-    count = pg_session.execute(
+    row = pg_session.execute(
         text(
-            "SELECT count(*) FROM information_schema.table_constraints "
-            "WHERE table_schema='public' AND table_name='bags' "
-            "AND constraint_type='FOREIGN KEY'"
+            "SELECT tc.constraint_name, rc.delete_rule "
+            "FROM information_schema.table_constraints tc "
+            "JOIN information_schema.referential_constraints rc "
+            "  ON tc.constraint_name = rc.constraint_name "
+            " AND tc.constraint_schema = rc.constraint_schema "
+            "WHERE tc.table_schema='public' AND tc.table_name='bags' "
+            "  AND tc.constraint_type='FOREIGN KEY'"
         )
-    ).scalar_one()
-    assert count == 0, f"bags should have NO FK constraints in Phase 0; got {count}"
+    ).one_or_none()
+    assert row is not None, (
+        "bags.coffee_id must have an FK constraint after p4_shared_catalog has run"
+    )
+    assert row.constraint_name == "fk_bags_coffee_id", (
+        f"FK constraint must be named 'fk_bags_coffee_id'; got {row.constraint_name!r}"
+    )
+    assert row.delete_rule == "RESTRICT", (
+        f"FK delete rule must be RESTRICT (not CASCADE/SET NULL); got {row.delete_rule!r}"
+    )
 
 
 def test_ai_recommendations_columns(pg_session: Connection) -> None:
