@@ -93,9 +93,7 @@ def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
     if leftovers:
         existing = normalized.get("_form")
         combined = (
-            "; ".join(leftovers)
-            if existing is None
-            else f"{existing}; {'; '.join(leftovers)}"
+            "; ".join(leftovers) if existing is None else f"{existing}; {'; '.join(leftovers)}"
         )
         normalized["_form"] = combined
     return normalized
@@ -118,9 +116,7 @@ def list_flavor_notes(
     Service returns ``(FlavorNote, usage_count)`` tuples; the template
     iterates them as ``flavor_note, usage_count``.
     """
-    rows = flavor_notes_service.list_flavor_notes(
-        db, include_archived=include_archived
-    )
+    rows = flavor_notes_service.list_flavor_notes(db, include_archived=include_archived)
     if request.headers.get("HX-Request") == "true":
         return templates.TemplateResponse(
             request=request,
@@ -143,14 +139,17 @@ def list_flavor_notes(
 def new_flavor_note_form(
     request: Request,
     as_modal: bool = False,
+    prefill: str = "",
     user: User = Depends(require_user),  # noqa: B008
 ) -> Response:
-    """Empty form fragment. ``as_modal=true`` → the modal-chrome variant."""
-    name = (
-        "fragments/flavor_note_modal.html"
-        if as_modal
-        else "fragments/flavor_note_form.html"
-    )
+    """Empty form fragment. ``as_modal=true`` → the modal-chrome variant.
+
+    ``prefill`` (plan 04-11): parallel to the roasters/new endpoint —
+    the autocomplete's "+ Create new" affordance sends the typed text
+    here so the modal opens with the Name input pre-populated. Bounded
+    at 80 chars (matches FlavorNoteCreate.name max_length).
+    """
+    name = "fragments/flavor_note_modal.html" if as_modal else "fragments/flavor_note_form.html"
     return templates.TemplateResponse(
         request=request,
         name=name,
@@ -159,6 +158,7 @@ def new_flavor_note_form(
             "errors": {},
             "mode": "modal" if as_modal else "create",
             "categories": FLAVOR_NOTE_CATEGORIES,
+            "prefill": (prefill or "")[:80],
         },
     )
 
@@ -262,9 +262,7 @@ def edit_flavor_note_form(
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     """Pre-populated form fragment for inline edit (swaps the row)."""
-    flavor_note = flavor_notes_service.get_flavor_note(
-        db, flavor_note_id=flavor_note_id
-    )
+    flavor_note = flavor_notes_service.get_flavor_note(db, flavor_note_id=flavor_note_id)
     if flavor_note is None:
         raise HTTPException(status_code=404)
     values = {
@@ -292,9 +290,7 @@ async def update_flavor_note_handler(
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     """Update a flavor note. Validation errors → 200 + form re-render."""
-    existing = flavor_notes_service.get_flavor_note(
-        db, flavor_note_id=flavor_note_id
-    )
+    existing = flavor_notes_service.get_flavor_note(db, flavor_note_id=flavor_note_id)
     if existing is None:
         raise HTTPException(status_code=404)
 
@@ -343,17 +339,11 @@ def archive_flavor_note_handler(
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     """Soft-delete a flavor note; re-render the row with archived styling."""
-    existing = flavor_notes_service.get_flavor_note(
-        db, flavor_note_id=flavor_note_id
-    )
+    existing = flavor_notes_service.get_flavor_note(db, flavor_note_id=flavor_note_id)
     if existing is None:
         raise HTTPException(status_code=404)
-    flavor_notes_service.archive_flavor_note(
-        db, flavor_note_id=flavor_note_id, by_user_id=user.id
-    )
-    flavor_note = flavor_notes_service.get_flavor_note(
-        db, flavor_note_id=flavor_note_id
-    )
+    flavor_notes_service.archive_flavor_note(db, flavor_note_id=flavor_note_id, by_user_id=user.id)
+    flavor_note = flavor_notes_service.get_flavor_note(db, flavor_note_id=flavor_note_id)
     return templates.TemplateResponse(
         request=request,
         name="fragments/flavor_note_row.html",

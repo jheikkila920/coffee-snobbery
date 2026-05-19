@@ -113,7 +113,9 @@ def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
     if leftovers:
         # Preserve any existing _form message by joining.
         existing = normalized.get("_form")
-        combined = "; ".join(leftovers) if existing is None else f"{existing}; {'; '.join(leftovers)}"
+        combined = (
+            "; ".join(leftovers) if existing is None else f"{existing}; {'; '.join(leftovers)}"
+        )
         normalized["_form"] = combined
     return normalized
 
@@ -154,14 +156,27 @@ def list_roasters(
 def new_roaster_form(
     request: Request,
     as_modal: bool = False,
+    prefill: str = "",
     user: User = Depends(require_user),  # noqa: B008
 ) -> Response:
-    """Empty form fragment. ``as_modal=true`` → the modal-chrome variant."""
+    """Empty form fragment. ``as_modal=true`` → the modal-chrome variant.
+
+    ``prefill`` (plan 04-11): when the user clicks "+ Create new roaster"
+    on the coffee form's autocomplete dropdown, the parent autocomplete_list
+    fragment hx-gets ``/roasters/new?as_modal=true&prefill=<typed-text>``
+    so the modal's Name input opens pre-populated. Bounded at 200 chars
+    (matches the schema's max_length) to defeat junk-URL DoS shapes.
+    """
     name = "fragments/roaster_modal.html" if as_modal else "fragments/roaster_form.html"
     return templates.TemplateResponse(
         request=request,
         name=name,
-        context={"values": {}, "errors": {}, "mode": "modal" if as_modal else "create"},
+        context={
+            "values": {},
+            "errors": {},
+            "mode": "modal" if as_modal else "create",
+            "prefill": (prefill or "")[:200],
+        },
     )
 
 

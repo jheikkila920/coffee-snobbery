@@ -436,15 +436,26 @@ def test_csrf_missing_returns_403(csrf_client: Any, clean_catalog: None) -> None
 def test_form_renders_roaster_autocomplete_attributes(
     authed_client: Any, clean_catalog: None
 ) -> None:
-    """GET /coffees/new → body has the locked HX-4 + D-13 autocomplete attrs."""
+    """GET /coffees/new → body has the locked HX-4 + D-13 + D-14 autocomplete attrs.
+
+    Plan 04-11 extended the trigger clause to add the D-14 ``focus once
+    from:closest .field`` re-fetch substrate. The original D-13 debounce
+    clause and HX-4 ``hx-sync="this:replace"`` clause stay; both must be
+    present as substrings.
+    """
     _require_postgres()
     _require_p4_migration_applied()
     resp = authed_client.get("/coffees/new")
     assert resp.status_code == 200
     body = resp.text
-    # D-13 + HX-4 mitigation locked in template.
-    assert 'hx-trigger="input changed delay:350ms[target.value.length >= 2]"' in body
+    # D-13 (debounce) + HX-4 (sync) substrings still pinned. Plan 04-11
+    # appends `, focus once from:closest .field` to the hx-trigger value,
+    # so the original full-string match no longer holds — assert by
+    # substring to keep the test stable across the contract extension.
+    assert "input changed delay:350ms[target.value.length >= 2]" in body
     assert 'hx-sync="this:replace"' in body
+    # D-14 mitigation (plan 04-11): focus-once re-fetch from closest .field wrapper.
+    assert "focus once from:closest .field" in body
     # Roaster autocomplete target + hidden id field.
     assert 'id="roaster-dropdown"' in body
     assert 'name="roaster_id"' in body

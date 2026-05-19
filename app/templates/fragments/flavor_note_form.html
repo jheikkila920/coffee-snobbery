@@ -16,6 +16,12 @@
   {% set form_action = "/flavor-notes/" ~ flavor_note_id %}
   {% set form_target = "closest [data-row]" %}
   {% set form_swap = "outerHTML" %}
+{% elif is_modal %}
+  {# Plan 04-11: modal mode → re-render inside #modal-mount. See the
+     parallel comment in roaster_form.html. #}
+  {% set form_action = "/flavor-notes" %}
+  {% set form_target = "#modal-mount" %}
+  {% set form_swap = "innerHTML" %}
 {% else %}
   {% set form_action = "/flavor-notes" %}
   {% set form_target = "#flavor-note-form-mount" %}
@@ -25,6 +31,7 @@
   <form hx-post="{{ form_action }}"
         hx-target="{{ form_target }}"
         hx-swap="{{ form_swap }}"
+        {% if is_modal %}x-on:input="markDirty()"{% endif %}
         class="flex flex-col gap-4">
     {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
     <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
@@ -36,7 +43,7 @@
       <input name="name"
              required
              maxlength="80"
-             value="{{ values.get('name', '') }}"
+             value="{{ values.get('name') or prefill or '' }}"
              class="rounded border px-2 py-2 text-base{% if errors.get('name') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('name') %}
         <p class="text-sm text-red-700 mt-1">{{ errors['name'] }}</p>
@@ -61,6 +68,13 @@
       <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
     {% endif %}
     <div class="flex gap-3 mt-2">
+      {% if is_modal %}
+      <button type="button"
+              x-on:click="close()"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Discard
+      </button>
+      {% else %}
       <button type="button"
               hx-get="/flavor-notes/empty-form"
               hx-target="#flavor-note-form-mount"
@@ -68,6 +82,7 @@
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>
+      {% endif %}
       <button type="submit"
               class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
         Save

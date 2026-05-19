@@ -43,3 +43,25 @@ document.body.addEventListener('htmx:configRequest', (evt) => {
 // Alpine.data convention; this file remains the home for HTMX
 // configRequest / beforeRequest / afterSwap handlers that would
 // otherwise need to live in banned inline HTMX event attributes.
+
+// Re-walk swapped subtrees so Alpine binds any new x-data / x-on / :value
+// directives on fragment content (plan 04-11). HTMX 2.x fires
+// htmx:afterSettle once a swap has settled into the DOM; Alpine.initTree
+// is the supported entry point for binding directives on a subtree the
+// runtime has not yet seen (Alpine.start() walks document.body once at
+// boot, but never again).
+//
+// Idempotent: Alpine.initTree on a tree it has already initialised is a
+// no-op (Alpine tags initialised nodes via a hidden symbol).
+//
+// Required by:
+//   - mini-modal.js (the swapped #modal-mount subtree carries
+//     x-data="miniModal" on its root).
+//   - autocomplete.js (dropdown <li role="option"> rendered into
+//     #roaster-dropdown / #flavor-note-dropdown carry x-on:click
+//     bindings that must resolve in the enclosing autocomplete scope).
+document.body.addEventListener('htmx:afterSettle', (evt) => {
+  if (window.Alpine && evt && evt.target) {
+    Alpine.initTree(evt.target);
+  }
+});
