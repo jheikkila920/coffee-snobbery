@@ -1,0 +1,44 @@
+{# Generic autocomplete dropdown (D-13).
+   Used by both /roasters/list (this plan) and /flavor-notes/datalist
+   (plan 04-05). Context keys:
+     - items: list of objects with `.name`
+     - query: the user's typed string
+     - entity: "roaster" / "flavor note" — used in the "+ Create new" copy
+     - exact_match: bool — suppresses "+ Create new" when the typed value
+       matches an existing item exactly.
+     - create_new_endpoint: URL the "+ Create new" option hx-gets to launch
+       the mini-modal. The modal mount target is #modal-mount.
+
+   Match-highlight is server-side: split the name on the case-insensitive
+   query, wrap the matched span with <strong>. The three halves are each
+   separately autoescaped by Jinja — only the literal <strong> tag is raw
+   template. The autoescape-bypass filter is not used anywhere here
+   (Phase 1 SEC-05 + UI-SPEC).
+
+   Per D-14: NO hx-swap-oob on this fragment. Plan 04-11 adds the
+   parent-side `hx-trigger="focus once from:closest .field"` re-fetch.
+#}
+<ul role="listbox" class="bg-cream-100 border border-espresso-200 rounded-lg max-h-64 overflow-y-auto dark:bg-espresso-900 dark:border-espresso-800">
+  {% for item in items %}
+    {% set lower = item.name|lower %}
+    {% set q_lower = query|lower %}
+    <li role="option"
+        class="px-3 py-2 text-base hover:bg-cream-200 dark:hover:bg-espresso-800 cursor-pointer min-h-[44px]">
+      {% if q_lower in lower %}
+        {% set idx = lower.find(q_lower) %}
+        {{ item.name[:idx] }}<strong class="font-semibold">{{ item.name[idx:idx + query|length] }}</strong>{{ item.name[idx + query|length:] }}
+      {% else %}
+        {{ item.name }}
+      {% endif %}
+    </li>
+  {% endfor %}
+  {% if not exact_match and query %}
+    <li role="option"
+        hx-get="{{ create_new_endpoint }}"
+        hx-target="#modal-mount"
+        hx-swap="innerHTML"
+        class="px-3 py-2 text-base bg-espresso-700 text-cream-50 cursor-pointer min-h-[44px]">
+      + Create new {{ entity }}: "{{ query }}"
+    </li>
+  {% endif %}
+</ul>

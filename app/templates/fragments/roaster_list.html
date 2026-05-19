@@ -1,0 +1,35 @@
+{# Roaster list — UI-SPEC §"List-vs-Card Layout".
+   Desktop (md+): table.  Mobile (<md): cards. Both use roaster_row.html
+   with a `mode` flag ("row" for table tbody, "card" for mobile div). #}
+{% if roasters %}
+  <div class="hidden md:block">
+    <table class="w-full text-base">
+      <thead>
+        <tr class="text-sm font-semibold border-b border-espresso-200">
+          <th class="text-left py-2">Name</th>
+          <th class="text-left py-2">Location</th>
+          <th class="text-left py-2">Website</th>
+          <th class="text-right py-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for roaster in roasters %}
+          {% with mode = "row" %}
+            {% include "fragments/roaster_row.html" %}
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="md:hidden space-y-3">
+    {% for roaster in roasters %}
+      {% with mode = "card" %}
+        {% include "fragments/roaster_row.html" %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-espresso-700 dark:text-cream-200">
+    No roasters yet. Add a roaster when you log your first coffee.
+  </p>
+{% endif %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block page_title %}Roasters{% endblock %}
+{% block content %}
+  <main class="mx-auto max-w-5xl px-6 py-12">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-semibold">Roasters</h1>
+      <button type="button"
+              hx-get="/roasters/new"
+              hx-target="#roaster-form-mount"
+              hx-swap="innerHTML"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
+        Add roaster
+      </button>
+    </header>
+    <div id="roaster-form-mount" class="mb-4"></div>
+    <div id="roaster-list" class="space-y-3">
+      {% include "fragments/roaster_list.html" %}
+    </div>
+  </main>
+{% endblock %}
