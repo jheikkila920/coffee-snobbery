@@ -43,7 +43,17 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse
 
-from app.services.photos import PHOTOS_DIR, _is_safe_photo_filename
+# Import the module (not the symbols) so the ``PHOTOS_DIR`` attribute is
+# looked up dynamically on every request. The Wave-0 ``photo_volume``
+# fixture monkeypatches ``app.services.photos.PHOTOS_DIR`` for tests —
+# binding the name directly into this module via
+# ``from ... import PHOTOS_DIR`` would freeze the value at import time
+# and the fixture would have no effect. ``_is_safe_photo_filename`` is
+# a pure function so the binding form is irrelevant for it; aliased
+# locally below for readability.
+from app.services import photos as _photos_svc
+
+_is_safe_photo_filename = _photos_svc._is_safe_photo_filename
 
 router = APIRouter(prefix="/photos", tags=["photos"])
 
@@ -76,8 +86,13 @@ def serve_photo(filename: str, request: Request) -> FileResponse:
     #    stays inside ``PHOTOS_DIR``. The regex above already restricts
     #    to a flat filename (no separators) so this is defense-in-depth
     #    against a hypothetical future regex regression.
-    photos_dir_resolved = PHOTOS_DIR.resolve()
-    photo_path = (PHOTOS_DIR / filename).resolve()
+    #
+    #    Module-attribute lookup (``_photos_svc.PHOTOS_DIR``) instead of
+    #    a frozen import so the Wave-0 ``photo_volume`` test fixture's
+    #    monkeypatch is honored — see import comment above.
+    photos_dir = _photos_svc.PHOTOS_DIR
+    photos_dir_resolved = photos_dir.resolve()
+    photo_path = (photos_dir / filename).resolve()
     try:
         photo_path.relative_to(photos_dir_resolved)
     except ValueError as exc:
