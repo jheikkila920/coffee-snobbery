@@ -102,9 +102,7 @@ def _seed_coffee(
         ).id
     if archived:
         with engine.begin() as conn:
-            conn.execute(
-                text("UPDATE coffees SET archived=TRUE WHERE id = :id"), {"id": cid}
-            )
+            conn.execute(text("UPDATE coffees SET archived=TRUE WHERE id = :id"), {"id": cid})
     return cid
 
 
@@ -113,9 +111,7 @@ def _seed_coffee(
 # --------------------------------------------------------------------------- #
 
 
-def test_filter_by_roaster_returns_only_matching(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_filter_by_roaster_returns_only_matching(authed_client: Any, clean_catalog: None) -> None:
     """GET /coffees?roaster_id=R1 → only the coffee with roaster_id=R1."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -130,9 +126,7 @@ def test_filter_by_roaster_returns_only_matching(
     assert "Yirgacheffe" not in body
 
 
-def test_filter_by_country_returns_only_matching(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_filter_by_country_returns_only_matching(authed_client: Any, clean_catalog: None) -> None:
     """GET /coffees?country=Ethiopia → only the coffee whose country=Ethiopia."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -145,9 +139,7 @@ def test_filter_by_country_returns_only_matching(
     assert "Kiamabara" not in body
 
 
-def test_filter_by_process_returns_only_matching(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_filter_by_process_returns_only_matching(authed_client: Any, clean_catalog: None) -> None:
     """GET /coffees?process=washed → only the washed coffee."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -160,9 +152,7 @@ def test_filter_by_process_returns_only_matching(
     assert "Wildcat" not in body
 
 
-def test_filter_archived_false_excludes_archived(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_filter_archived_false_excludes_archived(authed_client: Any, clean_catalog: None) -> None:
     """Default archived=false → archived coffee excluded."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -195,24 +185,18 @@ def test_filter_archived_true_returns_only_archived(
 # --------------------------------------------------------------------------- #
 
 
-def test_filter_combinations_logical_and(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_filter_combinations_logical_and(authed_client: Any, clean_catalog: None) -> None:
     """Multi-dim filter → intersection only."""
     _require_postgres()
     _require_p4_migration_applied()
     r1 = _seed_roaster("Onyx")
     r2 = _seed_roaster("Heart")
-    target = _seed_coffee(
-        name="Target", roaster_id=r1, country="Ethiopia", process="washed"
-    )
+    target = _seed_coffee(name="Target", roaster_id=r1, country="Ethiopia", process="washed")
     _seed_coffee(name="WrongRoaster", roaster_id=r2, country="Ethiopia", process="washed")
     _seed_coffee(name="WrongCountry", roaster_id=r1, country="Kenya", process="washed")
     _seed_coffee(name="WrongProcess", roaster_id=r1, country="Ethiopia", process="natural")
 
-    resp = authed_client.get(
-        f"/coffees?roaster_id={r1}&country=Ethiopia&process=washed"
-    )
+    resp = authed_client.get(f"/coffees?roaster_id={r1}&country=Ethiopia&process=washed")
     assert resp.status_code == 200, resp.text
     body = resp.text
     assert "Target" in body
@@ -228,17 +212,13 @@ def test_filter_combinations_logical_and(
 # --------------------------------------------------------------------------- #
 
 
-def test_hx_request_with_filters_returns_fragment(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_hx_request_with_filters_returns_fragment(authed_client: Any, clean_catalog: None) -> None:
     """HX-Request: true with filter params → fragment body, no <html>."""
     _require_postgres()
     _require_p4_migration_applied()
     r1 = _seed_roaster("Onyx")
     _seed_coffee(name="Geometry", roaster_id=r1)
-    resp = authed_client.get(
-        f"/coffees?roaster_id={r1}", headers={"HX-Request": "true"}
-    )
+    resp = authed_client.get(f"/coffees?roaster_id={r1}", headers={"HX-Request": "true"})
     assert resp.status_code == 200
     body = resp.text
     assert "<html" not in body
@@ -251,9 +231,7 @@ def test_hx_request_with_filters_returns_fragment(
 # --------------------------------------------------------------------------- #
 
 
-def test_filter_form_hx_push_url_present(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_filter_form_hx_push_url_present(authed_client: Any, clean_catalog: None) -> None:
     """GET /coffees → page body contains hx-push-url="true" on the filter form."""
     _require_postgres()
     _require_p4_migration_applied()

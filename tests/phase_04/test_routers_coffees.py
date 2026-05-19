@@ -153,9 +153,7 @@ def _seed_bag(coffee_id: int) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def test_list_coffees_renders_page(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_list_coffees_renders_page(authed_client: Any, clean_catalog: None) -> None:
     """Authed GET /coffees → 200 + page HTML with h1 + Coffees + filter bar."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -201,9 +199,7 @@ def test_list_coffees_includes_responsive_layout_markers(
 # --------------------------------------------------------------------------- #
 
 
-def test_create_coffee_minimal_valid(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) -> None:
     """POST minimal valid form → 200 + row fragment."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -223,10 +219,18 @@ def test_create_coffee_minimal_valid(
     assert "coffee-form-mount" in resp.text
 
 
-def test_create_coffee_with_array_round_trip(
-    authed_client: Any, clean_catalog: None
-) -> None:
-    """POST with advertised_flavor_note_ids → array preserved on get_coffee."""
+def test_create_coffee_with_array_round_trip(authed_client: Any, clean_catalog: None) -> None:
+    """POST with advertised_flavor_note_ids → array preserved on get_coffee.
+
+    httpx-0.28 form-encoding gotcha: ``data=[("k","v"), ("k","v2"), ...]``
+    (list of 2-tuples) is NOT a supported shape — httpx silently drops the
+    body and the request reaches the handler with no form fields, so
+    ``CoffeeCreate(name=...)`` fails the required-name check and the
+    handler re-renders the form at 200 with the row never persisted. The
+    documented httpx shape for repeated form keys is
+    ``data={"key": [v1, v2], ...}`` — a dict whose values can be lists.
+    The handler reads repeated keys via ``form_data.getlist`` either way.
+    """
     _require_postgres()
     _require_p4_migration_applied()
     fn1 = _seed_flavor_note(name="Blueberry", category="fruit")
@@ -234,12 +238,11 @@ def test_create_coffee_with_array_round_trip(
     _prime_csrf(authed_client)
     resp = authed_client.post(
         "/coffees",
-        data=[
-            ("name", "Geometry"),
-            ("notes", ""),
-            ("advertised_flavor_note_ids", str(fn1)),
-            ("advertised_flavor_note_ids", str(fn2)),
-        ],
+        data={
+            "name": "Geometry",
+            "notes": "",
+            "advertised_flavor_note_ids": [str(fn1), str(fn2)],
+        },
     )
     assert resp.status_code == 200, resp.text
 
@@ -252,9 +255,7 @@ def test_create_coffee_with_array_round_trip(
     assert rows[0].advertised_flavor_note_ids == [fn1, fn2]
 
 
-def test_create_coffee_rejects_unknown_process(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_create_coffee_rejects_unknown_process(authed_client: Any, clean_catalog: None) -> None:
     """POST with process=cold_brewed → 200 + form re-render with error."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -274,9 +275,7 @@ def test_create_coffee_rejects_unknown_process(
     assert "Bogus" in body
 
 
-def test_create_coffee_rejects_blank_name(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_create_coffee_rejects_blank_name(authed_client: Any, clean_catalog: None) -> None:
     """POST with name="" → 200 + form re-render with error on `name`."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -296,9 +295,7 @@ def test_create_coffee_rejects_blank_name(
     assert "Ethiopia" in body
 
 
-def test_create_coffee_extra_field_rejected(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_create_coffee_extra_field_rejected(authed_client: Any, clean_catalog: None) -> None:
     """Extra form field → 200 + form re-render (T-04-MASS via extra='forbid')."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -320,9 +317,7 @@ def test_create_coffee_extra_field_rejected(
 # --------------------------------------------------------------------------- #
 
 
-def test_coffee_detail_page_renders(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_coffee_detail_page_renders(authed_client: Any, clean_catalog: None) -> None:
     """Seed coffee + bag → GET /coffees/{id} → body has name + Bags + Open new bag."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -340,9 +335,7 @@ def test_coffee_detail_page_renders(
     assert 'id="bag-form-mount"' in body
 
 
-def test_coffee_detail_page_404_for_unknown_id(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_coffee_detail_page_404_for_unknown_id(authed_client: Any, clean_catalog: None) -> None:
     """GET /coffees/999999 → 404."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -355,9 +348,7 @@ def test_coffee_detail_page_404_for_unknown_id(
 # --------------------------------------------------------------------------- #
 
 
-def test_edit_pre_populates_advertised_array(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_edit_pre_populates_advertised_array(authed_client: Any, clean_catalog: None) -> None:
     """Seed coffee with [id1, id2] → GET /{id}/edit body has hidden inputs for both."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -367,19 +358,11 @@ def test_edit_pre_populates_advertised_array(
     resp = authed_client.get(f"/coffees/{cid}/edit")
     assert resp.status_code == 200, resp.text
     body = resp.text
-    assert (
-        f'<input type="hidden" name="advertised_flavor_note_ids" value="{fn1}">'
-        in body
-    )
-    assert (
-        f'<input type="hidden" name="advertised_flavor_note_ids" value="{fn2}">'
-        in body
-    )
+    assert f'<input type="hidden" name="advertised_flavor_note_ids" value="{fn1}">' in body
+    assert f'<input type="hidden" name="advertised_flavor_note_ids" value="{fn2}">' in body
 
 
-def test_update_persists_array_change(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_update_persists_array_change(authed_client: Any, clean_catalog: None) -> None:
     """POST /{id} with [id1] only → array becomes [id1]."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -387,13 +370,16 @@ def test_update_persists_array_change(
     fn2 = _seed_flavor_note(name="Jasmine", category="floral")
     cid = _seed_coffee(name="Geometry", advertised_flavor_note_ids=[fn1, fn2])
     _prime_csrf(authed_client)
+    # See ``test_create_coffee_with_array_round_trip`` for the httpx-0.28
+    # form-encoding gotcha: pass repeated keys via ``data={"k": [v1, v2]}``
+    # not via a list of 2-tuples (the latter silently sends no body).
     resp = authed_client.post(
         f"/coffees/{cid}",
-        data=[
-            ("name", "Geometry"),
-            ("notes", ""),
-            ("advertised_flavor_note_ids", str(fn1)),
-        ],
+        data={
+            "name": "Geometry",
+            "notes": "",
+            "advertised_flavor_note_ids": [str(fn1)],
+        },
     )
     assert resp.status_code == 200, resp.text
 
@@ -411,9 +397,7 @@ def test_update_persists_array_change(
 # --------------------------------------------------------------------------- #
 
 
-def test_archive_marks_archived(
-    authed_client: Any, clean_catalog: None
-) -> None:
+def test_archive_marks_archived(authed_client: Any, clean_catalog: None) -> None:
     """POST /{id}/archive → DB row.archived=True."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -436,9 +420,7 @@ def test_archive_marks_archived(
 # --------------------------------------------------------------------------- #
 
 
-def test_csrf_missing_returns_403(
-    csrf_client: Any, clean_catalog: None
-) -> None:
+def test_csrf_missing_returns_403(csrf_client: Any, clean_catalog: None) -> None:
     """POST /coffees with mismatched CSRF → 403."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -461,9 +443,7 @@ def test_form_renders_roaster_autocomplete_attributes(
     assert resp.status_code == 200
     body = resp.text
     # D-13 + HX-4 mitigation locked in template.
-    assert (
-        'hx-trigger="input changed delay:350ms[target.value.length >= 2]"' in body
-    )
+    assert 'hx-trigger="input changed delay:350ms[target.value.length >= 2]"' in body
     assert 'hx-sync="this:replace"' in body
     # Roaster autocomplete target + hidden id field.
     assert 'id="roaster-dropdown"' in body
