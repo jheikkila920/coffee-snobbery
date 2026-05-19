@@ -168,6 +168,31 @@ document.addEventListener('alpine:init', () => {
         ? cfg.initialChips.slice()
         : [];
 
+      // Plan 04-11: the form fragment also renders the server seed as
+      // static no-JS / pre-hydration markup (see coffee_form.html):
+      //   - `<span data-seed-chip>` siblings in #flavor-note-chip-list
+      //   - `<input type="hidden" name="advertised_flavor_note_ids">`
+      //     children of `<div data-seed-hidden-container>` (the static
+      //     hidden inputs MUST NOT carry extra attributes — plan 04-07's
+      //     test contract pins their exact HTML string).
+      // Clear both seed locations now so the parallel <template x-for>
+      // blocks become the single source of truth post-hydration (no
+      // duplicate visible chips, no duplicate submitted ids).
+      const root = this.$root;
+      if (root) {
+        root.querySelectorAll('[data-seed-chip]').forEach((el) => el.remove());
+        const seedHidden = root.querySelector('[data-seed-hidden-container]');
+        if (seedHidden) {
+          // Remove only the direct <input> children — the <template>
+          // placeholder for x-for stays so Alpine can populate from it.
+          Array.from(seedHidden.children).forEach((child) => {
+            if (child.tagName === 'INPUT') {
+              child.remove();
+            }
+          });
+        }
+      }
+
       this._onCreated = (evt) => {
         if (!evt || !evt.detail) return;
         const id = evt.detail.flavor_note_id;

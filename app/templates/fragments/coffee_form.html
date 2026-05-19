@@ -72,28 +72,36 @@
       {% endif %}
     </label>
 
-    {# Roaster autocomplete (D-13 + HX-4 mitigation).
-       - `roaster_query` is the visible text input — autocompleted via /roasters/list.
-       - `roaster_id`    is the hidden input that actually submits the FK id.
-       Plan 04-11 wires the Alpine `autocomplete` component that watches the
-       dropdown selection + the `HX-Trigger: roaster-created` event to
-       pre-select after the mini-modal closes. #}
-    <div class="flex flex-col gap-1">
+    {# Roaster autocomplete (D-13 + D-14 + D-16 + HX-4 mitigation).
+       Plan 04-11: wrapper carries `field` class (HX-4 `focus once from:closest .field`
+       targets it) + x-data="autocomplete" Alpine scope. The visible text input owns
+       the hx-get + the two hx-trigger clauses; the hidden `roaster_id` input
+       mirrors the Alpine `selectedId` state via :value.
+
+       On HX-Trigger: roaster-created (D-16): the Alpine autocomplete listener
+       sets selectedId + selectedLabel + query, the visible label updates via
+       :value="query", the hidden input updates via :value="selectedId". #}
+    <div class="field flex flex-col gap-1"
+         x-data="autocomplete({ entityKey: 'roaster', hiddenInputName: 'roaster_id', initialId: {{ values.get('roaster_id') or 'null' }}, initialName: {{ (roaster_name or '')|tojson }} })">
       <span class="text-sm font-semibold">Roaster</span>
       <div class="relative">
         <input type="text"
                name="roaster_query"
-               value="{{ roaster_name }}"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
                autocomplete="off"
                hx-get="/roasters/list"
-               hx-trigger="input changed delay:350ms[target.value.length >= 2]"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2], focus once from:closest .field"
                hx-sync="this:replace"
                hx-target="#roaster-dropdown"
                hx-swap="innerHTML"
                placeholder="Type 2+ chars to search…"
                class="w-full rounded border px-2 py-2 text-base{% if errors.get('roaster_id') %} border-red-300{% else %} border-espresso-200{% endif %}">
-        <input type="hidden" name="roaster_id" value="{{ values.get('roaster_id', '') }}">
-        <div id="roaster-dropdown" class="absolute top-full left-0 right-0 z-10"></div>
+        <input type="hidden" name="roaster_id" :value="selectedId">
+        <div id="roaster-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
       </div>
       {% if errors.get('roaster_id') %}
         <p class="text-sm text-red-700 mt-1">{{ errors['roaster_id'] }}</p>
@@ -161,44 +169,107 @@
       {% endif %}
     </label>
 
-    {# Advertised flavor notes — chip-builder shell.
-       Plan 04-07 ships the INERT markup + server-rendered seed chips so
-       validation re-render survives without Alpine. Plan 04-11 mounts
-       `x-data="flavorNoteChips"` here and wires:
-         - chip add (autocomplete <li role="option" @click ...>)
-         - chip remove (button @click splices selectedChips)
-         - hidden-input mirroring (parallel <template x-for>)
-         - flavor-note-created HX-Trigger listener (pre-select after mini-modal)
-       DO NOT change the element IDs below without updating the chip-widget
-       contract in 04-07-SUMMARY. #}
-    <div id="flavor-note-chips" class="flavor-note-chips-field flex flex-col gap-1">
+    {# Advertised flavor notes — chip-builder (D-15 + D-16 + plan 04-11).
+       Wraps the input + chip list + hidden inputs in a single
+       x-data="flavorNoteChips" scope. The component:
+         - reads `initialChips` (passed via the `data-*` attribute decoded
+           by Alpine's component-init reading the config) so a validation
+           re-render OR edit-mode pre-population restores the chip set.
+         - renders the visible chip pills via <template x-for> (each chip
+           has a × button calling removeChip(id)).
+         - renders one <input type="hidden" name="advertised_flavor_note_ids">
+           per chip via a PARALLEL <template x-for> against the same array,
+           so FastAPI's Form(default_factory=list) collects the repeated
+           keys natively at submit time (plan 04-07 contract — no
+           comma-separated string fallback).
+         - listens for `flavor-note-created` HX-Trigger (D-16) → appends
+           the new entity as a chip + clears the input.
+         - keyboard nav (Up/Down/Enter/Esc) on the input; Backspace at
+           empty query removes the last chip.
+
+       No JS / pre-hydration fallback: the chip-list and hidden-inputs
+       <template x-for> blocks render nothing until Alpine hydrates. The
+       htmx:afterSettle → Alpine.initTree hook (htmx-listeners.js) fires
+       synchronously after fragment swaps so the chips appear without a
+       visible flash. Users without JS use the standalone /flavor-notes
+       page per the plan's static-fallback note.
+
+       The `field` class on the wrapper is what the HX-4 `focus once from:closest .field`
+       trigger on the input element targets.
+
+       DO NOT change the wrapper ID or the inner IDs without updating the
+       chip-widget contract in 04-07-SUMMARY. #}
+    <div id="flavor-note-chips"
+         class="field flavor-note-chips-field flex flex-col gap-1"
+         x-data="flavorNoteChips({ initialChips: {{ selected_flavor_notes|tojson }} })">
       <span class="text-sm font-semibold">Advertised flavor notes</span>
+      {# Two render paths:
+           1. No-JS / pre-hydration: the static `<span data-server-chip>`
+              + `<input type="hidden" data-server-hidden>` siblings (one
+              per seeded chip) are present at server-render time so a
+              validation re-render OR an HTTP-only crawler / test sees
+              the chip set. Plan 04-07 contract.
+           2. Post-hydration: Alpine clears the static siblings via
+              `clearServerSeed()` in init(), then drives the chip-list
+              and hidden-inputs containers via parallel <template x-for>
+              blocks bound to selectedChips. Plan 04-11 contract.
+         The static siblings are tagged `data-server-chip` /
+         `data-server-hidden` so the Alpine-side cleanup is precise — it
+         removes ONLY those siblings, never the <template> placeholders. #}
       <div id="flavor-note-chip-list" class="flex flex-wrap gap-2 mb-2">
+        {# Static seed siblings BEFORE the <template x-for> — visible
+           pre-hydration / no-JS. The `data-seed-chip` marker on each
+           container element lets Alpine's init() locate + remove them
+           cleanly on hydration (single source of truth post-init). #}
         {% for chip in selected_flavor_notes %}
-          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200"
-                data-chip
-                data-chip-id="{{ chip.id }}">
+          <span data-seed-chip
+                class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
             {{ chip.name }}
           </span>
         {% endfor %}
+        <template x-for="chip in selectedChips" :key="chip.id">
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
+            <span x-text="chip.name"></span>
+            <button type="button"
+                    x-on:click="removeChip(chip.id)"
+                    :aria-label="'Remove ' + chip.name"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-cream-300 dark:hover:bg-espresso-700">
+              &times;
+            </button>
+          </span>
+        </template>
       </div>
-      <div id="flavor-note-hidden-inputs">
+      <div id="flavor-note-hidden-inputs" data-seed-hidden-container>
+        {# Static seed hidden inputs — preserved verbatim (no extra
+           attributes) so the plan-04-07 test contract
+           `<input type="hidden" name="advertised_flavor_note_ids" value="N">`
+           stays exact-match. Alpine clears them on hydration by emptying
+           every <input> child of the marker container BEFORE the
+           <template x-for> takes over. #}
         {% for chip in selected_flavor_notes %}
           <input type="hidden" name="advertised_flavor_note_ids" value="{{ chip.id }}">
         {% endfor %}
+        <template x-for="chip in selectedChips" :key="'h-' + chip.id">
+          <input type="hidden" name="advertised_flavor_note_ids" :value="chip.id">
+        </template>
       </div>
       <div class="relative">
         <input type="text"
                name="flavor_note_query"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
                autocomplete="off"
                hx-get="/flavor-notes/datalist"
-               hx-trigger="input changed delay:350ms[target.value.length >= 2]"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2], focus once from:closest .field"
                hx-sync="this:replace"
                hx-target="#flavor-note-dropdown"
                hx-swap="innerHTML"
                placeholder="Type 2+ chars to add a flavor note…"
                class="w-full rounded border px-2 py-2 text-base{% if errors.get('advertised_flavor_note_ids') %} border-red-300{% else %} border-espresso-200{% endif %}">
-        <div id="flavor-note-dropdown" class="absolute top-full left-0 right-0 z-10"></div>
+        <div id="flavor-note-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
       </div>
       {% if errors.get('advertised_flavor_note_ids') %}
         <p class="text-sm text-red-700 mt-1">{{ errors['advertised_flavor_note_ids'] }}</p>
