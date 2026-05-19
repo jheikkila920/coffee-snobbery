@@ -1,0 +1,98 @@
+{# Roaster row fragment — one of two shapes selected by `mode`:
+   - mode="row"   → <tr> inside the desktop table tbody
+   - mode="card"  → <div> mobile card
+
+   Both carry data-row + id="roaster-{{ roaster.id }}" so HTMX edit/archive
+   swaps work in either layout. Archived rows render italic + an "Archived"
+   pill per UI-SPEC §"Archived rows". Website link uses
+   rel="noopener noreferrer" target="_blank" per UI-SPEC §Security.
+
+   If `include_oob_form_clear` is set, append the out-of-band swap that
+   empties the form mount after a successful create (04-RESEARCH Pattern 2).
+#}
+{% set archive_confirm = "Archive roaster — stops appearing in autocomplete but keeps linked coffees." %}
+{% if mode == "card" %}
+  <div id="roaster-{{ roaster.id }}"
+       data-row
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800{% if roaster.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <div class="font-semibold">
+      {{ roaster.name }}
+      {% if roaster.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </div>
+    {% if roaster.location %}
+      <div class="text-sm">{{ roaster.location }}</div>
+    {% endif %}
+    {% if roaster.website %}
+      <div class="text-sm truncate">
+        <a href="{{ roaster.website }}" rel="noopener noreferrer" target="_blank"
+           class="text-espresso-700 underline hover:text-espresso-900 dark:text-cream-200">
+          {{ roaster.website }}
+        </a>
+      </div>
+    {% endif %}
+    <div class="mt-3 flex gap-3">
+      <button type="button"
+              hx-get="/roasters/{{ roaster.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not roaster.archived %}
+        <button type="button"
+                hx-post="/roasters/{{ roaster.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <tr id="roaster-{{ roaster.id }}"
+      data-row
+      class="border-b border-espresso-100{% if roaster.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    <td class="py-2">
+      {{ roaster.name }}
+      {% if roaster.archived %}
+        <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
+      {% endif %}
+    </td>
+    <td class="py-2">{{ roaster.location or "" }}</td>
+    <td class="py-2 truncate max-w-xs">
+      {% if roaster.website %}
+        <a href="{{ roaster.website }}" rel="noopener noreferrer" target="_blank"
+           class="text-espresso-700 underline hover:text-espresso-900 dark:text-cream-200">
+          {{ roaster.website }}
+        </a>
+      {% endif %}
+    </td>
+    <td class="py-2 text-right">
+      <button type="button"
+              hx-get="/roasters/{{ roaster.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {% if not roaster.archived %}
+        <button type="button"
+                hx-post="/roasters/{{ roaster.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="ml-1 rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Archive
+        </button>
+      {% endif %}
+    </td>
+  </tr>
+{% endif %}
+{% if include_oob_form_clear %}
+  {# 04-RESEARCH Pattern 2: clear the form mount on successful create. #}
+  <div id="roaster-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}

@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -75,6 +75,47 @@ from app.services.form_validation import errors_by_field
 from app.templates_setup import templates
 
 router = APIRouter(prefix="/roasters")
+
+# Field keys the inline form template renders error paragraphs for. Any
+# ValidationError landing on a key outside this set (e.g., the extra-field
+# rejection on ``is_admin`` from a T-04-MASS probe) is folded into the
+# ``_form`` sentinel so the user still sees the error rendered.
+_FORM_FIELDS = {"name", "location", "website", "notes"}
+
+# Fields where an empty form-string is semantically "no value" — coerce to
+# ``None`` before handing to the Pydantic schema so an empty website input
+# doesn't trip ``HttpUrl`` validation, and a blank location stays as
+# ``str | None = None`` rather than the empty string. ``name`` and
+# ``notes`` are deliberately NOT in this set: name is required (min_length=1
+# trips on the empty value, which is the desired error), and notes has a
+# legitimate ``""`` default that is meaningful as "no extra notes".
+_EMPTY_TO_NONE_FIELDS = {"location", "website"}
+
+
+def _coerce_empty_to_none(raw: dict[str, str]) -> dict[str, object]:
+    """Map ``""`` → ``None`` for optional fields whose schema type rejects ``""``."""
+    out: dict[str, object] = dict(raw)
+    for key in _EMPTY_TO_NONE_FIELDS:
+        if out.get(key) == "":
+            out[key] = None
+    return out
+
+
+def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
+    """Fold any error keys outside the rendered form fields into ``_form``."""
+    normalized: dict[str, str] = {}
+    leftovers: list[str] = []
+    for key, msg in errors.items():
+        if key in _FORM_FIELDS or key == "_form":
+            normalized[key] = msg
+        else:
+            leftovers.append(f"{key}: {msg}")
+    if leftovers:
+        # Preserve any existing _form message by joining.
+        existing = normalized.get("_form")
+        combined = "; ".join(leftovers) if existing is None else f"{existing}; {'; '.join(leftovers)}"
+        normalized["_form"] = combined
+    return normalized
 
 
 # --------------------------------------------------------------------------- #
@@ -145,32 +186,41 @@ def empty_form(
 
 
 @router.post("", response_class=HTMLResponse)
-def create_roaster(
+async def create_roaster(
     request: Request,
-    name: str = Form(...),
-    location: str | None = Form(None),
-    website: str | None = Form(None),
-    notes: str = Form(""),
-    as_modal: bool = Form(False),
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Create a roaster. Validation errors → 200 + form re-render."""
-    raw = {
-        "name": name,
-        "location": location,
-        "website": website,
-        "notes": notes,
-    }
+    """Create a roaster. Validation errors → 200 + form re-render.
+
+    Reads the raw form via ``await request.form()`` (not individual
+    ``Form(...)`` params) so that extra/mass-assignment fields reach the
+    Pydantic schema and trip ``extra="forbid"`` (T-04-MASS). Per
+    FastAPI's docs, ``Form(...)`` params would silently drop unknown
+    fields — leaving the mass-assignment defense to the schema layer
+    alone — which a probe with no header-set assertions might miss.
+    """
+    form_data = await request.form()
+    # Filter out CSRF substrate + flow flag before handing to the schema.
+    skip = {"X-CSRF-Token", "as_modal"}
+    raw = {k: v for k, v in form_data.items() if k not in skip}
+    as_modal_raw = form_data.get("as_modal")
+    as_modal = isinstance(as_modal_raw, str) and as_modal_raw.lower() in (
+        "true",
+        "on",
+        "1",
+    )
+    coerced = _coerce_empty_to_none(raw)
     try:
-        form = RoasterCreate(**raw)
+        form = RoasterCreate(**coerced)
     except ValidationError as exc:
+        # Preserve the user's submitted text on re-render (D-04).
         return templates.TemplateResponse(
             request=request,
             name="fragments/roaster_form.html",
             context={
                 "values": raw,
-                "errors": errors_by_field(exc),
+                "errors": _normalize_errors(errors_by_field(exc)),
                 "mode": "modal" if as_modal else "create",
             },
             status_code=200,
@@ -246,36 +296,34 @@ def edit_roaster_form(
 
 
 @router.post("/{roaster_id}", response_class=HTMLResponse)
-def update_roaster_handler(
+async def update_roaster_handler(
     roaster_id: int,
     request: Request,
-    name: str = Form(...),
-    location: str | None = Form(None),
-    website: str | None = Form(None),
-    notes: str = Form(""),
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Update a roaster. Validation errors → 200 + form re-render."""
+    """Update a roaster. Validation errors → 200 + form re-render.
+
+    Same raw-form-read pattern as :func:`create_roaster` so the schema's
+    ``extra="forbid"`` defense is exercised on the update path too.
+    """
     existing = roasters_service.get_roaster(db, roaster_id=roaster_id)
     if existing is None:
         raise HTTPException(status_code=404)
 
-    raw = {
-        "name": name,
-        "location": location,
-        "website": website,
-        "notes": notes,
-    }
+    form_data = await request.form()
+    skip = {"X-CSRF-Token", "as_modal"}
+    raw = {k: v for k, v in form_data.items() if k not in skip}
+    coerced = _coerce_empty_to_none(raw)
     try:
-        form = RoasterCreate(**raw)
+        form = RoasterCreate(**coerced)
     except ValidationError as exc:
         return templates.TemplateResponse(
             request=request,
             name="fragments/roaster_form.html",
             context={
                 "values": raw,
-                "errors": errors_by_field(exc),
+                "errors": _normalize_errors(errors_by_field(exc)),
                 "mode": "edit",
                 "roaster_id": roaster_id,
             },
