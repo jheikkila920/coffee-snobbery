@@ -18,7 +18,11 @@
 # --- Stage 1: Tailwind builder -----------------------------------------------
 FROM debian:bookworm-slim AS tailwind-builder
 
-ARG TAILWIND_VERSION=v4.3.0
+# Tailwind v3.4.x: the repo's tailwind.src.css uses v3 directives
+# (@tailwind base/components/utilities) and tailwind.config.js is a v3-style
+# JS config. The v4 CLI is CSS-first and ignores the JS config, producing a
+# near-empty stylesheet — so the CLI must stay on the v3 line.
+ARG TAILWIND_VERSION=v3.4.17
 ARG TARGETARCH
 
 RUN apt-get update \
@@ -41,6 +45,10 @@ WORKDIR /build
 COPY tailwind.config.js ./
 COPY app/static/css/tailwind.src.css ./app/static/css/tailwind.src.css
 COPY app/templates ./app/templates
+# tailwind.config.js content scan includes app/static/js/**/*.js (Alpine
+# components build class strings dynamically); copy it so those classes are
+# generated rather than silently dropped.
+COPY app/static/js ./app/static/js
 
 # Compute SHA-8 of the source CSS and emit the content-hashed output.
 RUN set -eux; \
