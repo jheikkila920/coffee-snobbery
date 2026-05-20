@@ -16,5 +16,39 @@
 @tailwind utilities;
 
 @layer base {
+  /* 16px floor (PITFALL MX-1): iOS Safari auto-zooms a focused input whose
+     computed font-size is < 16px. */
   input, select, textarea { font-size: 16px; }
+
+  /* Readable form-control contrast, app-wide (Phase 5 round-3 fix).
+     Preflight resets form controls to `color: inherit; background: transparent`,
+     so a control's text color rode on body inheritance and its background fell
+     through to the browser UA default (white). Under `darkMode: 'media'` the
+     body text flips to light (cream) while the UA input background stays white,
+     producing light-on-white = unreadable typed text on the sign-in page and
+     every form. Pin an explicit, palette-matched ink + surface on the controls
+     themselves so contrast no longer depends on per-element utilities or body
+     inheritance. Values are the UI-SPEC committed-value tokens:
+       light: espresso-900 ink on cream-50 surface, espresso-200 border
+       dark:  cream-100 ink on espresso-900 surface, espresso-700 border
+     File/select buttons and the placeholder stay muted. */
+  input, select, textarea {
+    color: #21150C;            /* espresso-900 */
+    background-color: #FAF7F2; /* cream-50 */
+    border-color: #C6AB94;     /* espresso-200 */
+  }
+  input::placeholder, textarea::placeholder {
+    color: #4B3422;            /* espresso-600 (muted) */
+    opacity: 1;
+  }
+  @media (prefers-color-scheme: dark) {
+    input, select, textarea {
+      color: #F4EFE6;            /* cream-100 */
+      background-color: #21150C; /* espresso-900 */
+      border-color: #3D2817;     /* espresso-700 */
+    }
+    input::placeholder, textarea::placeholder {
+      color: #DACBAE;            /* cream-300 (muted) */
+    }
+  }
 }
