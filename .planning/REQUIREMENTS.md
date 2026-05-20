@@ -68,7 +68,7 @@
 - [x] **BREW-05**: Live brew-ratio readout in the form (computed in Alpine from `dose_grams_actual` and `water_grams_actual`, displayed as `1:N.NN`); no schema column
 - [x] **BREW-06**: LocalStorage draft persistence on every input change, key namespaced by `user_id`; cleared on successful submit
 - [x] **BREW-07**: Server-side draft autosave on field blur (POST `/brew/draft`); restore from server when localStorage is empty; defends against iOS Safari 7-day ITP wipe
-- [ ] **BREW-08**: Sticky Save/Cancel buttons at bottom of long forms on mobile
+- [x] **BREW-08**: Sticky Save/Cancel buttons at bottom of long forms on mobile
 - [x] **BREW-09**: Quick re-log action on every session row: opens a new session form prefilled with that session's coffee, bag (if active), recipe, brewer, grinder, kettle, water type, dose, water, temp, grind setting; leaves rating, observed flavor notes, notes blank
 - [x] **BREW-10**: Sessions list view per user with filters: coffee, brewer, rating range, date range; CSV export
 - [x] **BREW-11**: CSV import of brew sessions (limited scope: refuse rows where coffee or bag not in catalog; force conscious add)
@@ -138,7 +138,7 @@
 - [ ] **MOB-03**: Tables collapse to card lists at mobile widths; no horizontal scroll anywhere
 - [ ] **MOB-04**: All tap targets ≥44×44px
 - [x] **MOB-05**: Form inputs use correct `inputmode` (`decimal` for grams/temp/rating, `numeric` for integer counts) and `type` (`date`, `datetime-local`) so mobile keyboards match
-- [ ] **MOB-06**: Global CSS rule `input, select, textarea { font-size: 16px; }` to prevent iOS Safari auto-zoom; Playwright assertion at 375px confirms no zoom on focus
+- [x] **MOB-06**: Global CSS rule `input, select, textarea { font-size: 16px; }` to prevent iOS Safari auto-zoom; Playwright assertion at 375px confirms no zoom on focus
 - [ ] **MOB-07**: Native `<select>` for short dropdowns on mobile; searchable HTMX dropdowns for long lists (coffees only)
 - [ ] **MOB-08**: Modals are full-screen sheets at <768px, dialogs at ≥768px
 - [ ] **MOB-09**: `manifest.json` with name, `short_name`, `description`, icons (192px, 512px, maskable), `display: standalone`, dual `theme-color` (light + dark), `start_url: "/?source=pwa"` that returns 200 (no redirect)
@@ -246,7 +246,7 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | BREW-05 | Phase 5 — Brew Sessions | Complete |
 | BREW-06 | Phase 5 — Brew Sessions | Complete |
 | BREW-07 | Phase 5 — Brew Sessions | Complete |
-| BREW-08 | Phase 5 — Brew Sessions | Pending |
+| BREW-08 | Phase 5 — Brew Sessions | Complete |
 | BREW-09 | Phase 5 — Brew Sessions | Complete |
 | BREW-10 | Phase 5 — Brew Sessions | Complete |
 | BREW-11 | Phase 5 — Brew Sessions | Complete |
@@ -298,7 +298,7 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | MOB-03 | Phase 11 — PWA + Mobile Polish | Pending |
 | MOB-04 | Phase 11 — PWA + Mobile Polish | Pending |
 | MOB-05 | Phase 5 — Brew Sessions | Complete |
-| MOB-06 | Phase 5 — Brew Sessions | Pending |
+| MOB-06 | Phase 5 — Brew Sessions | Complete |
 | MOB-07 | Phase 11 — PWA + Mobile Polish | Pending |
 | MOB-08 | Phase 11 — PWA + Mobile Polish | Pending |
 | MOB-09 | Phase 11 — PWA + Mobile Polish | Pending |

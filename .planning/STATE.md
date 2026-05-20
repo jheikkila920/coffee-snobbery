@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-05-20T02:28:52.796Z"
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-05-20T15:54:58.877Z"
 last_activity: 2026-05-20
 progress:
   total_phases: 13
   completed_phases: 5
   total_plans: 49
-  completed_plans: 47
-  percent: 96
+  completed_plans: 48
+  percent: 98
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 ## Current Position
 
 Phase: 05 (brew-sessions) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-05-20
 
-Progress: [██████████] 96%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████████] 96%
 | Phase 05 P02 | 8 | 3 tasks | 5 files |
 | Phase 05 P03 | 5 | 2 tasks | 2 files |
 | Phase 05 P04 | 14 | 3 tasks | 5 files |
+| Phase 05 P05 | 3 rounds | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -86,10 +87,15 @@ Recent decisions from PROJECT.md Key Decisions table:
 - [Phase ?]: Phase 5: brew router is the first per-user ROUTER — handlers require_user-gated + scoped by request.state.user.id; cross-user session_id returns 404 via the service None sentinel (T-05-15 IDOR non-leak, not 403)
 - [Phase ?]: Phase 5: brew create/update success responds 204 + HX-Redirect to /brew; POST /brew/draft is silent 204 and NOT CSRF-exempt; server draft exposed in /brew/new context for client localStorage-primary reconciliation (BREW-07)
 - [Phase ?]: Phase 5: GET /brew/prefill is a dynamic re-prefill FRAGMENT reusing resolve_prefill — renders only prefill-dependent fields + D-11 advertised chips; rating/observed/notes deliberately absent so an in-progress entry is never clobbered
+- Phase 5 (P05): brew form star colors deviate from UI-SPEC per user preference — selected bright amber, unselected dark espresso (better tap-feedback contrast on cream)
+- Phase 5 (P05): app-wide form-control contrast pinned in `app/static/css/tailwind.src.css` `@layer base` — root cause was Tailwind Preflight `color:inherit` + `darkMode:'media'` flipping body ink while the UA input background stayed white (fixed `/login` and every form, not just brew); `custom.css` intentionally NOT created (MX-1 lock)
+- Phase 5 (P05): D-07 water type implemented as a native `<datalist>` (suggestions + free-typed Other in one field) instead of select+toggle — CSP-safe, no 5th Alpine component
+- Phase 5 (P05): added `POST /brew/draft/clear` (CSRF-enforced, 204) to `app/routers/brew.py` to back the Discard affordance — Discard wipes the namespaced localStorage key AND deletes the server backstop draft (BREW-07); cross-plan touch of the Plan-04-owned router
+- Phase 5 (P05): prefill wrapper id is `#brew-prefill-region` (the hx-target); restore notice hidden pre-hydration via inline `style="display:none"` + `x-show` (no `[x-cloak]` rule exists)
 
 ### Pending Todos
 
-None yet.
+- **Inline "add new coffee" from the brew form coffee select** — while logging a brew, allow adding a coffee not yet in the shared catalog without leaving the form (inline create from the coffee `<select>`). Requested by John during Plan 05-05 verification. Cross-cutting UX enhancement; catalog CRUD is Phase 4 scope — does NOT belong to Phase 5. (No `.planning/todos/` dir exists, so tracked here + in 05-05-SUMMARY follow-ups.)
 
 ### Blockers/Concerns
 
@@ -114,6 +120,7 @@ None yet. Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-20T02:28:52.779Z
-Stopped at: Completed 05-04-PLAN.md
+Last session: 2026-05-20T15:54:58.877Z
+Stopped at: Completed 05-05-PLAN.md (brew form UI — human-verified)
 Resume file: None
+Next: 05-06-PLAN.md (sessions list + filters + CSV export/import)

@@ -183,7 +183,7 @@ Plans:
 - [x] 05-04-PLAN.md — brew form router: SEC-06 add/edit, prefill GET, brew-again, draft autosave + register (BREW-02, BREW-05, BREW-07, BREW-09)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 05-05-PLAN.md — four Alpine components + base.html + brew_form.html add/edit page + human-verify (BREW-02..08, MOB-05/06)
+- [x] 05-05-PLAN.md — four Alpine components + base.html + brew_form.html add/edit page + human-verify (BREW-02..08, MOB-05/06)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 05-06-PLAN.md — sessions list + filters + CSV export/import routes + list/import templates + human-verify (BREW-10, BREW-11, MOB-05)
@@ -289,7 +289,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 2. Auth | 0/TBD | Not started | - |
 | 3. Encryption + Settings | 0/TBD | Not started | - |
 | 4. Shared Catalog | 0/TBD | Not started | - |
-| 5. Brew Sessions | 0/6 | Ready to execute | - |
+| 5. Brew Sessions | 5/6 | In Progress | - |
 | 6. Analytics (Home Page) | 0/TBD | Not started | - |
 | 7. AI Services | 0/TBD | Not started | - |
 | 8. Scheduler + Backups | 0/TBD | Not started | - |
