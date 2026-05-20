@@ -90,6 +90,7 @@ from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
 from app.routers import equipment as equipment_router
 from app.routers import flavor_notes as flavor_notes_router
+from app.routers import home as home_router
 from app.routers import photos as photos_router
 from app.routers import recipes as recipes_router
 from app.routers import roasters as roasters_router
@@ -227,6 +228,7 @@ def create_app() -> FastAPI:
     app.include_router(recipes_router.router)
     app.include_router(bags_router.router)
     app.include_router(brew_router.router)
+    app.include_router(home_router.router)
     app.include_router(photos_router.router)
 
     @app.get("/healthz")
@@ -245,19 +247,6 @@ def create_app() -> FastAPI:
             log.warning("app.healthz_failed", error_class=type(exc).__name__)
             return JSONResponse({"status": "error"}, status_code=503)
         return JSONResponse({"status": "ok"})
-
-    @app.get("/")
-    def home(request: Request) -> object:
-        """Render the placeholder home page (Phase 0).
-
-        Phase 4 replaces this with the real home page route — keeping the
-        Phase 0 template path here means existing healthcheck flows and
-        manual smoke tests stay green during the Phase 1 → Phase 4
-        transition.
-        """
-        return request.app.state.templates.TemplateResponse(
-            request=request, name="pages/index.html", context={}
-        )
 
     return app
 
