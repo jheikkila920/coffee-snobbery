@@ -1,14 +1,17 @@
-"""Home page router — analytics shell + always-on fragment endpoints (Phase 6).
+"""Home page router — analytics shell + always-on + aggregate fragment endpoints (Phase 6).
 
 Replaces the Phase 0 placeholder ``@app.get("/")`` in ``app/main.py``.
 
 Routes:
-  GET /                        — full home shell (eager: cold-start gate,
-                                 recent brews, unrated coffees)
-  GET /home/cards/recent-brews — partial refresh endpoint for the recent-brews
-                                 card (also the surface the shell includes eagerly)
-  GET /home/cards/unrated-coffees — partial refresh + lazy-load for the
-                                    unrated-coffees card
+  GET /                              — full home shell (eager: cold-start gate,
+                                       recent brews, unrated coffees)
+  GET /home/cards/recent-brews       — partial refresh for the recent-brews card
+  GET /home/cards/unrated-coffees    — partial refresh + lazy-load for unrated coffees
+  GET /home/cards/top-coffees        — aggregate card (HOME-01)
+  GET /home/cards/preference-profile — aggregate card (HOME-02)
+  GET /home/cards/flavor-descriptors — aggregate card (HOME-03)
+  GET /home/cards/roast-freshness    — aggregate card (HOME-04)
+  GET /home/cards/sweet-spots        — aggregate card (HOME-05)
 
 Every handler is gated by ``Depends(require_user)`` (T-06-04 / T-06-05).
 ``user_id`` is ALWAYS read from ``request.state.user.id`` — never a query param
@@ -21,10 +24,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
+from app.models.brew_session import BrewSession
 from app.models.user import User
 from app.services import analytics
 from app.templates_setup import templates
@@ -104,4 +109,122 @@ def card_unrated_coffees(
         request=request,
         name="fragments/home/unrated_coffees.html",
         context={"unrated_coffees": unrated_coffees},
+    )
+
+
+def _has_rated_sessions(db: Session, user_id: int) -> bool:
+    """Return True if the user has at least one rated brew session.
+
+    Used by rating-dependent card handlers to detect the all-unrated case (D-05):
+    a single DB scalar rather than iterating over query results.
+    """
+    count = (
+        db.scalar(
+            select(func.count(BrewSession.id)).where(
+                BrewSession.user_id == user_id,
+                BrewSession.rating.is_not(None),
+            )
+        )
+        or 0
+    )
+    return count > 0
+
+
+@router.get("/home/cards/top-coffees", response_class=HTMLResponse)
+def card_top_coffees(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Fragment endpoint for the top-coffees card (HOME-01).
+
+    Rating-dependent: passes ``all_unrated`` to the template (D-05).
+    ``FragmentCacheHeadersMiddleware`` adds ``no-store`` + ``Vary: HX-Request``
+    automatically on ``HX-Request: true`` responses.
+    """
+    rows = analytics.get_top_coffees(db, user.id)
+    all_unrated = not rows and not _has_rated_sessions(db, user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/top_coffees.html",
+        context={"rows": rows, "all_unrated": all_unrated},
+    )
+
+
+@router.get("/home/cards/preference-profile", response_class=HTMLResponse)
+def card_preference_profile(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Fragment endpoint for the preference-profile card (HOME-02).
+
+    Rating-dependent: passes ``all_unrated`` to the template (D-05).
+    The ``profile`` dict has keys origin/process/roaster/roast_level.
+    """
+    profile = analytics.get_preference_profile(db, user.id)
+    profile_empty = not any(profile.values())
+    all_unrated = profile_empty and not _has_rated_sessions(db, user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/preference_profile.html",
+        context={"profile": profile, "all_unrated": all_unrated},
+    )
+
+
+@router.get("/home/cards/flavor-descriptors", response_class=HTMLResponse)
+def card_flavor_descriptors(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Fragment endpoint for the top-flavor-descriptors card (HOME-03).
+
+    Rating-dependent: passes ``all_unrated`` to the template (D-05).
+    """
+    rows = analytics.get_flavor_descriptors(db, user.id)
+    all_unrated = not rows and not _has_rated_sessions(db, user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/flavor_descriptors.html",
+        context={"rows": rows, "all_unrated": all_unrated},
+    )
+
+
+@router.get("/home/cards/roast-freshness", response_class=HTMLResponse)
+def card_roast_freshness(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Fragment endpoint for the roast-freshness card (HOME-04).
+
+    NOT rating-dependent for the D-05 nudge — freshness doesn't require ratings.
+    Always uses the generic sparse hint when empty.
+    """
+    rows = analytics.get_roast_freshness_buckets(db, user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/roast_freshness.html",
+        context={"rows": rows, "all_unrated": False},
+    )
+
+
+@router.get("/home/cards/sweet-spots", response_class=HTMLResponse)
+def card_sweet_spots(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Fragment endpoint for the sweet-spots card (HOME-05).
+
+    Rating-dependent: passes ``all_unrated`` to the template (D-05).
+    No AI prose / 'coming soon' placeholder — HOME-06 is Phase 7 (T-06-11).
+    """
+    rows = analytics.get_sweet_spots(db, user.id)
+    all_unrated = not rows and not _has_rated_sessions(db, user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/sweet_spots.html",
+        context={"rows": rows, "all_unrated": all_unrated},
     )
