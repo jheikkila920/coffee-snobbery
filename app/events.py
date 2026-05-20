@@ -114,6 +114,26 @@ CATALOG_BAG_PHOTO_UPLOADED = "catalog.bag.photo_uploaded"
 CATALOG_BAG_PHOTO_DELETED = "catalog.bag.photo_deleted"
 CATALOG_PHOTO_ORPHAN_SWEPT = "catalog.photo.orphan_swept"
 
+# --- brew.* (Phase 5) ------------------------------------------------------
+# Per-user brew-session lifecycle + the localStorage-backstop draft store +
+# the CSV import/export flows. Same ``<category>.<action>`` taxonomy as the
+# catalog block. Emitted by the Phase 5 service modules (plans 05-02..05-05)
+# at the end of each successful write transaction.
+#
+# Field shapes the downstream JSON-log queries depend on:
+# - ``brew.session.created/updated/deleted`` carry ``session_id`` + ``user_id``.
+# - ``brew.draft.saved/cleared`` carry ``user_id`` (one draft per user).
+# - ``brew.csv.imported`` carries ``user_id`` + the per-run counts
+#   (``inserted``, ``skipped``, ``refused``); ``brew.csv.exported`` carries
+#   ``user_id`` + ``row_count``.
+BREW_SESSION_CREATED = "brew.session.created"
+BREW_SESSION_UPDATED = "brew.session.updated"
+BREW_SESSION_DELETED = "brew.session.deleted"
+BREW_DRAFT_SAVED = "brew.draft.saved"
+BREW_DRAFT_CLEARED = "brew.draft.cleared"
+BREW_CSV_IMPORTED = "brew.csv.imported"
+BREW_CSV_EXPORTED = "brew.csv.exported"
+
 
 __all__ = [
     "ADMIN_API_CREDENTIAL_SET",
@@ -126,6 +146,13 @@ __all__ = [
     "AUTH_LOGIN_FAILED",
     "AUTH_LOGIN_SUCCEEDED",
     "AUTH_LOGOUT",
+    "BREW_CSV_EXPORTED",
+    "BREW_CSV_IMPORTED",
+    "BREW_DRAFT_CLEARED",
+    "BREW_DRAFT_SAVED",
+    "BREW_SESSION_CREATED",
+    "BREW_SESSION_DELETED",
+    "BREW_SESSION_UPDATED",
     "CATALOG_BAG_ARCHIVED",
     "CATALOG_BAG_CREATED",
     "CATALOG_BAG_PHOTO_DELETED",

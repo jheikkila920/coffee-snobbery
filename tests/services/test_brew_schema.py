@@ -213,9 +213,8 @@ def test_observed_notes_array() -> None:
 def test_rating_decimal_steps() -> None:
     """BREW-04: rating Decimal accepts 0/2.5/5/1.75; rejects 5.5 (range) and 3.3 (step)."""
     _require_brew_schema()
-    from pydantic import ValidationError
-
     from app.schemas.brew_session import BrewSessionCreate
+    from pydantic import ValidationError
 
     base = {
         "coffee_id": 1,
