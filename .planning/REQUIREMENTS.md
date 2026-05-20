@@ -63,9 +63,9 @@
 
 - [x] **BREW-01**: `brew_sessions` table per user with `coffee_id` (denormalized for fast queries), `bag_id` (FK to `bags`, nullable for freestyle without specific bag), `recipe_id` (FK, nullable), `brewer_id`, `grinder_id`, `kettle_id`, `water_type`, `dose_grams_actual`, `water_grams_actual`, `yield_grams_actual` (nullable), `tds_pct` (nullable), `extraction_yield_pct` (GENERATED), `water_temp_c_actual`, `grind_setting_actual`, `rating`, `flavor_note_ids_observed`, `notes`, `brewed_at`
 - [x] **BREW-02**: Single scrollable add-session form with aggressive prefill from last session + selected recipe; visible prefill indicators (ghost text or pill) so users don't re-type defensively
-- [ ] **BREW-03**: Tag input for observed flavor notes — autocomplete from existing tags, comma/enter commits a new tag, tap-to-remove chips, mobile keyboard friendly
+- [x] **BREW-03**: Tag input for observed flavor notes — autocomplete from existing tags, comma/enter commits a new tag, tap-to-remove chips, mobile keyboard friendly
 - [x] **BREW-04**: Rating control 0–5 in 0.25 steps as tap-on-stars (half/quarter stars), thumb-operable, ≥44×44px tap targets
-- [ ] **BREW-05**: Live brew-ratio readout in the form (computed in Alpine from `dose_grams_actual` and `water_grams_actual`, displayed as `1:N.NN`); no schema column
+- [x] **BREW-05**: Live brew-ratio readout in the form (computed in Alpine from `dose_grams_actual` and `water_grams_actual`, displayed as `1:N.NN`); no schema column
 - [x] **BREW-06**: LocalStorage draft persistence on every input change, key namespaced by `user_id`; cleared on successful submit
 - [x] **BREW-07**: Server-side draft autosave on field blur (POST `/brew/draft`); restore from server when localStorage is empty; defends against iOS Safari 7-day ITP wipe
 - [ ] **BREW-08**: Sticky Save/Cancel buttons at bottom of long forms on mobile
@@ -241,9 +241,9 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | CAT-08 | Phase 4 — Shared Catalog | Pending |
 | BREW-01 | Phase 5 — Brew Sessions | Complete |
 | BREW-02 | Phase 5 — Brew Sessions | Complete |
-| BREW-03 | Phase 5 — Brew Sessions | Pending |
+| BREW-03 | Phase 5 — Brew Sessions | Complete |
 | BREW-04 | Phase 5 — Brew Sessions | Complete |
-| BREW-05 | Phase 5 — Brew Sessions | Pending |
+| BREW-05 | Phase 5 — Brew Sessions | Complete |
 | BREW-06 | Phase 5 — Brew Sessions | Complete |
 | BREW-07 | Phase 5 — Brew Sessions | Complete |
 | BREW-08 | Phase 5 — Brew Sessions | Pending |

@@ -180,7 +180,7 @@ Plans:
 - [x] 05-03-PLAN.md — csv_io service: header-driven import (resolve/dedup/single-txn) + name-based round-trip export (BREW-10, BREW-11)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 05-04-PLAN.md — brew form router: SEC-06 add/edit, prefill GET, brew-again, draft autosave + register (BREW-02, BREW-05, BREW-07, BREW-09)
+- [x] 05-04-PLAN.md — brew form router: SEC-06 add/edit, prefill GET, brew-again, draft autosave + register (BREW-02, BREW-05, BREW-07, BREW-09)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 05-05-PLAN.md — four Alpine components + base.html + brew_form.html add/edit page + human-verify (BREW-02..08, MOB-05/06)

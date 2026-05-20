@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-05-20T02:10:20.007Z"
+stopped_at: Completed 05-04-PLAN.md
+last_updated: "2026-05-20T02:28:52.796Z"
 last_activity: 2026-05-20
 progress:
   total_phases: 13
   completed_phases: 5
   total_plans: 49
-  completed_plans: 46
-  percent: 94
+  completed_plans: 47
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 ## Current Position
 
 Phase: 05 (brew-sessions) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-05-20
 
-Progress: [█████████░] 94%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████████░] 94%
 | Phase 05 P01 | 12 | 4 tasks | 10 files |
 | Phase 05 P02 | 8 | 3 tasks | 5 files |
 | Phase 05 P03 | 5 | 2 tasks | 2 files |
+| Phase 05 P04 | 14 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,9 @@ Recent decisions from PROJECT.md Key Decisions table:
 - [Phase ?]: Phase 5: brew CSV import is header-driven (csv.DictReader + case-insensitive alias map); Snobbery-native EXPORT_FIELDNAMES is the authoritative round-trip format, Beanconqueror aliases shipped TODO-confirm pending a real export file
 - [Phase ?]: Phase 5: CSV formula injection (T-05-13) mitigated by prefixing leading = + - @ with a single quote on free-text export columns only; numeric columns untouched
 - [Phase ?]: Phase 5: CSV import single-transaction (BREW-11) — refused/skipped rows never enter the txn, all accepted rows + D-09 notes commit once, DB error rolls back the whole batch (no partial commit)
+- [Phase ?]: Phase 5: brew router is the first per-user ROUTER — handlers require_user-gated + scoped by request.state.user.id; cross-user session_id returns 404 via the service None sentinel (T-05-15 IDOR non-leak, not 403)
+- [Phase ?]: Phase 5: brew create/update success responds 204 + HX-Redirect to /brew; POST /brew/draft is silent 204 and NOT CSRF-exempt; server draft exposed in /brew/new context for client localStorage-primary reconciliation (BREW-07)
+- [Phase ?]: Phase 5: GET /brew/prefill is a dynamic re-prefill FRAGMENT reusing resolve_prefill — renders only prefill-dependent fields + D-11 advertised chips; rating/observed/notes deliberately absent so an in-progress entry is never clobbered
 
 ### Pending Todos
 
@@ -110,6 +114,6 @@ None yet. Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-20T02:09:59.498Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-05-20T02:28:52.779Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None
