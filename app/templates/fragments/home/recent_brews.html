@@ -1,0 +1,46 @@
+{# Recent brews card body — last 10 sessions (HOME-07, D-01).
+   Context: recent_brews — list of Row(id, brewed_at, rating, coffee_id, coffee_name)
+   from analytics.get_recent_brews(). Always rendered (no gate dependency).
+
+   Card list at ALL viewports — mobile-first, no desktop table (plan requirement).
+   Edit link → /brew/{id}/edit (Phase 5 session-edit path, single-word label).
+   Brew again → /brew/new?from={id}.
+   All values autoescaped. CSP-clean. #}
+
+{% if recent_brews %}
+  <ul class="space-y-3">
+    {% for row in recent_brews %}
+      <li class="rounded-lg border border-espresso-200 bg-cream-50 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+        <div class="flex items-baseline justify-between gap-4 mb-1">
+          <span class="font-semibold text-base">{{ row.coffee_name }}</span>
+          <span class="text-sm text-espresso-600 dark:text-cream-300">
+            {% if row.rating is not none %}
+              <span class="text-espresso-700" aria-hidden="true">★</span>
+              <span class="tabular-nums">{{ row.rating }}</span>
+            {% else %}
+              —
+            {% endif %}
+          </span>
+        </div>
+        <div class="text-sm text-espresso-600 dark:text-cream-300 mb-3">
+          {{ row.brewed_at.strftime('%b %d, %Y') }}
+        </div>
+        <div class="flex gap-4">
+          <a href="/brew/{{ row.id }}/edit"
+             class="rounded border border-espresso-300 px-4 py-2 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+            Edit
+          </a>
+          <a href="/brew/new?from={{ row.id }}"
+             aria-label="Brew again from {{ row.coffee_name }}"
+             class="rounded bg-espresso-700 px-4 py-2 text-sm text-cream-50 hover:bg-espresso-800">
+            Brew again
+          </a>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="flex flex-col items-center justify-center text-center py-16 gap-3">
+    <p class="text-base">No brews logged yet. The snobbery awaits.</p>
+  </div>
+{% endif %}

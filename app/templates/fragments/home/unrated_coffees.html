@@ -1,0 +1,36 @@
+{# Unrated coffees card body — non-archived coffees this user has never brewed (HOME-08).
+   Context: unrated_coffees — list of Row(id, name, origin, roast_level)
+   from analytics.get_unrated_coffees(). Lazy-loaded at load delay:150ms.
+
+   Note: get_unrated_coffees() returns (id, name, origin, roast_level) from the
+   Coffee model — roaster_name is not included in this service call. The origin
+   and roast_level are shown as secondary context where available.
+   All values autoescaped. CSP-clean. #}
+
+{% if unrated_coffees %}
+  <ul class="space-y-3">
+    {% for row in unrated_coffees %}
+      <li class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2 last:border-0">
+        <div>
+          <span class="text-base">{{ row.name }}</span>
+          {% if row.origin or row.roast_level %}
+            <span class="block text-sm text-espresso-600 dark:text-cream-300">
+              {%- if row.origin %}{{ row.origin }}{% endif -%}
+              {%- if row.origin and row.roast_level %} · {% endif -%}
+              {%- if row.roast_level %}{{ row.roast_level }}{% endif -%}
+            </span>
+          {% endif %}
+        </div>
+        <a href="/brew/new?coffee_id={{ row.id }}"
+           aria-label="Log session with {{ row.name }}"
+           class="shrink-0 rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800">
+          Log session
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-base text-espresso-600 dark:text-cream-300">
+    You've brewed every coffee in the catalog.
+  </p>
+{% endif %}

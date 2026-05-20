@@ -1,0 +1,49 @@
+{# Cold-start empty state (gate not cleared: sessions < 3 OR distinct_notes < 5).
+   Context: gate dict from analytics.get_cold_start_counts():
+     gate.sessions         — total sessions (including unrated, D-02)
+     gate.distinct_notes   — distinct observed flavor notes
+     gate.sessions_needed  — max(0, 3 - sessions)
+     gate.notes_needed     — max(0, 5 - notes)
+   Progress meter: server-computed pct from live counts (D-03, no Alpine).
+   All values autoescaped. CSP-clean. #}
+
+{# Compute capped counts for the progress percentage (8 total units: 3 sessions + 5 notes). #}
+{% set sessions_done = [gate.sessions, 3] | min %}
+{% set notes_done = [gate.distinct_notes, 5] | min %}
+{% set pct = ((sessions_done + notes_done) / 8 * 100) | round | int %}
+
+<section aria-labelledby="cold-start-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="cold-start-heading" class="text-xl font-semibold mb-4">Build your taste profile.</h2>
+
+  <div class="mb-4">
+    <div class="h-2 rounded-full bg-espresso-200 dark:bg-espresso-800 overflow-hidden"
+         role="progressbar"
+         aria-valuenow="{{ pct }}"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-label="Profile completion">
+      <div class="h-2 rounded-full bg-espresso-700" style="width: {{ pct }}%"></div>
+    </div>
+  </div>
+
+  <p class="text-base mb-2">
+    {# Three branches per UI-SPEC §"Cold-Start Empty State" (singular/plural handled). #}
+    {% if gate.sessions_needed > 0 and gate.notes_needed > 0 %}
+      Log {{ gate.sessions_needed }} more brew{% if gate.sessions_needed != 1 %}s{% endif %} and add {{ gate.notes_needed }} more flavor note{% if gate.notes_needed != 1 %}s{% endif %} to unlock insights.
+    {% elif gate.sessions_needed == 0 and gate.notes_needed > 0 %}
+      Add {{ gate.notes_needed }} more flavor note{% if gate.notes_needed != 1 %}s{% endif %} to your brews to unlock insights.
+    {% else %}
+      Log {{ gate.sessions_needed }} more brew{% if gate.sessions_needed != 1 %}s{% endif %} to unlock insights.
+    {% endif %}
+  </p>
+
+  <p class="text-sm text-espresso-600 dark:text-cream-300 mb-4">
+    In the meantime, your recent brews and catalog are below.
+  </p>
+
+  <a href="/brew/new"
+     class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+    Log session
+  </a>
+</section>
