@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{# Dedicated brew add/edit page (D-01, BREW-02/03/04/05/08).
+
+   Modes:
+     - mode="create" → POST /brew         (prefilled; draft-backed via /brew/draft)
+     - mode="edit"   → POST /brew/{id}     (actual stored values; NOT draft-backed)
+
+   On Pydantic ValidationError the router re-renders THIS page at HTTP 200 with
+   `errors` populated and `values` echoing the submission (SEC-06 — HTMX swaps
+   cleanly only on 2xx). On success the router responds HX-Redirect to the list.
+
+   Context contract (locked here for Plan 05 — see 05-04-SUMMARY):
+     - values:            {field: str | list[str]} prefilled / submitted values
+     - errors:            {field: message}
+     - mode:              "create" | "edit"
+     - session_id:        int (edit mode only)
+     - form_action:       POST target ("/brew" or "/brew/{id}")
+     - touched:           {field: bool} (False = prefilled-untouched → pill)
+     - pill_sources:      {field: caption}
+     - advertised_chips:  list[{id, name}]  (D-11; rendered in the include)
+     - selected_flavor_notes: list[{id, name}]  (seeded observed chips)
+     - coffees/recipes/brewers/grinders/kettles + equipment_name_map
+     - server_draft / server_draft_json:  the server draft for client reconcile
+                                           (create mode only)
+     - disclosure_open:   bool (edit mode auto-opens when yield/tds non-null)
+
+   This page is a SCAFFOLD: Plan 05 mounts the four Alpine components
+   (ratingStars, observedFlavorNotes, brewRatio, brewDraft) and the sticky-bar
+   polish on this structure. The field markup is kept consistent with
+   fragments/brew_prefill_fields.html so the initial render and the re-prefill
+   swap produce identical DOM for the prefill-dependent region.
+
+   CSP-strict: no |safe, no inline hx-on:, no hx-vals='js:'. Autoescape ON.
+#}
+{% set is_edit = mode == "edit" %}
+{% block page_title %}{% if is_edit %}Edit session{% else %}Log session{% endif %}{% endblock %}
+{% block content %}
+  <main class="mx-auto max-w-2xl px-6 py-12">
+    <h1 class="text-2xl font-semibold mb-6">{% if is_edit %}Edit session{% else %}Log session{% endif %}</h1>
+
+    {% if not is_edit and not coffees %}
+      <p class="text-sm text-espresso-600 mb-4">First brew — nothing to prefill yet. Future sessions start from your last.</p>
+    {% endif %}
+
+    {# Server draft surface for client-side reconciliation (BREW-07).
+       localStorage is primary; Plan 05's brewDraft component reads this only
+       when localStorage is empty. Create mode only. #}
+    {% if not is_edit and server_draft is not none %}
+      <div id="brew-server-draft"
+           data-server-draft="{{ server_draft_json }}"
+           class="text-sm text-espresso-700 bg-cream-200 rounded px-3 py-2 mb-4">
+        Restored your unsaved draft.
+      </div>
+    {% endif %}
+
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700 mb-4">{{ errors['_form'] }}</p>
+    {% endif %}
+
+    <form id="brew-form"
+          hx-post="{{ form_action }}"
+          hx-swap="none"
+          class="rounded-lg border border-espresso-200 bg-cream-100 p-6 flex flex-col gap-3 dark:bg-espresso-900 dark:border-espresso-800">
+      {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+      {# Prefill-dependent fields — shared with the dynamic re-prefill fragment. #}
+      {% include "fragments/brew_prefill_fields.html" %}
+
+      {# --- Per-attempt fields (NEVER in the prefill fragment) --- #}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-sm font-semibold">Rating</legend>
+        {# Plan 05 enhances this numeric floor into the tap-on-stars control. #}
+        <input type="number" name="rating" min="0" max="5" step="0.25" inputmode="decimal"
+               value="{{ values.get('rating', '') }}"
+               class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('rating') %} border-red-300{% else %} border-espresso-200{% endif %}">
+        {% if errors.get('rating') %}<p class="text-sm text-red-700 mt-1">{{ errors['rating'] }}</p>{% endif %}
+      </fieldset>
+
+      {# Observed flavor notes (per-session) — seeded chips render server-side.
+         Plan 05 mounts x-data="observedFlavorNotes" here. NEVER conflated with
+         the per-coffee advertised_flavor_note_ids. #}
+      <div id="observed-flavor-notes" class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Flavor notes</span>
+        <div id="observed-chip-list" class="flex flex-wrap gap-2">
+          {% for chip in selected_flavor_notes %}
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200"
+                  data-seed-chip data-chip-id="{{ chip.id }}" data-chip-name="{{ chip.name }}">{{ chip.name }}</span>
+          {% endfor %}
+        </div>
+        <div id="observed-hidden-inputs">
+          {% for chip in selected_flavor_notes %}
+            <input type="hidden" name="flavor_note_ids_observed" value="{{ chip.id }}">
+          {% endfor %}
+        </div>
+      </div>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Notes</span>
+        <textarea name="notes" maxlength="5000" rows="3"
+                  class="rounded border border-espresso-200 px-2 py-2 text-base">{{ values.get('notes', '') }}</textarea>
+      </label>
+
+      {# --- D-02 refractometer / advanced disclosure --- #}
+      <details class="rounded border border-espresso-200 p-4"{% if disclosure_open %} open{% endif %}>
+        <summary class="text-lg font-semibold cursor-pointer">Refractometer / advanced</summary>
+        <div class="flex gap-3 mt-3">
+          <label class="flex flex-col gap-1 flex-1">
+            <span class="text-sm font-semibold">Yield (g)</span>
+            <input name="yield_grams_actual" inputmode="decimal"
+                   value="{{ values.get('yield_grams_actual', '') }}"
+                   class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('yield_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+            {% if errors.get('yield_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['yield_grams_actual'] }}</p>{% endif %}
+          </label>
+          <label class="flex flex-col gap-1 flex-1">
+            <span class="text-sm font-semibold">TDS %</span>
+            <input name="tds_pct" inputmode="decimal"
+                   value="{{ values.get('tds_pct', '') }}"
+                   class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('tds_pct') %} border-red-300{% else %} border-espresso-200{% endif %}">
+            {% if errors.get('tds_pct') %}<p class="text-sm text-red-700 mt-1">{{ errors['tds_pct'] }}</p>{% endif %}
+          </label>
+        </div>
+        {# extraction_yield_pct is GENERATED — render-only, never an input. #}
+        <p class="text-sm text-espresso-600 mt-3">Extraction yield <span class="tabular-nums">—</span></p>
+      </details>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Brewed at</span>
+        <input type="datetime-local" name="brewed_at"
+               value="{{ values.get('brewed_at', '') }}"
+               class="rounded border border-espresso-200 px-2 py-2 text-base">
+      </label>
+
+      {# --- Sticky save / discard bar (BREW-08; Plan 05 polishes) --- #}
+      <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex gap-3 justify-end dark:bg-espresso-950/95 dark:border-espresso-800"
+           style="padding-bottom: env(safe-area-inset-bottom)">
+        <a href="{{ '/brew' }}"
+           class="rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
+        <button type="submit"
+                class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
+          {% if is_edit %}Save session{% else %}Log session{% endif %}
+        </button>
+      </div>
+    </form>
+  </main>
+{% endblock %}

@@ -1,0 +1,151 @@
+{# Prefill-DEPENDENT fields fragment (D-01 dynamic re-prefill target).
+
+   Rendered by:
+     - GET /brew/prefill          (the coffee/recipe <select> hx-get swap)
+     - pages/brew_form.html       ({% include %} for the initial server render)
+
+   This fragment renders ONLY the prefill-dependent subset of the brew form so
+   a coffee/recipe change can swap it in place without clobbering the user's
+   in-progress per-attempt entries. It MUST NOT include rating, observed flavor
+   notes, or notes — those are per-attempt fields that stay as the user left
+   them (UI-SPEC §"Prefill Indicators", §"Brew Session Form").
+
+   D-04: a coffee change re-prefills bag/equipment/dose/water/temp/grind from
+   the user's last session with that coffee. D-05: a recipe change overwrites
+   exactly dose/water/temp/grind ("from recipe" pill). D-11: the advertised
+   quick-add chips always refresh to the selected coffee's notes.
+
+   Context contract (locked here for Plan 05 — see 05-04-SUMMARY):
+     - values:           {field: str}  (prefill-dependent fields only used here)
+     - touched:          {field: bool} (False = prefilled-untouched → show pill)
+     - pill_sources:     {field: caption} ("from last brew"/"from recipe"/"from this brew")
+     - advertised_chips: list[{id, name}]  (D-11 quick-add suggestion chips)
+     - coffees / recipes / brewers / grinders / kettles: dropdown sources
+     - equipment_name_map: {id: label}
+
+   The wrapper id `#brew-prefill-fields` is the hx-target the coffee/recipe
+   selects swap into (Plan 05 wires the hx-get on those selects).
+
+   CSP-strict: no |safe, no inline hx-on:, no hx-vals='js:'. Autoescape ON.
+#}
+{% macro prefill_pill(field) -%}
+  {%- if not touched.get(field, True) and pill_sources.get(field) -%}
+    <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-sm bg-cream-200 text-espresso-700 dark:bg-espresso-800 dark:text-cream-300"
+          data-prefill-pill="{{ field }}">{{ pill_sources[field] }}</span>
+  {%- endif -%}
+{%- endmacro %}
+<div id="brew-prefill-fields" class="flex flex-col gap-3">
+  {# --- Coffee (drives D-04 re-prefill + D-11 advertised chips) --- #}
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Coffee {{ prefill_pill('coffee_id') }}</span>
+    <select name="coffee_id"
+            class="rounded border px-2 py-2 text-base{% if errors.get('coffee_id') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      <option value=""{% if not values.get('coffee_id') %} selected{% endif %}>—</option>
+      {% for c in coffees %}
+        <option value="{{ c.id }}"{% if values.get('coffee_id') == (c.id | string) %} selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    {% if errors.get('coffee_id') %}<p class="text-sm text-red-700 mt-1">{{ errors['coffee_id'] }}</p>{% endif %}
+  </label>
+
+  {# --- Recipe (drives D-05 recipe-wins on the four template fields) --- #}
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Recipe {{ prefill_pill('recipe_id') }}</span>
+    <select name="recipe_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+      <option value=""{% if not values.get('recipe_id') %} selected{% endif %}>—</option>
+      {% for r in recipes %}
+        <option value="{{ r.id }}"{% if values.get('recipe_id') == (r.id | string) %} selected{% endif %}>{{ r.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  {# --- Equipment selects (prefilled from last session) --- #}
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Brewer {{ prefill_pill('brewer_id') }}</span>
+    <select name="brewer_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+      <option value=""{% if not values.get('brewer_id') %} selected{% endif %}>—</option>
+      {% for e in brewers %}
+        <option value="{{ e.id }}"{% if values.get('brewer_id') == (e.id | string) %} selected{% endif %}>{{ equipment_name_map.get(e.id, e.id) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Grinder {{ prefill_pill('grinder_id') }}</span>
+    <select name="grinder_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+      <option value=""{% if not values.get('grinder_id') %} selected{% endif %}>—</option>
+      {% for e in grinders %}
+        <option value="{{ e.id }}"{% if values.get('grinder_id') == (e.id | string) %} selected{% endif %}>{{ equipment_name_map.get(e.id, e.id) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Kettle {{ prefill_pill('kettle_id') }}</span>
+    <select name="kettle_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+      <option value=""{% if not values.get('kettle_id') %} selected{% endif %}>—</option>
+      {% for e in kettles %}
+        <option value="{{ e.id }}"{% if values.get('kettle_id') == (e.id | string) %} selected{% endif %}>{{ equipment_name_map.get(e.id, e.id) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  {# --- Water type (D-07 free text; Plan 05 upgrades to select-or-Other) --- #}
+  <label class="flex flex-col gap-1">
+    <span class="text-sm font-semibold">Water type {{ prefill_pill('water_type') }}</span>
+    <input name="water_type" maxlength="100" inputmode="text"
+           value="{{ values.get('water_type', '') }}"
+           class="rounded border border-espresso-200 px-2 py-2 text-base">
+  </label>
+
+  {# --- Dose / Water (recipe-wins template fields) --- #}
+  <div class="flex gap-3">
+    <label class="flex flex-col gap-1 flex-1">
+      <span class="text-sm font-semibold">Dose (g) {{ prefill_pill('dose_grams_actual') }}</span>
+      <input name="dose_grams_actual" inputmode="decimal"
+             value="{{ values.get('dose_grams_actual', '') }}"
+             class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('dose_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('dose_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['dose_grams_actual'] }}</p>{% endif %}
+    </label>
+    <label class="flex flex-col gap-1 flex-1">
+      <span class="text-sm font-semibold">Water (g) {{ prefill_pill('water_grams_actual') }}</span>
+      <input name="water_grams_actual" inputmode="decimal"
+             value="{{ values.get('water_grams_actual', '') }}"
+             class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('water_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('water_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['water_grams_actual'] }}</p>{% endif %}
+    </label>
+  </div>
+
+  {# --- Temp / Grind (recipe-wins template fields) --- #}
+  <div class="flex gap-3">
+    <label class="flex flex-col gap-1 flex-1">
+      <span class="text-sm font-semibold">Temp (°C) {{ prefill_pill('water_temp_c_actual') }}</span>
+      <input name="water_temp_c_actual" inputmode="decimal"
+             value="{{ values.get('water_temp_c_actual', '') }}"
+             class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('water_temp_c_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      {% if errors.get('water_temp_c_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['water_temp_c_actual'] }}</p>{% endif %}
+    </label>
+    <label class="flex flex-col gap-1 flex-1">
+      <span class="text-sm font-semibold">Grind setting {{ prefill_pill('grind_setting_actual') }}</span>
+      <input name="grind_setting_actual" maxlength="200"
+             value="{{ values.get('grind_setting_actual', '') }}"
+             class="rounded border border-espresso-200 px-2 py-2 text-base">
+    </label>
+  </div>
+
+  {# --- D-11 advertised quick-add chips for the selected coffee --- #}
+  {% if advertised_chips %}
+    <div id="brew-advertised-chips" class="flex flex-wrap items-center gap-2">
+      <span class="text-sm font-semibold">Advertised:</span>
+      {% for chip in advertised_chips %}
+        <button type="button"
+                data-advertised-id="{{ chip.id }}"
+                data-advertised-name="{{ chip.name }}"
+                aria-label="Add advertised note {{ chip.name }}"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border border-espresso-300 text-espresso-800 hover:bg-cream-200 dark:border-espresso-700 dark:text-cream-200 min-h-[44px]">
+          <span aria-hidden="true">+</span>{{ chip.name }}
+        </button>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div id="brew-advertised-chips"></div>
+  {% endif %}
+</div>
