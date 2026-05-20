@@ -172,11 +172,20 @@ Plans:
   5. CSV import accepts a Beanconqueror-style file, refuses rows where the named coffee or bag is not yet in the catalog (with a per-row error list), and inserts the rest in one transaction. Every form input on this surface computes to ≥16px font-size — Playwright assertion at 375px confirms no zoom-in on focus for any input.
 **Plans:** 6 plans
 Plans:
-- [ ] 05-01-PLAN.md — brew_sessions + brew_drafts models, schemas, GENERATED-EY migration, events, Wave 0 tests (BREW-01, BREW-04, MOB-05)
+**Wave 1**
+- [x] 05-01-PLAN.md — brew_sessions + brew_drafts models, schemas, GENERATED-EY migration, events, Wave 0 tests (BREW-01, BREW-04, MOB-05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 05-02-PLAN.md — brew_sessions service (CRUD + prefill D-04/05/06/08 + usage_count) + brew_drafts service (BREW-02, BREW-06, BREW-07, BREW-09)
 - [ ] 05-03-PLAN.md — csv_io service: header-driven import (resolve/dedup/single-txn) + name-based round-trip export (BREW-10, BREW-11)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 05-04-PLAN.md — brew form router: SEC-06 add/edit, prefill GET, brew-again, draft autosave + register (BREW-02, BREW-05, BREW-07, BREW-09)
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 05-05-PLAN.md — four Alpine components + base.html + brew_form.html add/edit page + human-verify (BREW-02..08, MOB-05/06)
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 05-06-PLAN.md — sessions list + filters + CSV export/import routes + list/import templates + human-verify (BREW-10, BREW-11, MOB-05)
 **Notes:** Carries MX-5 (LocalStorage draft namespacing `snobbery:draft:brew:<user_id>` + clear-on-logout), MX-6 (tap-on-stars not native range), HX-3 (flavor-note tag input — `hx-get` on focus, no OOB swap). **MX-1 correction:** the 16px input rule already ships in `app/static/css/tailwind.src.css @layer base` (verified Phase 0); `app/static/css/custom.css` must NOT be created — the only Phase 5 MOB-06 obligation is no input overriding font-size below 16px (the Playwright 375px assertion is deferred to Phase 12/TEST-06). Two plan-time decisions deferred to execution: Plan 01 Task 0 confirms the EY GENERATED-column unit (tds_pct whole-percent vs fraction) + `user_id` ondelete; Plan 03 confirms the literal Beanconqueror CSV headers against a real export (importer is header-driven so this needs no code change). Guided Brew Mode (BREW-12, BREW-13) is deferred to Phase 11 alongside the wake-lock fallback and full-screen mobile chrome.
 

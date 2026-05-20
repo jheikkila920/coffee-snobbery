@@ -143,6 +143,10 @@ None — no external service configuration required. (`pip install --user pytest
 - The GENERATED EY and ARRAY/JSONB columns are live and verified; analytics (Phase 6) can rely on the GIN index for containment queries.
 - DB is at head `p5_brew_sessions`; full suite green.
 
+## Self-Check: PASSED
+
+All 6 created files and the SUMMARY exist on disk; all 5 plan commits (8b6cfd8, a13c4b2, ac1d21c, c396a75, 6ad2096) present in git history.
+
 ---
 *Phase: 05-brew-sessions*
 *Completed: 2026-05-20*

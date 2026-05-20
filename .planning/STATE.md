@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-05-19T21:46:29.905Z"
-last_activity: 2026-05-19
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-05-20T01:50:07.900Z"
+last_activity: 2026-05-20
 progress:
   total_phases: 13
-  completed_phases: 6
-  total_plans: 43
-  completed_plans: 43
-  percent: 46
+  completed_phases: 5
+  total_plans: 49
+  completed_plans: 44
+  percent: 90
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-16)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 04 — shared-catalog
+**Current focus:** Phase 05 — brew-sessions
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-19
+Phase: 05 (brew-sessions) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-05-20
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [█████████░] 86%
 - No history yet
 
 *Updated after each plan completion*
+| Phase 05 P01 | 12 | 4 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Recent decisions from PROJECT.md Key Decisions table:
 - Phase 3: `MultiFernet` from day one — rotation-ready encryption from first encrypted row
 - Phase 7: AI streaming via polling, not SSE, in v1 — simpler, no `proxy_buffering off` requirement
 - Phase 8: APScheduler `SQLAlchemyJobStore` + `misfire_grace_time=3600` + `coalesce=True` — defaults would silently miss every restart-bracketing nightly run
+- Phase 5: tds_pct stored as WHOLE PERCENT (1.35 = 1.35%); GENERATED extraction_yield_pct = (yield * tds/100.0)/dose*100 yields whole-percent EY
+- Phase 5: brew_sessions.user_id ondelete=RESTRICT (not CASCADE) — brew history never silently vanishes on a user delete; Phase 9 admin delete handles logs explicitly
 
 ### Pending Todos
 
@@ -84,6 +87,12 @@ None yet. Three plan-phase research flags carried forward:
 - Phase 10: prototype Postgres FTS vs `pg_trgm` and pick one
 - Phase 11: prototype iOS Wake Lock fallback (silent audio loop vs NoSleep.js)
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260519-ql9 | Codex review bucket-A fixes (duplicate-name 500→inline error, stale Makefile smoke head, CSRF docstring) | 2026-05-20 | e37cdf3, e9184c2, 9678787 | [260519-ql9-codex-bucket-a-fixes](./quick/260519-ql9-codex-bucket-a-fixes/) |
+
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
@@ -92,6 +101,6 @@ None yet. Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-18T22:57:42.371Z
-Stopped at: Phase 4 UI-SPEC approved
-Resume file: .planning/phases/04-shared-catalog/04-UI-SPEC.md
+Last session: 2026-05-20T01:50:07.876Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
