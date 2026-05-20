@@ -94,18 +94,21 @@ def test_cold_container_through_login(client) -> None:
     assert m, f"could not extract session_id value: {set_cookie}"
     session_signed = m.group(1)
 
-    # ----- Step 4: GET / with the session cookie shows the auth'd footer -----
+    # ----- Step 4: GET / with the session cookie renders the authenticated home -----
+    # The home route is require_user-gated, so an unauthenticated request redirects
+    # to /login. A 200 carrying the analytics home content confirms the session
+    # cookie authenticated the user. The placeholder "Signed in as {user}" footer
+    # and the inline sign-out link were retired when Phase 6 replaced the index.html
+    # placeholder with the analytics home; the persistent nav/identity + sign-out
+    # chrome is Phase 11 scope. Logout itself is still exercised directly in Step 5.
     r_home = client.get(
         "/",
         cookies={"session_id": session_signed, "csrftoken": token},
     )
     assert r_home.status_code == 200
-    assert "Signed in as smoketest" in r_home.text, (
-        "home page footer must show 'Signed in as smoketest' for authenticated "
-        f"user; got body: {r_home.text[:500]}"
-    )
-    assert "/logout" in r_home.text, (
-        "home page footer must include the Sign-out form action"
+    assert "Recent brews" in r_home.text, (
+        "authenticated home must render the analytics home (e.g. the always-on "
+        f"'Recent brews' section); got body: {r_home.text[:500]}"
     )
 
     # ----- Step 5: POST /logout -----
@@ -129,9 +132,13 @@ def test_cold_container_through_login(client) -> None:
         f"got: {logout_set_cookie}"
     )
 
-    # ----- Step 7: GET / after logout shows the "Sign in" link -----
+    # ----- Step 7: GET / after logout is rejected by the auth gate -----
     # Don't carry the session_id cookie — it's been cleared client-side too.
+    # Phase 6 replaced the public index.html placeholder with the require_user-gated
+    # analytics home, consistent with every other full-page route (brew/catalog all
+    # 401 for anonymous). A logged-out request to / is therefore rejected rather than
+    # rendering a public page with a "Sign in" link. (A friendly /login redirect and
+    # the nav chrome are Phase 11 scope.)
     r_anon = client.get("/", cookies={"csrftoken": token2})
-    assert r_anon.status_code == 200
-    assert "Sign in" in r_anon.text
+    assert r_anon.status_code == 401
     assert "Signed in as" not in r_anon.text
