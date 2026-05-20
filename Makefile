@@ -90,5 +90,9 @@ smoke:
 	sleep 30
 	curl -fsS http://127.0.0.1:8080/healthz
 	@echo ""
-	docker compose exec coffee-snobbery alembic current | grep -E '^0001_initial \(head\)'
+	# Assert the DB is migrated to the LIVE Alembic head. `alembic current`
+	# appends ` (head)` only when the applied revision IS the head, so this
+	# marker check is revision-id-agnostic — it never names a revision and so
+	# does not need bumping when a new migration lands.
+	docker compose exec coffee-snobbery alembic current | grep -E '\(head\)'
 	@echo "smoke: OK"
