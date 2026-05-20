@@ -277,10 +277,9 @@
 
              Discard: create mode abandons the in-progress draft (clears
              localStorage via brewDraft.discard() + the per-user server draft via
-             /brew/draft) and navigates home; edit mode is not draft-backed so it
-             is a plain link home. Target is "/" — the sessions list (/brew) is a
-             later plan's GET route and does not exist yet (a GET /brew would 405
-             against POST /brew). --- #}
+             /brew/draft) and returns to the sessions list; edit mode is not
+             draft-backed so it is a plain link to /brew. Target is "/brew" — the
+             sessions list shipped in Plan 06 (GET /brew). --- #}
           {# Both controls are flex-1 (equal width) with identical px-4 py-2
              (equal height), vertically centered (items-center) and each an
              inline-flex/justify-center so the ghost anchor and the accent button
@@ -288,7 +287,7 @@
           <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex items-center gap-3 dark:bg-espresso-950/95 dark:border-espresso-800"
                style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
             {% if is_edit %}
-              <a href="/"
+              <a href="/brew"
                  class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
             {% else %}
               <button type="button"

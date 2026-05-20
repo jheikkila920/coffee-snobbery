@@ -183,13 +183,15 @@ document.addEventListener('alpine:init', () => {
 
     // Abandon the in-progress form entirely and navigate away (the sticky-bar
     // "Discard changes" on /brew/new). Wipes localStorage + the server backstop,
-    // then leaves the page. The sessions list (/brew) is a later plan's route, so
-    // we navigate home ("/"). The localStorage clear is synchronous and
-    // authoritative for BREW-07 reconciliation; the server clear is best-effort.
+    // then returns to the sessions list (/brew, now shipped in Plan 06). A fixed
+    // target is used deliberately (not document.referrer) so the destination is
+    // robust regardless of how the form was reached. The localStorage clear is
+    // synchronous and authoritative for BREW-07 reconciliation; the server clear
+    // is best-effort.
     discardAndLeave() {
       this.clearDraft();
       this._clearServerDraft();
-      window.location.assign('/');
+      window.location.assign('/brew');
     },
 
     clearDraft() {
