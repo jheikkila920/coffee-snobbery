@@ -135,9 +135,10 @@ def clean_brew_router() -> Iterator[None]:
         with engine.begin() as conn:
             conn.execute(text("DELETE FROM brew_sessions"))
             conn.execute(text("DELETE FROM brew_drafts"))
-            conn.execute(text(f"DELETE FROM recipes WHERE name LIKE '{_RECIPE_PREFIX}%'"))
-            conn.execute(text(f"DELETE FROM equipment WHERE model LIKE '{_EQUIP_PREFIX}%'"))
-            conn.execute(text(f"DELETE FROM coffees WHERE name LIKE '{_COFFEE_PREFIX}%'"))
+            conn.execute(text("DELETE FROM recipes WHERE name LIKE 'Router Recipe%'"))
+            conn.execute(text("DELETE FROM equipment WHERE model LIKE 'RouterRig%'"))
+            conn.execute(text("DELETE FROM coffees WHERE name LIKE 'Router Coffee%'"))
+            conn.execute(text("DELETE FROM flavor_notes WHERE name LIKE 'RouterNote%'"))
 
     _reset()
     yield
@@ -145,14 +146,31 @@ def clean_brew_router() -> Iterator[None]:
 
 
 def _authed_client(app: Any, signed_cookie: str):
-    """Build a TestClient carrying the session cookie + double-submit CSRF pair."""
+    """Build a TestClient with the session cookie + a real signed CSRF pair.
+
+    starlette-csrf signs the token, so a literal placeholder fails the
+    double-submit check. ``_prime_csrf`` GETs ``/`` to mint a real signed
+    ``csrftoken`` and wires it onto the client cookie + ``X-CSRF-Token`` header
+    (the established Phase 4 pattern).
+    """
     from fastapi.testclient import TestClient
 
     client = TestClient(app)
     client.cookies.set("session_id", signed_cookie)
-    client.cookies.set("csrftoken", _CSRF_TOKEN)
-    client.headers["X-CSRF-Token"] = _CSRF_TOKEN
+    _prime_csrf(client)
     return client
+
+
+def _prime_csrf(client: Any) -> str:
+    """GET ``/`` to mint a real signed csrftoken; wire it onto the client."""
+    client.cookies.delete("csrftoken")
+    response = client.get("/")
+    token = response.cookies.get("csrftoken") or client.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+    client.cookies.set("csrftoken", token)
+    client.headers["X-CSRF-Token"] = token
+    return token
 
 
 def _create_session(db, *, by_user_id, coffee_id, brewed_at, **over):
@@ -448,9 +466,7 @@ def test_draft_requires_csrf(app, seeded_regular_user, clean_brew_router) -> Non
     assert r.status_code == 403, f"tokenless draft POST must 403, got {r.status_code}"
 
 
-def test_draft_per_user(
-    app, seeded_regular_user, seeded_admin_user, clean_brew_router
-) -> None:
+def test_draft_per_user(app, seeded_regular_user, seeded_admin_user, clean_brew_router) -> None:
     """A draft saved by user A is never returned to user B."""
     _require_postgres()
     _require_p5_migration_applied()
@@ -483,11 +499,9 @@ def test_brew_new_includes_server_draft(app, seeded_regular_user, clean_brew_rou
 
     uid = seeded_regular_user["user"].id
     with SessionLocal() as db:
-        coffee = _seed_coffee(db, name=f"{_COFFEE_PREFIX} Draft")
+        _seed_coffee(db, name=f"{_COFFEE_PREFIX} Draft")
         db.commit()
-        draft_svc.upsert_draft(
-            db, by_user_id=uid, payload={"notes": "sentinel-draft-value-xyz"}
-        )
+        draft_svc.upsert_draft(db, by_user_id=uid, payload={"notes": "sentinel-draft-value-xyz"})
 
     client = _authed_client(app, seeded_regular_user["signed_cookie"])
     r = client.get("/brew/new")
@@ -576,7 +590,7 @@ def test_prefill_fragment_advertised_chips(app, seeded_regular_user, clean_brew_
     uid = seeded_regular_user["user"].id
     with SessionLocal() as db:
         note = fn_svc.create_flavor_note(
-            db, name="RouterBlueberry", category="other", by_user_id=uid
+            db, name="RouterNoteBlueberry", category="other", by_user_id=uid
         )
         coffee = _seed_coffee(db, name=f"{_COFFEE_PREFIX} D11", advertised=[note.id])
         db.commit()
@@ -585,7 +599,9 @@ def test_prefill_fragment_advertised_chips(app, seeded_regular_user, clean_brew_
     client = _authed_client(app, seeded_regular_user["signed_cookie"])
     r = client.get(f"/brew/prefill?coffee_id={cid}", headers={"HX-Request": "true"})
     assert r.status_code == 200
-    assert "RouterBlueberry" in r.text, "advertised chip note name must render in the fragment"
+    assert "RouterNoteBlueberry" in r.text, (
+        "advertised chip note name must render in the fragment"
+    )
 
 
 def test_prefill_user_scoped(
