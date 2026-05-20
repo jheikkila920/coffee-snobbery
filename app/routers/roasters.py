@@ -71,7 +71,7 @@ from app.dependencies.db import get_session
 from app.models.user import User
 from app.schemas.roaster import RoasterCreate
 from app.services import roasters as roasters_service
-from app.services.form_validation import errors_by_field
+from app.services.form_validation import DuplicateNameError, errors_by_field
 from app.templates_setup import templates
 
 router = APIRouter(prefix="/roasters")
@@ -241,14 +241,28 @@ async def create_roaster(
             status_code=200,
         )
 
-    roaster = roasters_service.create_roaster(
-        db,
-        name=form.name,
-        location=form.location,
-        website=str(form.website) if form.website else None,
-        notes=form.notes,
-        by_user_id=user.id,
-    )
+    try:
+        roaster = roasters_service.create_roaster(
+            db,
+            name=form.name,
+            location=form.location,
+            website=str(form.website) if form.website else None,
+            notes=form.notes,
+            by_user_id=user.id,
+        )
+    except DuplicateNameError:
+        # UNIQUE CITEXT name collision → friendly inline name error (not a 500),
+        # re-rendered via the SAME path the ValidationError branch uses (D-04).
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/roaster_form.html",
+            context={
+                "values": raw,
+                "errors": _normalize_errors({"name": "Name already exists."}),
+                "mode": "modal" if as_modal else "create",
+            },
+            status_code=200,
+        )
 
     if as_modal:
         # D-15 / D-16 substrate: empty body + HX-Trigger header. The
@@ -345,15 +359,29 @@ async def update_roaster_handler(
             status_code=200,
         )
 
-    roaster = roasters_service.update_roaster(
-        db,
-        roaster_id=roaster_id,
-        name=form.name,
-        location=form.location,
-        website=str(form.website) if form.website else None,
-        notes=form.notes,
-        by_user_id=user.id,
-    )
+    try:
+        roaster = roasters_service.update_roaster(
+            db,
+            roaster_id=roaster_id,
+            name=form.name,
+            location=form.location,
+            website=str(form.website) if form.website else None,
+            notes=form.notes,
+            by_user_id=user.id,
+        )
+    except DuplicateNameError:
+        # Renaming onto an existing name → friendly inline name error (not 500).
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/roaster_form.html",
+            context={
+                "values": raw,
+                "errors": _normalize_errors({"name": "Name already exists."}),
+                "mode": "edit",
+                "roaster_id": roaster_id,
+            },
+            status_code=200,
+        )
     return templates.TemplateResponse(
         request=request,
         name="fragments/roaster_row.html",

@@ -28,6 +28,20 @@ from __future__ import annotations
 from pydantic import ValidationError
 
 
+class DuplicateNameError(Exception):
+    """Raised by a catalog service when a write hits the UNIQUE name constraint.
+
+    The catalog name columns are ``CITEXT() ... unique=True`` (see
+    :mod:`app.models.roaster` / :mod:`app.models.flavor_note`), so any create or
+    rename onto an existing name (including a case-variant) raises
+    :class:`sqlalchemy.exc.IntegrityError` at commit. The service catches that,
+    rolls the session back, and re-raises this typed sentinel. The router maps it
+    onto the SAME ``errors_by_field`` re-render path used for
+    :class:`pydantic.ValidationError` — a friendly inline ``{"name": "Name
+    already exists."}`` error at HTTP 200, not a 500.
+    """
+
+
 def errors_by_field(exc: ValidationError) -> dict[str, str]:
     """Pivot ``ValidationError.errors()`` into ``{field_name: message}``.
 
@@ -55,4 +69,4 @@ def errors_by_field(exc: ValidationError) -> dict[str, str]:
     return out
 
 
-__all__ = ["errors_by_field"]
+__all__ = ["DuplicateNameError", "errors_by_field"]

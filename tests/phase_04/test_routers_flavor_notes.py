@@ -115,9 +115,7 @@ def _seed_flavor_note(**kwargs: Any) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def test_list_flavor_notes_renders(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_list_flavor_notes_renders(authed_client: Any, clean_flavor_notes: None) -> None:
     """Authenticated GET /flavor-notes → 200 + page HTML with h1."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -133,9 +131,7 @@ def test_list_flavor_notes_renders(
 # --------------------------------------------------------------------------- #
 
 
-def test_create_valid_returns_row(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_create_valid_returns_row(authed_client: Any, clean_flavor_notes: None) -> None:
     """Valid form data → 200 + row fragment (id="flavor-note-N")."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -168,6 +164,59 @@ def test_create_rejects_unknown_category_with_form_re_render(
     assert "text-red-700" in resp.text
 
 
+def test_create_flavor_note_duplicate_name_returns_friendly_error(
+    authed_client: Any, clean_flavor_notes: None
+) -> None:
+    """Duplicate name on create → 200 + 'Name already exists.' inline, not 500.
+
+    The UNIQUE CITEXT name column raises IntegrityError; the service rolls
+    back and raises DuplicateNameError, which the router maps to the friendly
+    re-render. A case-variant ("bergamot" vs seeded "Bergamot") also collides.
+    The re-render must still pass categories so the <select> renders.
+    """
+    _require_postgres()
+    _require_p4_migration_applied()
+    _seed_flavor_note(name="Bergamot", category="fruit")
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/flavor-notes",
+        data={"name": "bergamot", "category": "floral"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "text-red-700" in body
+    assert "Name already exists." in body
+    # The category <select> still renders (categories context preserved).
+    assert "<select" in body
+    # Session rolled back cleanly → a subsequent valid create still succeeds.
+    follow_up = authed_client.post(
+        "/flavor-notes",
+        data={"name": "Jasmine", "category": "floral"},
+    )
+    assert follow_up.status_code == 200, follow_up.text
+    assert 'id="flavor-note-' in follow_up.text
+
+
+def test_update_flavor_note_duplicate_name_returns_friendly_error(
+    authed_client: Any, clean_flavor_notes: None
+) -> None:
+    """Renaming a flavor note onto an existing name → 200 + friendly error."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    _seed_flavor_note(name="Bergamot", category="fruit")
+    fnid = _seed_flavor_note(name="Jasmine", category="floral")
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        f"/flavor-notes/{fnid}",
+        data={"name": "Bergamot", "category": "floral"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "text-red-700" in body
+    assert "Name already exists." in body
+    assert "<select" in body
+
+
 def test_create_with_as_modal_emits_hx_trigger(
     authed_client: Any, clean_flavor_notes: None
 ) -> None:
@@ -194,9 +243,7 @@ def test_create_with_as_modal_emits_hx_trigger(
 # --------------------------------------------------------------------------- #
 
 
-def test_edit_pre_populates_category(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_edit_pre_populates_category(authed_client: Any, clean_flavor_notes: None) -> None:
     """GET /edit → form fragment with the right <option> pre-selected."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -215,9 +262,7 @@ def test_edit_pre_populates_category(
 # --------------------------------------------------------------------------- #
 
 
-def test_archive_marks_archived(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_archive_marks_archived(authed_client: Any, clean_flavor_notes: None) -> None:
     """POST /archive → DB row.archived=True."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -240,9 +285,7 @@ def test_archive_marks_archived(
 # --------------------------------------------------------------------------- #
 
 
-def test_datalist_short_query_empty(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_datalist_short_query_empty(authed_client: Any, clean_flavor_notes: None) -> None:
     """len(q) < 2 → empty body (debounce-cheap)."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -251,9 +294,7 @@ def test_datalist_short_query_empty(
     assert resp.text.strip() == ""
 
 
-def test_datalist_returns_matches(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_datalist_returns_matches(authed_client: Any, clean_flavor_notes: None) -> None:
     """Prefix match returns flavor notes whose name starts with q."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -270,9 +311,7 @@ def test_datalist_returns_matches(
     assert "Jasmine" not in body
 
 
-def test_datalist_create_new_when_no_match(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_datalist_create_new_when_no_match(authed_client: Any, clean_flavor_notes: None) -> None:
     """No exact match for q → "+ Create new flavor note" affordance appears."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -286,9 +325,7 @@ def test_datalist_create_new_when_no_match(
 # --------------------------------------------------------------------------- #
 
 
-def test_extra_field_rejected(
-    authed_client: Any, clean_flavor_notes: None
-) -> None:
+def test_extra_field_rejected(authed_client: Any, clean_flavor_notes: None) -> None:
     """Extra form field → 200 + form re-render (T-04-MASS via extra='forbid')."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -310,15 +347,11 @@ def test_extra_field_rejected(
 # --------------------------------------------------------------------------- #
 
 
-def test_csrf_missing_returns_403(
-    csrf_client: Any, clean_flavor_notes: None
-) -> None:
+def test_csrf_missing_returns_403(csrf_client: Any, clean_flavor_notes: None) -> None:
     """POST /flavor-notes with mismatched CSRF → 403 from CSRFMiddleware."""
     _require_postgres()
     _require_p4_migration_applied()
-    resp = csrf_client.post(
-        "/flavor-notes", data={"name": "X", "category": "other"}
-    )
+    resp = csrf_client.post("/flavor-notes", data={"name": "X", "category": "other"})
     assert resp.status_code == 403
 
 
@@ -365,9 +398,7 @@ def test_name_unique_citext_returns_validation_error(
     with SessionLocal() as db:
         rows = flavor_notes_service.list_flavor_notes(db, include_archived=False)
     # Exactly one Bergamot — CITEXT collision was rejected somewhere.
-    bergamot_rows = [
-        fn for fn, _ in rows if fn.name.lower() == "bergamot"
-    ]
+    bergamot_rows = [fn for fn, _ in rows if fn.name.lower() == "bergamot"]
     assert len(bergamot_rows) == 1
 
 
@@ -394,17 +425,11 @@ def test_list_flavor_notes_usage_count_from_advertised_array(
 
     with engine.begin() as conn:
         conn.execute(
-            text(
-                "INSERT INTO coffees (name, advertised_flavor_note_ids) "
-                "VALUES (:n, :ids)"
-            ),
+            text("INSERT INTO coffees (name, advertised_flavor_note_ids) VALUES (:n, :ids)"),
             {"n": "Geometry", "ids": [fn1, fn2]},
         )
         conn.execute(
-            text(
-                "INSERT INTO coffees (name, advertised_flavor_note_ids) "
-                "VALUES (:n, :ids)"
-            ),
+            text("INSERT INTO coffees (name, advertised_flavor_note_ids) VALUES (:n, :ids)"),
             {"n": "Kabingo", "ids": [fn1]},
         )
 

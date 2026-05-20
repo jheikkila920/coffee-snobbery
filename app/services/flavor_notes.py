@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import structlog
 from sqlalchemy import any_, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.events import (
@@ -47,6 +48,7 @@ from app.events import (
 )
 from app.models.coffee import Coffee
 from app.models.flavor_note import FlavorNote
+from app.services.form_validation import DuplicateNameError
 
 log = structlog.get_logger(__name__)
 
@@ -66,8 +68,15 @@ def create_flavor_note(
     """
     flavor_note = FlavorNote(name=name, category=category)
     db.add(flavor_note)
-    db.flush()
-    db.commit()
+    try:
+        db.flush()
+        db.commit()
+    except IntegrityError as exc:
+        # UNIQUE CITEXT name collision (incl. case-variant). Roll back the
+        # poisoned session so a subsequent valid write succeeds, then re-raise
+        # the typed sentinel the router maps to a friendly inline name error.
+        db.rollback()
+        raise DuplicateNameError from exc
     log.info(
         CATALOG_FLAVOR_NOTE_CREATED,
         flavor_note_id=flavor_note.id,
@@ -107,9 +116,8 @@ def list_flavor_notes(
         .correlate(FlavorNote)
         .scalar_subquery()
     )
-    stmt = (
-        select(FlavorNote, usage_count.label("usage_count"))
-        .order_by(FlavorNote.category, FlavorNote.name)
+    stmt = select(FlavorNote, usage_count.label("usage_count")).order_by(
+        FlavorNote.category, FlavorNote.name
     )
     if not include_archived:
         stmt = stmt.where(FlavorNote.archived.is_(False))
@@ -130,19 +138,22 @@ def update_flavor_note(
     Core ``update()`` so we can stamp ``updated_at = func.now()`` in the
     same statement (mirrors :func:`app.services.roasters.update_roaster`).
     """
-    db.execute(
-        update(FlavorNote)
-        .where(FlavorNote.id == flavor_note_id)
-        .values(
-            name=name,
-            category=category,
-            updated_at=func.now(),
+    try:
+        db.execute(
+            update(FlavorNote)
+            .where(FlavorNote.id == flavor_note_id)
+            .values(
+                name=name,
+                category=category,
+                updated_at=func.now(),
+            )
         )
-    )
-    db.commit()
-    flavor_note = db.execute(
-        select(FlavorNote).where(FlavorNote.id == flavor_note_id)
-    ).scalar_one()
+        db.commit()
+    except IntegrityError as exc:
+        # Renaming onto an existing flavor note's name → UNIQUE CITEXT collision.
+        db.rollback()
+        raise DuplicateNameError from exc
+    flavor_note = db.execute(select(FlavorNote).where(FlavorNote.id == flavor_note_id)).scalar_one()
     log.info(
         CATALOG_FLAVOR_NOTE_UPDATED,
         flavor_note_id=flavor_note_id,
@@ -152,9 +163,7 @@ def update_flavor_note(
     return flavor_note
 
 
-def archive_flavor_note(
-    db: Session, *, flavor_note_id: int, by_user_id: int
-) -> None:
+def archive_flavor_note(db: Session, *, flavor_note_id: int, by_user_id: int) -> None:
     """Soft-delete a flavor note (``archived=True``) and emit the event.
 
     Phase 4 ships archive-only — hard-delete is reserved per CONTEXT
@@ -175,9 +184,7 @@ def archive_flavor_note(
     )
 
 
-def search_by_prefix(
-    db: Session, *, query: str, limit: int = 50
-) -> list[FlavorNote]:
+def search_by_prefix(db: Session, *, query: str, limit: int = 50) -> list[FlavorNote]:
     """D-13 autocomplete prefix-match helper.
 
     Returns up to *limit* non-archived flavor notes whose name starts with

@@ -126,9 +126,7 @@ def test_list_roasters_anon_returns_401(client: Any) -> None:
     assert resp.status_code == 401
 
 
-def test_list_roasters_authed_renders_page(
-    authed_client: Any, clean_roasters: None
-) -> None:
+def test_list_roasters_authed_renders_page(authed_client: Any, clean_roasters: None) -> None:
     """Authenticated GET /roasters → 200 + page HTML with h1 + Add button."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -205,9 +203,7 @@ def test_create_roaster_blank_name_returns_form_with_error(
     assert "Somewhere" in body
 
 
-def test_create_roaster_extra_field_rejected(
-    authed_client: Any, clean_roasters: None
-) -> None:
+def test_create_roaster_extra_field_rejected(authed_client: Any, clean_roasters: None) -> None:
     """Extra form field → 200 + form re-render (T-04-MASS via extra='forbid')."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -224,9 +220,56 @@ def test_create_roaster_extra_field_rejected(
     assert "text-red-700" in resp.text
 
 
-def test_create_roaster_as_modal_emits_hx_trigger(
+def test_create_roaster_duplicate_name_returns_friendly_error(
     authed_client: Any, clean_roasters: None
 ) -> None:
+    """Duplicate name on create → 200 + 'Name already exists.' inline, not 500.
+
+    The UNIQUE CITEXT name column raises IntegrityError; the service rolls
+    back and raises DuplicateNameError, which the router maps to the friendly
+    re-render. A case-variant ("onyx" vs seeded "Onyx") also collides.
+    """
+    _require_postgres()
+    _require_p4_migration_applied()
+    _seed_roaster(name="Onyx")
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        "/roasters",
+        data={"name": "onyx", "location": "", "website": "", "notes": ""},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "text-red-700" in body
+    assert "Name already exists." in body
+    # Session rolled back cleanly → a subsequent valid create still succeeds.
+    follow_up = authed_client.post(
+        "/roasters",
+        data={"name": "Heart", "location": "", "website": "", "notes": ""},
+    )
+    assert follow_up.status_code == 200, follow_up.text
+    assert 'id="roaster-' in follow_up.text
+
+
+def test_update_roaster_duplicate_name_returns_friendly_error(
+    authed_client: Any, clean_roasters: None
+) -> None:
+    """Renaming a roaster onto an existing name → 200 + friendly error, not 500."""
+    _require_postgres()
+    _require_p4_migration_applied()
+    _seed_roaster(name="Onyx")
+    rid = _seed_roaster(name="Heart")
+    _prime_csrf(authed_client)
+    resp = authed_client.post(
+        f"/roasters/{rid}",
+        data={"name": "Onyx", "location": "", "website": "", "notes": ""},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "text-red-700" in body
+    assert "Name already exists." in body
+
+
+def test_create_roaster_as_modal_emits_hx_trigger(authed_client: Any, clean_roasters: None) -> None:
     """as_modal=true → empty body + HX-Trigger roaster-created header (D-15)."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -263,9 +306,7 @@ def test_edit_roaster_returns_form_fragment_prepopulated(
     assert 'value="Onyx"' in resp.text
 
 
-def test_update_roaster_persists_changes(
-    authed_client: Any, clean_roasters: None
-) -> None:
+def test_update_roaster_persists_changes(authed_client: Any, clean_roasters: None) -> None:
     """POST /roasters/{id} with new name → DB reflects the change."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -292,9 +333,7 @@ def test_update_roaster_persists_changes(
 # --------------------------------------------------------------------------- #
 
 
-def test_archive_roaster_marks_archived(
-    authed_client: Any, clean_roasters: None
-) -> None:
+def test_archive_roaster_marks_archived(authed_client: Any, clean_roasters: None) -> None:
     """POST /roasters/{id}/archive → DB row.archived=True."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -317,9 +356,7 @@ def test_archive_roaster_marks_archived(
 # --------------------------------------------------------------------------- #
 
 
-def test_autocomplete_short_query_returns_empty(
-    authed_client: Any, clean_roasters: None
-) -> None:
+def test_autocomplete_short_query_returns_empty(authed_client: Any, clean_roasters: None) -> None:
     """len(q) < 2 → empty body (debounce-cheap)."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -328,9 +365,7 @@ def test_autocomplete_short_query_returns_empty(
     assert resp.text.strip() == ""
 
 
-def test_autocomplete_returns_matches(
-    authed_client: Any, clean_roasters: None
-) -> None:
+def test_autocomplete_returns_matches(authed_client: Any, clean_roasters: None) -> None:
     """Prefix match returns roasters whose name starts with q, excludes others."""
     _require_postgres()
     _require_p4_migration_applied()

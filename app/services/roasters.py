@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import structlog
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.events import (
@@ -41,6 +42,7 @@ from app.events import (
     CATALOG_ROASTER_UPDATED,
 )
 from app.models.roaster import Roaster
+from app.services.form_validation import DuplicateNameError
 
 log = structlog.get_logger(__name__)
 
@@ -67,8 +69,15 @@ def create_roaster(
         notes=notes,
     )
     db.add(roaster)
-    db.flush()
-    db.commit()
+    try:
+        db.flush()
+        db.commit()
+    except IntegrityError as exc:
+        # UNIQUE CITEXT name collision (incl. case-variant). Roll back the
+        # poisoned session so a subsequent valid write succeeds, then re-raise
+        # the typed sentinel the router maps to a friendly inline name error.
+        db.rollback()
+        raise DuplicateNameError from exc
     log.info(
         CATALOG_ROASTER_CREATED,
         roaster_id=roaster.id,
@@ -79,9 +88,7 @@ def create_roaster(
 
 def get_roaster(db: Session, *, roaster_id: int) -> Roaster | None:
     """Return the roaster with *roaster_id*, or ``None`` if missing."""
-    return db.execute(
-        select(Roaster).where(Roaster.id == roaster_id)
-    ).scalar_one_or_none()
+    return db.execute(select(Roaster).where(Roaster.id == roaster_id)).scalar_one_or_none()
 
 
 def list_roasters(db: Session, *, include_archived: bool = False) -> list[Roaster]:
@@ -115,21 +122,24 @@ def update_roaster(
     Returning the re-fetched row keeps the router's response shape
     identical between create and update paths.
     """
-    db.execute(
-        update(Roaster)
-        .where(Roaster.id == roaster_id)
-        .values(
-            name=name,
-            location=location,
-            website=website,
-            notes=notes,
-            updated_at=func.now(),
+    try:
+        db.execute(
+            update(Roaster)
+            .where(Roaster.id == roaster_id)
+            .values(
+                name=name,
+                location=location,
+                website=website,
+                notes=notes,
+                updated_at=func.now(),
+            )
         )
-    )
-    db.commit()
-    roaster = db.execute(
-        select(Roaster).where(Roaster.id == roaster_id)
-    ).scalar_one()
+        db.commit()
+    except IntegrityError as exc:
+        # Renaming onto an existing roaster's name → UNIQUE CITEXT collision.
+        db.rollback()
+        raise DuplicateNameError from exc
+    roaster = db.execute(select(Roaster).where(Roaster.id == roaster_id)).scalar_one()
     log.info(
         CATALOG_ROASTER_UPDATED,
         roaster_id=roaster_id,
@@ -146,9 +156,7 @@ def archive_roaster(db: Session, *, roaster_id: int, by_user_id: int) -> None:
     would fail at the DB anyway once the row has any referencing bags.
     """
     db.execute(
-        update(Roaster)
-        .where(Roaster.id == roaster_id)
-        .values(archived=True, updated_at=func.now())
+        update(Roaster).where(Roaster.id == roaster_id).values(archived=True, updated_at=func.now())
     )
     db.commit()
     log.info(

@@ -54,7 +54,7 @@ from app.dependencies.db import get_session
 from app.models.user import User
 from app.schemas.flavor_note import FlavorNoteCreate
 from app.services import flavor_notes as flavor_notes_service
-from app.services.form_validation import errors_by_field
+from app.services.form_validation import DuplicateNameError, errors_by_field
 from app.templates_setup import templates
 
 router = APIRouter(prefix="/flavor-notes")
@@ -212,12 +212,28 @@ async def create_flavor_note(
             status_code=200,
         )
 
-    flavor_note = flavor_notes_service.create_flavor_note(
-        db,
-        name=form.name,
-        category=form.category,
-        by_user_id=user.id,
-    )
+    try:
+        flavor_note = flavor_notes_service.create_flavor_note(
+            db,
+            name=form.name,
+            category=form.category,
+            by_user_id=user.id,
+        )
+    except DuplicateNameError:
+        # UNIQUE CITEXT name collision → friendly inline name error (not a 500),
+        # re-rendered via the SAME path the ValidationError branch uses (D-04).
+        # categories must stay in context so the <select> still renders.
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/flavor_note_form.html",
+            context={
+                "values": raw,
+                "errors": _normalize_errors({"name": "Name already exists."}),
+                "mode": "modal" if as_modal else "create",
+                "categories": FLAVOR_NOTE_CATEGORIES,
+            },
+            status_code=200,
+        )
 
     if as_modal:
         # D-15 / D-16 substrate: empty body + HX-Trigger header. Locked
@@ -313,13 +329,28 @@ async def update_flavor_note_handler(
             status_code=200,
         )
 
-    flavor_note = flavor_notes_service.update_flavor_note(
-        db,
-        flavor_note_id=flavor_note_id,
-        name=form.name,
-        category=form.category,
-        by_user_id=user.id,
-    )
+    try:
+        flavor_note = flavor_notes_service.update_flavor_note(
+            db,
+            flavor_note_id=flavor_note_id,
+            name=form.name,
+            category=form.category,
+            by_user_id=user.id,
+        )
+    except DuplicateNameError:
+        # Renaming onto an existing name → friendly inline name error (not 500).
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/flavor_note_form.html",
+            context={
+                "values": raw,
+                "errors": _normalize_errors({"name": "Name already exists."}),
+                "mode": "edit",
+                "flavor_note_id": flavor_note_id,
+                "categories": FLAVOR_NOTE_CATEGORIES,
+            },
+            status_code=200,
+        )
     return templates.TemplateResponse(
         request=request,
         name="fragments/flavor_note_row.html",
