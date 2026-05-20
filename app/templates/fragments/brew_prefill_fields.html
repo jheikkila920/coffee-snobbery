@@ -60,7 +60,7 @@
             hx-include="[name='coffee_id'],[name='recipe_id']"
             hx-target="#brew-prefill-region"
             hx-swap="outerHTML"
-            class="rounded border px-2 py-2 text-base{% if errors.get('coffee_id') %} border-red-300{% else %} border-espresso-200{% endif %}">
+            class="w-full rounded border px-2 py-2 text-base text-espresso-900 dark:text-cream-100{% if errors.get('coffee_id') %} border-red-300{% else %} border-espresso-200{% endif %}">
       <option value=""{% if not values.get('coffee_id') %} selected{% endif %}>—</option>
       {% for c in coffees %}
         <option value="{{ c.id }}"{% if values.get('coffee_id') == (c.id | string) %} selected{% endif %}>{{ c.name }}</option>
@@ -80,7 +80,7 @@
             hx-include="[name='coffee_id'],[name='recipe_id']"
             hx-target="#brew-prefill-region"
             hx-swap="outerHTML"
-            class="rounded border border-espresso-200 px-2 py-2 text-base">
+            class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
       <option value=""{% if not values.get('recipe_id') %} selected{% endif %}>—</option>
       {% for r in recipes %}
         <option value="{{ r.id }}"{% if values.get('recipe_id') == (r.id | string) %} selected{% endif %}>{{ r.name }}</option>
@@ -91,7 +91,7 @@
   {# --- Equipment selects (prefilled from last session) --- #}
   <label class="flex flex-col gap-1">
     <span class="text-sm font-semibold">Brewer {{ prefill_pill('brewer_id') }}</span>
-    <select name="brewer_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+    <select name="brewer_id" class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
       <option value=""{% if not values.get('brewer_id') %} selected{% endif %}>—</option>
       {% for e in brewers %}
         <option value="{{ e.id }}"{% if values.get('brewer_id') == (e.id | string) %} selected{% endif %}>{{ equipment_name_map.get(e.id, e.id) }}</option>
@@ -100,7 +100,7 @@
   </label>
   <label class="flex flex-col gap-1">
     <span class="text-sm font-semibold">Grinder {{ prefill_pill('grinder_id') }}</span>
-    <select name="grinder_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+    <select name="grinder_id" class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
       <option value=""{% if not values.get('grinder_id') %} selected{% endif %}>—</option>
       {% for e in grinders %}
         <option value="{{ e.id }}"{% if values.get('grinder_id') == (e.id | string) %} selected{% endif %}>{{ equipment_name_map.get(e.id, e.id) }}</option>
@@ -109,7 +109,7 @@
   </label>
   <label class="flex flex-col gap-1">
     <span class="text-sm font-semibold">Kettle {{ prefill_pill('kettle_id') }}</span>
-    <select name="kettle_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+    <select name="kettle_id" class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
       <option value=""{% if not values.get('kettle_id') %} selected{% endif %}>—</option>
       {% for e in kettles %}
         <option value="{{ e.id }}"{% if values.get('kettle_id') == (e.id | string) %} selected{% endif %}>{{ equipment_name_map.get(e.id, e.id) }}</option>
@@ -126,7 +126,7 @@
     <span class="text-sm font-semibold">Water type {{ prefill_pill('water_type') }}</span>
     <input name="water_type" maxlength="100" inputmode="text" list="water-type-options"
            value="{{ values.get('water_type', '') }}"
-           class="rounded border border-espresso-200 px-2 py-2 text-base">
+           class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
     <datalist id="water-type-options">
       <option value="Tap"></option>
       <option value="Filtered"></option>
@@ -141,20 +141,20 @@
      x-on:input reports into the enclosing brewRatio scope (live 1:N.NN). The
      brewRatio root is in brew_form.html, outside this swappable region. #}
   <div class="flex gap-3">
-    <label class="flex flex-col gap-1 flex-1">
+    <label class="flex flex-col gap-1 flex-1 min-w-0">
       <span class="text-sm font-semibold">Dose (g) {{ prefill_pill('dose_grams_actual') }}</span>
       <input name="dose_grams_actual" inputmode="decimal"
              value="{{ values.get('dose_grams_actual', '') }}"
              x-on:input="setDose($el.value)"
-             class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('dose_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+             class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('dose_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('dose_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['dose_grams_actual'] }}</p>{% endif %}
     </label>
-    <label class="flex flex-col gap-1 flex-1">
+    <label class="flex flex-col gap-1 flex-1 min-w-0">
       <span class="text-sm font-semibold">Water (g) {{ prefill_pill('water_grams_actual') }}</span>
       <input name="water_grams_actual" inputmode="decimal"
              value="{{ values.get('water_grams_actual', '') }}"
              x-on:input="setWater($el.value)"
-             class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('water_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+             class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('water_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('water_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['water_grams_actual'] }}</p>{% endif %}
     </label>
   </div>
@@ -168,18 +168,18 @@
 
   {# --- Temp / Grind (recipe-wins template fields) --- #}
   <div class="flex gap-3">
-    <label class="flex flex-col gap-1 flex-1">
+    <label class="flex flex-col gap-1 flex-1 min-w-0">
       <span class="text-sm font-semibold">Temp (°C) {{ prefill_pill('water_temp_c_actual') }}</span>
       <input name="water_temp_c_actual" inputmode="decimal"
              value="{{ values.get('water_temp_c_actual', '') }}"
-             class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('water_temp_c_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+             class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('water_temp_c_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('water_temp_c_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['water_temp_c_actual'] }}</p>{% endif %}
     </label>
-    <label class="flex flex-col gap-1 flex-1">
+    <label class="flex flex-col gap-1 flex-1 min-w-0">
       <span class="text-sm font-semibold">Grind setting {{ prefill_pill('grind_setting_actual') }}</span>
       <input name="grind_setting_actual" maxlength="200"
              value="{{ values.get('grind_setting_actual', '') }}"
-             class="rounded border border-espresso-200 px-2 py-2 text-base">
+             class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
     </label>
   </div>
 

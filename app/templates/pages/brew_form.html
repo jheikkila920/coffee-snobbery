@@ -86,7 +86,9 @@
        dose/water so the readout is correct before the user touches anything. #}
     <div x-data="brewRatio"
          data-initial-dose="{{ values.get('dose_grams_actual', '') }}"
-         data-initial-water="{{ values.get('water_grams_actual', '') }}">
+         data-initial-water="{{ values.get('water_grams_actual', '') }}"
+         data-initial-yield="{{ values.get('yield_grams_actual', '') }}"
+         data-initial-tds="{{ values.get('tds_pct', '') }}">
       <div id="observed-flavor-notes"
            class="field"
            x-data="observedFlavorNotes"
@@ -113,7 +115,7 @@
             <legend class="text-sm font-semibold">Rating</legend>
             <input type="hidden" name="rating" :value="hiddenValue">
             <div role="group" aria-label="Rating, 0 to 5 stars"
-                 class="flex items-center gap-1 min-h-[56px] py-2"
+                 class="flex flex-wrap items-center gap-1 min-h-[56px] py-2"
                  x-on:keydown="onKeydown($event)" tabindex="0">
               {% for i in range(5) %}
                 <span class="relative inline-block w-14 h-14">
@@ -208,7 +210,7 @@
                      hx-target="#observed-flavor-dropdown"
                      hx-swap="innerHTML"
                      placeholder="Type 2+ chars; Enter or comma adds…"
-                     class="w-full rounded border border-espresso-200 px-2 py-2 text-base">
+                     class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
               <div id="observed-flavor-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1 max-h-60 overflow-y-auto"></div>
             </div>
           </div>
@@ -216,7 +218,7 @@
           <label class="flex flex-col gap-1">
             <span class="text-sm font-semibold">Notes</span>
             <textarea name="notes" maxlength="5000" rows="3"
-                      class="rounded border border-espresso-200 px-2 py-2 text-base">{{ values.get('notes', '') }}</textarea>
+                      class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">{{ values.get('notes', '') }}</textarea>
           </label>
 
           {# --- D-02 refractometer / advanced disclosure (closed by default;
@@ -226,25 +228,31 @@
           <details class="rounded border border-espresso-200 p-4"{% if disclosure_open %} open{% endif %}>
             <summary class="text-lg font-semibold cursor-pointer">Refractometer / advanced</summary>
             <div class="flex gap-3 mt-3">
-              <label class="flex flex-col gap-1 flex-1">
+              <label class="flex flex-col gap-1 flex-1 min-w-0">
                 <span class="text-sm font-semibold">Yield (g)</span>
                 <input name="yield_grams_actual" inputmode="decimal"
                        value="{{ values.get('yield_grams_actual', '') }}"
-                       class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('yield_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
+                       x-on:input="setYield($el.value)"
+                       class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('yield_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
                 {% if errors.get('yield_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['yield_grams_actual'] }}</p>{% endif %}
               </label>
-              <label class="flex flex-col gap-1 flex-1">
+              <label class="flex flex-col gap-1 flex-1 min-w-0">
                 <span class="text-sm font-semibold">TDS %</span>
                 <input name="tds_pct" inputmode="decimal"
                        value="{{ values.get('tds_pct', '') }}"
-                       class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('tds_pct') %} border-red-300{% else %} border-espresso-200{% endif %}">
+                       x-on:input="setTds($el.value)"
+                       class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('tds_pct') %} border-red-300{% else %} border-espresso-200{% endif %}">
                 {% if errors.get('tds_pct') %}<p class="text-sm text-red-700 mt-1">{{ errors['tds_pct'] }}</p>{% endif %}
               </label>
             </div>
-            {# extraction_yield_pct is GENERATED — render-only, never an input. #}
+            {# extraction_yield_pct is GENERATED in Postgres (render-only, never an
+               input, never submitted — T-05-23). The brewRatio scope computes a
+               LIVE preview from dose+yield+tds so the value updates as the user
+               types; it is seeded from the stored values so edit mode matches the
+               persisted GENERATED column on first render. #}
             <p class="text-sm text-espresso-600 mt-3 dark:text-cream-300">
               Extraction yield
-              <span class="tabular-nums">{% if extraction_yield_pct is defined and extraction_yield_pct is not none %}{{ extraction_yield_pct }}%{% else %}—{% endif %}</span>
+              <span class="tabular-nums" x-text="extractionYield">{% if extraction_yield_pct is defined and extraction_yield_pct is not none %}{{ extraction_yield_pct }}%{% else %}—{% endif %}</span>
             </p>
           </details>
 
@@ -252,17 +260,34 @@
             <span class="text-sm font-semibold">Brewed at</span>
             <input type="datetime-local" name="brewed_at"
                    value="{{ values.get('brewed_at', '') }}"
-                   class="rounded border border-espresso-200 px-2 py-2 text-base">
+                   class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
           </label>
 
           {# --- Sticky save / discard bar (BREW-08). Sticky on mobile; in-flow
-             on desktop is acceptable. Save uses the HTMX in-flight indicator. --- #}
-          <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex gap-3 justify-end dark:bg-espresso-950/95 dark:border-espresso-800"
-               style="padding-bottom: env(safe-area-inset-bottom)">
-            <a href="/brew"
-               class="rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
+             on desktop is acceptable. items-center vertically centers the two
+             controls; both are inline-flex/justify-center so the ghost anchor
+             and the accent button line up at equal height. The safe-area inset
+             is added to py-3 via padding so the bar clears the iOS home
+             indicator without shoving the buttons off-center.
+
+             Discard: create mode abandons the in-progress draft (clears
+             localStorage via brewDraft.discard() + the per-user server draft via
+             /brew/draft) and navigates home; edit mode is not draft-backed so it
+             is a plain link home. Target is "/" — the sessions list (/brew) is a
+             later plan's GET route and does not exist yet (a GET /brew would 405
+             against POST /brew). --- #}
+          <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex items-center justify-end gap-3 dark:bg-espresso-950/95 dark:border-espresso-800"
+               style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
+            {% if is_edit %}
+              <a href="/"
+                 class="inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
+            {% else %}
+              <button type="button"
+                      x-on:click="discardAndLeave()"
+                      class="inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</button>
+            {% endif %}
             <button type="submit"
-                    class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
+                    class="inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
               {% if is_edit %}Save session{% else %}Log session{% endif %}
             </button>
           </div>
