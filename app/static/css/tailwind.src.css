@@ -51,4 +51,23 @@
       color: #DACBAE;            /* cream-300 (muted) */
     }
   }
+
+  /* Readable hyperlink color, app-wide (Phase 5 round-4 fix).
+     Preflight strips the UA anchor color, leaving bare <a> text on body
+     inheritance. On the light cream surface that read as muted body ink; under
+     `darkMode: 'media'` the dark espresso-700 accent links (session-row Edit /
+     "Brew again", etc.) sat near-black on a dark surface = unreadable. Pin the
+     accent palette token in both schemes so any plain anchor is legible without
+     a per-link utility, while utility-class colors on specific anchors still win
+     by specificity. UI-SPEC §Color "Accent link": espresso-700 light. */
+  a {
+    color: #3D2817;              /* espresso-700 (accent link) */
+  }
+  a:hover { color: #2B1B10; }    /* espresso-800 */
+  @media (prefers-color-scheme: dark) {
+    a {
+      color: #E3D5C9;            /* espresso-100 (light accent on dark surface) */
+    }
+    a:hover { color: #F4EFE6; }  /* cream-100 */
+  }
 }
