@@ -241,6 +241,7 @@ def _seed_cold_start(db, *, username: str) -> int:
     """
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
+    from app.models.flavor_note import FlavorNote
     from app.models.user import User
 
     user = User(
@@ -257,6 +258,15 @@ def _seed_cold_start(db, *, username: str) -> int:
     db.add(coffee)
     db.flush()
 
+    # 2 real flavor notes (the gate JOINs flavor_notes, so dangling IDs would
+    # count as 0 — seed live rows so the count is an honest 2, still below gate).
+    fn_ids = []
+    for i in range(2):
+        fn = FlavorNote(name=f"analyticstest-fn-cold-{i}-{username}", category="fruit")
+        db.add(fn)
+        db.flush()
+        fn_ids.append(fn.id)
+
     # 1 session, 2 distinct notes — below both thresholds (3 sessions AND 5 notes)
     session = BrewSession(
         user_id=uid,
@@ -264,7 +274,7 @@ def _seed_cold_start(db, *, username: str) -> int:
         dose_grams_actual=Decimal("15"),
         water_grams_actual=Decimal("250"),
         rating=None,
-        flavor_note_ids_observed=[1, 2],  # only 2 distinct notes
+        flavor_note_ids_observed=fn_ids,  # only 2 distinct notes
         brewed_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
     )
     db.add(session)

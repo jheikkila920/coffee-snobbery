@@ -330,11 +330,17 @@ def get_cold_start_counts(db: Session, user_id: int) -> dict[str, Any]:
 
     # Use raw SQL for unnest — column_valued() lateral join is not supported
     # in this SQLAlchemy 2.0 + ORM context (Assumption A2, RESEARCH.md fallback).
+    # JOIN flavor_notes so only LIVE notes count toward the gate, matching
+    # get_flavor_descriptors (the card this gate unlocks). flavor_note_ids_observed
+    # is a BIGINT[] with no FK, so dangling IDs (note deleted post-session) must
+    # not open the gate on a card that would then render empty (WR-01). D-02
+    # semantics preserved: still counts across ALL sessions, including unrated.
     note_count_row = db.execute(
         text(
             """
             SELECT count(DISTINCT note_id) AS cnt
             FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
+            JOIN flavor_notes fn ON fn.id = note_id
             WHERE bs.user_id = :user_id
             """
         ),
