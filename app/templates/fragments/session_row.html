@@ -1,0 +1,90 @@
+{# Session row fragment — one of two shapes selected by `mode`:
+   - mode="row"  → <tr> inside the desktop sessions table tbody
+   - mode="card" → <div> mobile card
+
+   Both carry data-row + id="session-{{ row.id }}" (UI-SPEC §Sessions List).
+   Each row offers "Edit" (/brew/{id}/edit) and the accent "Brew again"
+   (/brew/new?from={id}, D-08 — prefills carryable fields, blanks the
+   per-attempt rating/observed/notes).
+
+   The `row` dict is pre-resolved by the router (_session_view_rows): id,
+   brewed_at_local (tz-aware APP_TIMEZONE), coffee_name, roaster_name,
+   brewer_name, recipe_name, ratio (string, "—" when undefined), rating.
+   All values render autoescaped (no |safe). #}
+{% set date_label = row.brewed_at_local.strftime('%b %d, %H:%M') if row.brewed_at_local else '—' %}
+{% set rating_label = (row.rating | string + ' / 5') if row.rating is not none else '—' %}
+{% set again_label = 'Brew again from ' ~ row.coffee_name ~ ' on ' ~ date_label %}
+{% if mode == "card" %}
+  <div id="session-{{ row.id }}"
+       data-row
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+    <div class="flex items-baseline justify-between gap-3">
+      <span class="font-semibold">{{ date_label }}</span>
+      <span class="text-sm text-espresso-600 dark:text-cream-300">
+        {% if row.rating is not none %}
+          <span class="text-espresso-700" aria-hidden="true">★</span>
+          <span class="tabular-nums">{{ row.rating }}</span>
+        {% else %}
+          —
+        {% endif %}
+      </span>
+    </div>
+    <div class="text-sm">
+      {{ row.coffee_name }}
+      {% if row.roaster_name %} · {{ row.roaster_name }}{% endif %}
+      {% if row.brewer_name %} · {{ row.brewer_name }}{% endif %}
+    </div>
+    <div class="text-sm text-espresso-600 dark:text-cream-300">
+      {% if row.recipe_name %}{{ row.recipe_name }} · {% endif %}
+      <span class="tabular-nums">1:{{ row.ratio }}</span>
+    </div>
+    <div class="mt-3 flex gap-3">
+      <a href="/brew/{{ row.id }}/edit"
+         aria-label="Edit brew session"
+         class="rounded border border-espresso-300 px-3 py-2 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </a>
+      <a href="/brew/new?from={{ row.id }}"
+         aria-label="{{ again_label }}"
+         class="rounded bg-espresso-700 px-3 py-2 text-sm text-cream-50 hover:bg-espresso-800">
+        Brew again
+      </a>
+    </div>
+  </div>
+{% else %}
+  <tr id="session-{{ row.id }}"
+      data-row
+      class="border-b border-espresso-100 dark:border-espresso-800">
+    <td class="py-2">{{ date_label }}</td>
+    <td class="py-2">
+      {{ row.coffee_name }}
+      {% if row.roaster_name %}
+        <span class="text-sm text-espresso-600 dark:text-cream-300">({{ row.roaster_name }})</span>
+      {% endif %}
+    </td>
+    <td class="py-2">{{ row.brewer_name or "—" }}</td>
+    <td class="py-2">{{ row.recipe_name or "—" }}</td>
+    <td class="py-2 tabular-nums">1:{{ row.ratio }}</td>
+    <td class="py-2">
+      {% if row.rating is not none %}
+        <span class="text-espresso-700" aria-hidden="true">★</span>
+        <span class="tabular-nums">{{ row.rating }}</span>
+      {% else %}
+        —
+      {% endif %}
+    </td>
+    <td class="py-2 text-right whitespace-nowrap">
+      <a href="/brew/{{ row.id }}/edit"
+         aria-label="Edit brew session"
+         class="text-espresso-700 hover:text-espresso-800 hover:underline">
+        Edit
+      </a>
+      <span class="text-espresso-300" aria-hidden="true"> · </span>
+      <a href="/brew/new?from={{ row.id }}"
+         aria-label="{{ again_label }}"
+         class="text-espresso-700 hover:text-espresso-800 hover:underline">
+        Brew again
+      </a>
+    </td>
+  </tr>
+{% endif %}

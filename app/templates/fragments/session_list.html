@@ -1,0 +1,72 @@
+{# Sessions list fragment — the HTMX filter target (#session-list).
+   Desktop (md+): table — Date · Coffee · Brewer · Recipe · Ratio · Rating ·
+   Actions. Mobile (<md): stacked cards (no horizontal scroll at 375px,
+   MOB-03). Both delegate to fragments/session_row.html with a `mode` flag.
+
+   Context contract (GET /brew + the HX-Request fragment branch):
+     - rows:                 list[dict] — pre-resolved per-session view rows.
+     - filters:              dict[str, str] — raw filter strings (for the
+                              filtered-vs-empty distinction).
+     - active_filter_count:  int — drives the filtered-zero empty state.
+
+   Empty states (UI-SPEC §Empty States): zero sessions → the single Phase 5
+   snobbery wink; filtered-zero → widen-the-filters guidance + Clear filters. #}
+<div id="session-list">
+  {% if rows %}
+    <div class="hidden md:block">
+      <table class="w-full text-base">
+        <thead>
+          <tr class="text-sm font-semibold border-b border-espresso-200 dark:border-espresso-800">
+            <th class="text-left py-2">Date</th>
+            <th class="text-left py-2">Coffee</th>
+            <th class="text-left py-2">Brewer</th>
+            <th class="text-left py-2">Recipe</th>
+            <th class="text-left py-2">Ratio</th>
+            <th class="text-left py-2">Rating</th>
+            <th class="text-right py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            {% with mode = "row" %}
+              {% include "fragments/session_row.html" %}
+            {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="md:hidden space-y-3">
+      {% for row in rows %}
+        {% with mode = "card" %}
+          {% include "fragments/session_row.html" %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+  {% elif active_filter_count %}
+    <div class="flex flex-col items-center justify-center text-center py-16 gap-3">
+      <h2 class="text-lg font-semibold">No sessions match these filters.</h2>
+      <p class="text-base text-espresso-700 dark:text-cream-200">
+        Try widening the date range or clearing a filter.
+      </p>
+      <div class="flex gap-3">
+        <a href="/brew"
+           class="rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+          Clear filters
+        </a>
+        <a href="/brew/new"
+           class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
+          Log session
+        </a>
+      </div>
+    </div>
+  {% else %}
+    <div class="flex flex-col items-center justify-center text-center py-16 gap-3">
+      <h2 class="text-lg font-semibold">No brews logged yet.</h2>
+      <p class="text-base text-espresso-700 dark:text-cream-200">The snobbery awaits.</p>
+      <a href="/brew/new"
+         class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
+        Log session
+      </a>
+    </div>
+  {% endif %}
+</div>

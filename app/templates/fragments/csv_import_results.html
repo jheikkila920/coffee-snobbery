@@ -1,0 +1,42 @@
+{# CSV import per-row outcome summary (BREW-11, UI-SPEC §CSV Import Result UX).
+   Context contract (POST /brew/import → _render_import_results):
+     - outcomes:  list[RowOutcome]  (status, row_number, reason)
+     - inserted / skipped / refused: int counts
+     - error:     str | None  (upload-level error: bad/oversized/missing file)
+
+   Per-outcome treatment (lock):
+     - inserted: neutral/body text + a check glyph (NO green token).
+     - skipped:  muted text-espresso-600 "duplicate of an existing session".
+     - refused:  text-red-700 reason (the ONE import error-color case).
+   All reason strings render autoescaped (no |safe — stored-XSS defense). #}
+{% if error %}
+  <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+{% else %}
+  <div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 dark:bg-espresso-900 dark:border-espresso-800">
+    <p class="text-lg font-semibold">
+      Imported {{ inserted }} · Skipped {{ skipped }} (duplicate) · Refused {{ refused }}
+    </p>
+    {% if outcomes %}
+      <ul class="mt-3 space-y-1">
+        {% for o in outcomes %}
+          {% if o.status == "inserted" %}
+            <li class="text-sm text-espresso-900 dark:text-cream-100">
+              <span class="text-espresso-700" aria-hidden="true">✓</span>
+              inserted · Row {{ o.row_number }} · {{ o.reason }}
+            </li>
+          {% elif o.status == "skipped" %}
+            <li class="text-sm text-espresso-600 dark:text-cream-300">
+              <span aria-hidden="true">◦</span>
+              skipped · Row {{ o.row_number }} · {{ o.reason }}
+            </li>
+          {% else %}
+            <li class="text-sm text-red-700 dark:text-red-300">
+              <span aria-hidden="true">✕</span>
+              refused · Row {{ o.row_number }} · {{ o.reason }}
+            </li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+{% endif %}
