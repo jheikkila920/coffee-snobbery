@@ -386,3 +386,253 @@ def test_import_autocreates_observed_notes(clean_csv: None) -> None:
         assert len(rows_db) == 1
         observed = set(rows_db[0].flavor_note_ids_observed)
         assert {n.id for n in notes} == observed
+
+
+# --------------------------------------------------------------------------- #
+# Task 2 — export                                                             #
+# --------------------------------------------------------------------------- #
+
+
+def _parse_export(text_csv: str) -> tuple[list[str], list[dict[str, str]]]:
+    """Parse exported CSV text into (header, list-of-row-dicts)."""
+    import csv
+    import io
+
+    reader = csv.DictReader(io.StringIO(text_csv))
+    return list(reader.fieldnames or []), list(reader)
+
+
+def test_export_resolves_names(clean_csv: None) -> None:
+    """export_brews writes a header + one data row per session, resolving
+    coffee/roaster/recipe/equipment/observed-note ids to human names."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    from app.db import SessionLocal
+    from app.models.flavor_note import FlavorNote
+    from app.services import brew_sessions as brew_svc
+    from app.services import csv_io
+
+    with SessionLocal() as db:
+        user = _seed_user(db, username="csvtest-exportnames")
+        roaster = _seed_roaster(db, name="CSV Roaster Onyx")
+        coffee = _seed_coffee(db, name="CSV Geometry", roaster_id=roaster.id)
+        from app.models.equipment import Equipment
+
+        brewer = Equipment(type="brewer", brand="Hario", model="V60")
+        db.add(brewer)
+        note = FlavorNote(name="csvnote-Peach", category="fruit")
+        db.add(note)
+        db.flush()
+        uid, cid, brewer_id, note_id = user.id, coffee.id, brewer.id, note.id
+
+        brew_svc.create_brew_session(
+            db,
+            by_user_id=uid,
+            coffee_id=cid,
+            bag_id=None,
+            recipe_id=None,
+            brewer_id=brewer_id,
+            grinder_id=None,
+            kettle_id=None,
+            water_type="Filtered",
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=Decimal("230"),
+            tds_pct=Decimal("1.35"),
+            water_temp_c_actual=Decimal("93"),
+            grind_setting_actual="22",
+            rating=Decimal("4.25"),
+            flavor_note_ids_observed=[note_id],
+            notes="bright",
+            brewed_at=datetime(2026, 5, 14, 8, 0, 0, tzinfo=UTC),
+        )
+
+    with SessionLocal() as db:
+        out = csv_io.export_brews(db, by_user_id=uid)
+
+    header, data = _parse_export(out)
+    assert header == csv_io.EXPORT_FIELDNAMES
+    assert len(data) == 1
+    row = data[0]
+    assert row["coffee_name"] == "CSV Geometry"
+    assert row["roaster_name"] == "CSV Roaster Onyx"
+    assert row["brewer"] == "Hario V60"
+    assert row["observed_flavor_notes"] == "csvnote-Peach"
+    assert row["rating"] == "4.25"
+    assert row["notes"] == "bright"
+
+
+def test_export_includes_ratio_and_ey(clean_csv: None) -> None:
+    """Export includes the computed brew-ratio (water/dose) and the GENERATED
+    extraction_yield_pct."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    from app.db import SessionLocal
+    from app.services import brew_sessions as brew_svc
+    from app.services import csv_io
+
+    with SessionLocal() as db:
+        user = _seed_user(db, username="csvtest-ratio")
+        coffee = _seed_coffee(db, name="CSV RatioCoffee")
+        db.commit()
+        uid, cid = user.id, coffee.id
+
+    with SessionLocal() as db:
+        # dose=15, water=250 -> ratio 16.67; yield=250,tds=1.35 -> EY 22.50.
+        brew_svc.create_brew_session(
+            db,
+            by_user_id=uid,
+            coffee_id=cid,
+            bag_id=None,
+            recipe_id=None,
+            brewer_id=None,
+            grinder_id=None,
+            kettle_id=None,
+            water_type="",
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=Decimal("250"),
+            tds_pct=Decimal("1.35"),
+            water_temp_c_actual=None,
+            grind_setting_actual="",
+            rating=None,
+            flavor_note_ids_observed=[],
+            notes="",
+            brewed_at=datetime(2026, 5, 15, 8, 0, 0, tzinfo=UTC),
+        )
+
+    with SessionLocal() as db:
+        out = csv_io.export_brews(db, by_user_id=uid)
+    _header, data = _parse_export(out)
+    assert data[0]["brew_ratio"] == "16.67"
+    assert Decimal(data[0]["extraction_yield_pct"]) == Decimal("22.50")
+
+
+def test_export_roundtrip(clean_csv: None) -> None:
+    """Export a user's sessions, then re-import the same bytes for a fresh user
+    with the same catalog -> every row inserts, no refusals; bag_id=null
+    round-trips freestyle."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    from datetime import date
+
+    from app.db import SessionLocal
+    from app.services import brew_sessions as brew_svc
+    from app.services import csv_io
+
+    with SessionLocal() as db:
+        user_a = _seed_user(db, username="csvtest-rt-a")
+        user_b = _seed_user(db, username="csvtest-rt-b")
+        roaster = _seed_roaster(db, name="CSV RT Roaster")
+        coffee = _seed_coffee(db, name="CSV RTCoffee", roaster_id=roaster.id)
+        bag = _seed_bag(db, coffee_id=coffee.id, roast_date=date(2026, 5, 2))
+        db.flush()
+        a_id, b_id, cid, bag_id = user_a.id, user_b.id, coffee.id, bag.id
+
+        # One row with a bag, one freestyle (bag_id null).
+        brew_svc.create_brew_session(
+            db,
+            by_user_id=a_id,
+            coffee_id=cid,
+            bag_id=bag_id,
+            recipe_id=None,
+            brewer_id=None,
+            grinder_id=None,
+            kettle_id=None,
+            water_type="",
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=None,
+            tds_pct=None,
+            water_temp_c_actual=None,
+            grind_setting_actual="",
+            rating=None,
+            flavor_note_ids_observed=[],
+            notes="",
+            brewed_at=datetime(2026, 5, 16, 8, 0, 0, tzinfo=UTC),
+        )
+        brew_svc.create_brew_session(
+            db,
+            by_user_id=a_id,
+            coffee_id=cid,
+            bag_id=None,
+            recipe_id=None,
+            brewer_id=None,
+            grinder_id=None,
+            kettle_id=None,
+            water_type="",
+            dose_grams_actual=Decimal("16"),
+            water_grams_actual=Decimal("256"),
+            yield_grams_actual=None,
+            tds_pct=None,
+            water_temp_c_actual=None,
+            grind_setting_actual="",
+            rating=None,
+            flavor_note_ids_observed=[],
+            notes="",
+            brewed_at=datetime(2026, 5, 16, 9, 0, 0, tzinfo=UTC),
+        )
+
+    with SessionLocal() as db:
+        exported = csv_io.export_brews(db, by_user_id=a_id)
+
+    # Re-import the exported bytes for a fresh user with the same catalog.
+    with SessionLocal() as db:
+        outcomes = csv_io.import_brews(db, raw_bytes=exported.encode("utf-8"), by_user_id=b_id)
+    assert [o.status for o in outcomes] == ["inserted", "inserted"]
+
+    with SessionLocal() as db:
+        b_rows = brew_svc.list_brew_sessions(db, by_user_id=b_id)
+    assert len(b_rows) == 2
+    bag_linked = [r for r in b_rows if r.bag_id == bag_id]
+    freestyle = [r for r in b_rows if r.bag_id is None]
+    assert len(bag_linked) == 1
+    assert len(freestyle) == 1
+
+    # Re-importing the same file for the SAME user is a no-op (all duplicates).
+    with SessionLocal() as db:
+        again = csv_io.import_brews(db, raw_bytes=exported.encode("utf-8"), by_user_id=b_id)
+    assert [o.status for o in again] == ["skipped", "skipped"]
+
+
+def test_export_formula_injection_prefix(clean_csv: None) -> None:
+    """A free-text note beginning with '=' is exported as \"'=...\" (T-05-13)."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    from app.db import SessionLocal
+    from app.services import brew_sessions as brew_svc
+    from app.services import csv_io
+
+    with SessionLocal() as db:
+        user = _seed_user(db, username="csvtest-formula")
+        coffee = _seed_coffee(db, name="CSV FormulaCoffee")
+        db.commit()
+        uid, cid = user.id, coffee.id
+
+    with SessionLocal() as db:
+        brew_svc.create_brew_session(
+            db,
+            by_user_id=uid,
+            coffee_id=cid,
+            bag_id=None,
+            recipe_id=None,
+            brewer_id=None,
+            grinder_id=None,
+            kettle_id=None,
+            water_type="",
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=None,
+            tds_pct=None,
+            water_temp_c_actual=None,
+            grind_setting_actual="",
+            rating=None,
+            flavor_note_ids_observed=[],
+            notes="=SUM(A1:A9)",
+            brewed_at=datetime(2026, 5, 17, 8, 0, 0, tzinfo=UTC),
+        )
+
+    with SessionLocal() as db:
+        out = csv_io.export_brews(db, by_user_id=uid)
+    _header, data = _parse_export(out)
+    assert data[0]["notes"] == "'=SUM(A1:A9)"
