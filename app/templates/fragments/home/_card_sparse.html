@@ -1,0 +1,9 @@
+{# Shared sparse-card partial (D-04/D-05, HOME-01..05).
+   Context: hint_type ("sparse" | "unrated") — caller sets based on all_unrated.
+   All values autoescaped. CSP-clean. #}
+
+{% if hint_type == "unrated" %}
+  <p class="text-sm text-espresso-600 dark:text-cream-300">{{ unrated_text }}</p>
+{% else %}
+  <p class="text-sm text-espresso-600 dark:text-cream-300">{{ sparse_text }}</p>
+{% endif %}

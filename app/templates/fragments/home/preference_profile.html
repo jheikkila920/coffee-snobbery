@@ -1,0 +1,81 @@
+{# Preference-profile card body (HOME-02).
+   Context: profile — dict with keys origin/process/roaster/roast_level,
+            each a list of Row(label, avg_rating, session_count);
+            all_unrated — bool (D-05).
+   2-col grid on md+ (md:grid-cols-2). All values autoescaped. CSP-clean. #}
+
+{% set profile_empty = not (profile.origin or profile.process or profile.roaster or profile.roast_level) %}
+{% if not profile_empty %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    {% if profile.origin %}
+      <div>
+        <h3 class="text-sm font-semibold text-espresso-600 dark:text-cream-300 mb-2">Origin</h3>
+        {% for row in profile.origin %}
+          <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+            <span class="text-base">{{ row.label }}</span>
+            <span class="text-sm text-espresso-600 dark:text-cream-300 flex items-center gap-2">
+              <span class="text-espresso-700" aria-hidden="true">★</span>
+              <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
+              <span class="tabular-nums text-xs">({{ row.session_count }})</span>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if profile.process %}
+      <div>
+        <h3 class="text-sm font-semibold text-espresso-600 dark:text-cream-300 mb-2">Process</h3>
+        {% for row in profile.process %}
+          <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+            <span class="text-base">{{ row.label }}</span>
+            <span class="text-sm text-espresso-600 dark:text-cream-300 flex items-center gap-2">
+              <span class="text-espresso-700" aria-hidden="true">★</span>
+              <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
+              <span class="tabular-nums text-xs">({{ row.session_count }})</span>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if profile.roaster %}
+      <div>
+        <h3 class="text-sm font-semibold text-espresso-600 dark:text-cream-300 mb-2">Roaster</h3>
+        {% for row in profile.roaster %}
+          <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+            <span class="text-base">{{ row.label }}</span>
+            <span class="text-sm text-espresso-600 dark:text-cream-300 flex items-center gap-2">
+              <span class="text-espresso-700" aria-hidden="true">★</span>
+              <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
+              <span class="tabular-nums text-xs">({{ row.session_count }})</span>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if profile.roast_level %}
+      <div>
+        <h3 class="text-sm font-semibold text-espresso-600 dark:text-cream-300 mb-2">Roast Level</h3>
+        {% for row in profile.roast_level %}
+          <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+            <span class="text-base">{{ row.label }}</span>
+            <span class="text-sm text-espresso-600 dark:text-cream-300 flex items-center gap-2">
+              <span class="text-espresso-700" aria-hidden="true">★</span>
+              <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
+              <span class="tabular-nums text-xs">({{ row.session_count }})</span>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+  </div>
+{% else %}
+  {% set hint_type = "unrated" if all_unrated else "sparse" %}
+  {% set sparse_text = "Not enough sessions per dimension yet — keep logging." %}
+  {% set unrated_text = "Rate some brews to see your preference profile." %}
+  {% include "fragments/home/_card_sparse.html" %}
+{% endif %}
