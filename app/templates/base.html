@@ -17,6 +17,12 @@
     <script defer src="/static/js/alpine-components/recipe-step-builder.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/mini-modal.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/autocomplete.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 5 brew-form components (plan 05-05) — each registers an Alpine.data
+       factory and must load BEFORE the @alpinejs/csp core, like the three above. #}
+    <script defer src="/static/js/alpine-components/rating-stars.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/flavor-tag-input.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/brew-ratio.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/brew-draft.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Alpine CSP build — declarative-only (no eval). 3.15.x rewrote the CSP
        expression evaluator to support operators/arithmetic/concat/method-args
        that the Phase 4 templates rely on; 3.14.9 only parsed bare member access
