@@ -270,6 +270,41 @@ def test_ey_not_writable(app, seeded_regular_user, clean_brew_router) -> None:
         assert svc.list_brew_sessions(db, by_user_id=uid) == []
 
 
+def test_ey_overflow_returns_200_not_500(app, seeded_regular_user, clean_brew_router) -> None:
+    """CR-02: a dose/yield/tds combo whose computed EY overflows numeric(5,2)
+    → 200 re-rendered form (ValidationError), NOT an unhandled 500; no insert."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    _require_brew_router()
+    from app.db import SessionLocal
+
+    uid = seeded_regular_user["user"].id
+    with SessionLocal() as db:
+        coffee = _seed_coffee(db, name=f"{_COFFEE_PREFIX} Overflow")
+        db.commit()
+        cid = coffee.id
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    r = client.post(
+        "/brew",
+        data={
+            "X-CSRF-Token": _CSRF_TOKEN,
+            "coffee_id": str(cid),
+            "dose_grams_actual": "0.01",  # tiny dose
+            "water_grams_actual": "250",
+            "yield_grams_actual": "3000",  # huge yield
+            "tds_pct": "100",  # max tds -> EY = 30,000,000 >> 999.99
+            "notes": "",
+        },
+    )
+    assert r.status_code == 200, f"expected 200 re-render, got {r.status_code}: {r.text[:200]}"
+
+    from app.services import brew_sessions as svc
+
+    with SessionLocal() as db:
+        assert svc.list_brew_sessions(db, by_user_id=uid) == []
+
+
 def test_create_sets_user_id(app, seeded_regular_user, clean_brew_router) -> None:
     """A valid POST creates a session with the authed user_id; HX-Redirects; clears draft."""
     _require_postgres()
@@ -599,9 +634,7 @@ def test_prefill_fragment_advertised_chips(app, seeded_regular_user, clean_brew_
     client = _authed_client(app, seeded_regular_user["signed_cookie"])
     r = client.get(f"/brew/prefill?coffee_id={cid}", headers={"HX-Request": "true"})
     assert r.status_code == 200
-    assert "RouterNoteBlueberry" in r.text, (
-        "advertised chip note name must render in the fragment"
-    )
+    assert "RouterNoteBlueberry" in r.text, "advertised chip note name must render in the fragment"
 
 
 def test_prefill_user_scoped(

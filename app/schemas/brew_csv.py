@@ -20,8 +20,11 @@ field — it is GENERATED on insert from the imported dose/yield/tds.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.schemas.brew_session import validate_extraction_yield
 
 
 class BrewCsvRow(BaseModel):
@@ -48,6 +51,19 @@ class BrewCsvRow(BaseModel):
     # Decimal (NOT float) so 0.25 quarter-steps validate exactly (Pitfall 2).
     rating: Decimal | None = Field(None, ge=0, le=5, multiple_of=Decimal("0.25"))
     notes: str = Field("", max_length=5000)
+
+    @model_validator(mode="after")
+    def _reject_ey_overflow(self) -> Self:
+        # CR-02: same EY-overflow guard as BrewSessionCreate so an imported row
+        # whose dose/yield/TDS would overflow the GENERATED numeric(5,2) column
+        # is refused per-row (ValidationError) instead of crashing the import
+        # with an unhandled 500.
+        validate_extraction_yield(
+            dose_grams_actual=self.dose_grams_actual,
+            yield_grams_actual=self.yield_grams_actual,
+            tds_pct=self.tds_pct,
+        )
+        return self
 
 
 __all__ = ["BrewCsvRow"]

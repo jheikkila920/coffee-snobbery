@@ -33,8 +33,42 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# Max value representable by the GENERATED ``extraction_yield_pct`` column
+# (``numeric(5,2)`` → 999.99). The DB computes EY exactly as below; if the
+# computed value exceeds this the INSERT raises "numeric field overflow" and
+# would surface as an unhandled 500 (CR-02). Validate the combo up front so the
+# error routes through ValidationError → friendly form re-render / per-row CSV
+# refusal instead.
+_EY_MAX = Decimal("999.99")
+
+
+def validate_extraction_yield(
+    *,
+    dose_grams_actual: Decimal | None,
+    yield_grams_actual: Decimal | None,
+    tds_pct: Decimal | None,
+) -> None:
+    """Reject dose/yield/tds combos whose computed EY overflows numeric(5,2).
+
+    Mirrors the GENERATED column expression exactly (tds is whole-percent):
+    ``EY = (yield * tds / 100) / dose * 100``. Only checks when all three
+    operands are present and ``dose > 0`` (any NULL operand → EY is NULL in the
+    DB, no overflow). Raises ``ValueError`` (→ pydantic ``ValidationError``)
+    when EY would exceed 999.99 or be negative. Shared by the form schema and
+    the CSV-row schema so both import paths refuse the overflow identically.
+    """
+    if dose_grams_actual is None or yield_grams_actual is None or tds_pct is None:
+        return
+    if dose_grams_actual <= 0:
+        return  # field bounds already reject dose <= 0; avoid div-by-zero here
+    ey = (yield_grams_actual * tds_pct / Decimal("100")) / dose_grams_actual * Decimal("100")
+    if ey > _EY_MAX or ey < 0:
+        msg = "extraction yield out of range for these dose/yield/TDS values"
+        raise ValueError(msg)
 
 
 class BrewSessionCreate(BaseModel):
@@ -75,6 +109,19 @@ class BrewSessionCreate(BaseModel):
             msg = "flavor_note_ids_observed must be positive integers (>= 1)"
             raise ValueError(msg)
         return v
+
+    @model_validator(mode="after")
+    def _reject_ey_overflow(self) -> Self:
+        # CR-02: bound the COMPUTED extraction yield so a small-dose / large
+        # yield+tds combo can't overflow the GENERATED numeric(5,2) column and
+        # crash the INSERT with a 500. Routes through ValidationError → SEC-06
+        # 200 form re-render instead.
+        validate_extraction_yield(
+            dose_grams_actual=self.dose_grams_actual,
+            yield_grams_actual=self.yield_grams_actual,
+            tds_pct=self.tds_pct,
+        )
+        return self
 
 
 class BrewSessionUpdate(BrewSessionCreate):

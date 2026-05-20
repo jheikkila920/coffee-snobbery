@@ -213,8 +213,9 @@ def test_observed_notes_array() -> None:
 def test_rating_decimal_steps() -> None:
     """BREW-04: rating Decimal accepts 0/2.5/5/1.75; rejects 5.5 (range) and 3.3 (step)."""
     _require_brew_schema()
-    from app.schemas.brew_session import BrewSessionCreate
     from pydantic import ValidationError
+
+    from app.schemas.brew_session import BrewSessionCreate
 
     base = {
         "coffee_id": 1,
@@ -238,3 +239,91 @@ def test_rating_decimal_steps() -> None:
     # extra="forbid" blocks mass-assignment of the GENERATED EY column.
     with pytest.raises(ValidationError):
         BrewSessionCreate(**base, extraction_yield_pct=Decimal("18.5"))
+
+
+def test_brew_create_rejects_ey_overflow() -> None:
+    """CR-02: a dose/yield/tds combo whose COMPUTED EY overflows numeric(5,2)
+    (max 999.99) is rejected at the schema (pydantic ValidationError), not at
+    INSERT (which would be an unhandled 500). A normal brew still validates."""
+    _require_brew_schema()
+    from pydantic import ValidationError
+
+    from app.schemas.brew_session import BrewSessionCreate
+
+    # dose=0.01, yield=3000, tds=100 -> EY = 3000*100/0.01 = 30,000,000 >> 999.99
+    with pytest.raises(ValidationError):
+        BrewSessionCreate(
+            coffee_id=1,
+            dose_grams_actual=Decimal("0.01"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=Decimal("3000"),
+            tds_pct=Decimal("100"),
+        )
+
+    # A normal brew (dose 15 / yield 250 / tds 1.35 -> EY 22.5) still validates.
+    model = BrewSessionCreate(
+        coffee_id=1,
+        dose_grams_actual=Decimal("15"),
+        water_grams_actual=Decimal("250"),
+        yield_grams_actual=Decimal("250"),
+        tds_pct=Decimal("1.35"),
+    )
+    assert model.tds_pct == Decimal("1.35")
+
+    # EY exactly at the column ceiling (999.99) is accepted; just over is not.
+    # dose=10, yield=100, tds=99.999 -> EY = 100*99.999/10 = 999.99 (boundary).
+    ok = BrewSessionCreate(
+        coffee_id=1,
+        dose_grams_actual=Decimal("10"),
+        water_grams_actual=Decimal("250"),
+        yield_grams_actual=Decimal("100"),
+        tds_pct=Decimal("99.999"),
+    )
+    assert ok.yield_grams_actual == Decimal("100")
+    with pytest.raises(ValidationError):
+        BrewSessionCreate(
+            coffee_id=1,
+            dose_grams_actual=Decimal("10"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=Decimal("100"),
+            tds_pct=Decimal("100.001"),  # EY = 1000.01 > 999.99
+        )
+
+    # Any NULL operand -> EY is NULL in the DB (no overflow); must validate.
+    partial = BrewSessionCreate(
+        coffee_id=1,
+        dose_grams_actual=Decimal("0.01"),
+        water_grams_actual=Decimal("250"),
+        yield_grams_actual=Decimal("3000"),
+        tds_pct=None,  # NULL -> no EY computed -> no overflow
+    )
+    assert partial.tds_pct is None
+
+
+def test_brew_csv_row_rejects_ey_overflow() -> None:
+    """CR-02 (CSV path): BrewCsvRow rejects the same EY-overflow combo so the
+    importer refuses the row instead of crashing the import with a 500."""
+    try:
+        from app.schemas.brew_csv import BrewCsvRow
+    except ImportError:
+        pytest.skip("Phase 5 dependency: app.schemas.brew_csv")
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        BrewCsvRow(
+            coffee_name="Anything",
+            dose_grams_actual=Decimal("0.01"),
+            water_grams_actual=Decimal("250"),
+            yield_grams_actual=Decimal("3000"),
+            tds_pct=Decimal("100"),
+        )
+
+    # Normal row still validates.
+    ok = BrewCsvRow(
+        coffee_name="Anything",
+        dose_grams_actual=Decimal("15"),
+        water_grams_actual=Decimal("250"),
+        yield_grams_actual=Decimal("250"),
+        tds_pct=Decimal("1.35"),
+    )
+    assert ok.coffee_name == "Anything"
