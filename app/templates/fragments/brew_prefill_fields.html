@@ -23,8 +23,19 @@
      - coffees / recipes / brewers / grinders / kettles: dropdown sources
      - equipment_name_map: {id: label}
 
-   The wrapper id `#brew-prefill-fields` is the hx-target the coffee/recipe
-   selects swap into (Plan 05 wires the hx-get on those selects).
+   The wrapper id `#brew-prefill-region` is the hx-target the coffee/recipe
+   selects swap into (Plan 05 wired the hx-get="/brew/prefill" on those selects).
+   The Coffee/Recipe selects own the hx-get here so a fragment swap re-renders
+   them WITH their wiring intact (the swap replaces this whole outerHTML).
+
+   Plan 05 Alpine bindings:
+     - Dose / Water inputs x-on:input into the enclosing brewRatio scope (live
+       1:N.NN). The brewRatio root lives OUTSIDE this fragment (in brew_form.html)
+       so the readout survives a re-prefill swap; the bindings resolve in that
+       ancestor scope after htmx:afterSettle → Alpine.initTree (htmx-listeners.js).
+     - Advertised quick-add chips x-on:click into the enclosing
+       observedFlavorNotes scope (D-11 addAdvertised → adds to the observed list
+       + dims the suggestion).
 
    CSP-strict: no |safe, no inline hx-on:, no hx-vals='js:'. Autoescape ON.
 #}
@@ -34,11 +45,21 @@
           data-prefill-pill="{{ field }}">{{ pill_sources[field] }}</span>
   {%- endif -%}
 {%- endmacro %}
-<div id="brew-prefill-fields" class="flex flex-col gap-3">
-  {# --- Coffee (drives D-04 re-prefill + D-11 advertised chips) --- #}
+<div id="brew-prefill-region" class="flex flex-col gap-3">
+  {# --- Coffee (drives D-04 re-prefill + D-11 advertised chips) ---
+     hx-get="/brew/prefill" on change re-prefills the whole region (D-04) and
+     refreshes the advertised chips (D-11). hx-include pulls the recipe so a
+     recipe already chosen keeps winning the four template fields (D-05). The
+     swap replaces this region's outerHTML, so the selects re-render with their
+     wiring intact. CSP-strict: only hx-* attrs (no hx-on:, no hx-vals='js:'). #}
   <label class="flex flex-col gap-1">
     <span class="text-sm font-semibold">Coffee {{ prefill_pill('coffee_id') }}</span>
     <select name="coffee_id"
+            hx-get="/brew/prefill"
+            hx-trigger="change"
+            hx-include="[name='coffee_id'],[name='recipe_id']"
+            hx-target="#brew-prefill-region"
+            hx-swap="outerHTML"
             class="rounded border px-2 py-2 text-base{% if errors.get('coffee_id') %} border-red-300{% else %} border-espresso-200{% endif %}">
       <option value=""{% if not values.get('coffee_id') %} selected{% endif %}>—</option>
       {% for c in coffees %}
@@ -48,10 +69,18 @@
     {% if errors.get('coffee_id') %}<p class="text-sm text-red-700 mt-1">{{ errors['coffee_id'] }}</p>{% endif %}
   </label>
 
-  {# --- Recipe (drives D-05 recipe-wins on the four template fields) --- #}
+  {# --- Recipe (drives D-05 recipe-wins on the four template fields) ---
+     hx-get="/brew/prefill" on change overwrites dose/water/temp/grind with the
+     recipe's targets and tags them "from recipe" (D-05). Same region swap. #}
   <label class="flex flex-col gap-1">
     <span class="text-sm font-semibold">Recipe {{ prefill_pill('recipe_id') }}</span>
-    <select name="recipe_id" class="rounded border border-espresso-200 px-2 py-2 text-base">
+    <select name="recipe_id"
+            hx-get="/brew/prefill"
+            hx-trigger="change"
+            hx-include="[name='coffee_id'],[name='recipe_id']"
+            hx-target="#brew-prefill-region"
+            hx-swap="outerHTML"
+            class="rounded border border-espresso-200 px-2 py-2 text-base">
       <option value=""{% if not values.get('recipe_id') %} selected{% endif %}>—</option>
       {% for r in recipes %}
         <option value="{{ r.id }}"{% if values.get('recipe_id') == (r.id | string) %} selected{% endif %}>{{ r.name }}</option>
@@ -88,20 +117,35 @@
     </select>
   </label>
 
-  {# --- Water type (D-07 free text; Plan 05 upgrades to select-or-Other) --- #}
+  {# --- Water type (D-07: native suggestions + Other free-text) ---
+     A <datalist> gives native dropdown suggestions (select-like) while still
+     accepting a free-typed "Other" value — CSP-safe, no JS, mobile-friendly,
+     and one `water_type` field (no select/text conflict). See 05-05-SUMMARY
+     for the deviation note vs. a separate select+toggle. #}
   <label class="flex flex-col gap-1">
     <span class="text-sm font-semibold">Water type {{ prefill_pill('water_type') }}</span>
-    <input name="water_type" maxlength="100" inputmode="text"
+    <input name="water_type" maxlength="100" inputmode="text" list="water-type-options"
            value="{{ values.get('water_type', '') }}"
            class="rounded border border-espresso-200 px-2 py-2 text-base">
+    <datalist id="water-type-options">
+      <option value="Tap"></option>
+      <option value="Filtered"></option>
+      <option value="Bottled"></option>
+      <option value="Distilled"></option>
+      <option value="Third Wave Water"></option>
+      <option value="Custom mineral mix"></option>
+    </datalist>
   </label>
 
-  {# --- Dose / Water (recipe-wins template fields) --- #}
+  {# --- Dose / Water (recipe-wins template fields) ---
+     x-on:input reports into the enclosing brewRatio scope (live 1:N.NN). The
+     brewRatio root is in brew_form.html, outside this swappable region. #}
   <div class="flex gap-3">
     <label class="flex flex-col gap-1 flex-1">
       <span class="text-sm font-semibold">Dose (g) {{ prefill_pill('dose_grams_actual') }}</span>
       <input name="dose_grams_actual" inputmode="decimal"
              value="{{ values.get('dose_grams_actual', '') }}"
+             x-on:input="setDose($el.value)"
              class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('dose_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('dose_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['dose_grams_actual'] }}</p>{% endif %}
     </label>
@@ -109,10 +153,18 @@
       <span class="text-sm font-semibold">Water (g) {{ prefill_pill('water_grams_actual') }}</span>
       <input name="water_grams_actual" inputmode="decimal"
              value="{{ values.get('water_grams_actual', '') }}"
+             x-on:input="setWater($el.value)"
              class="rounded border px-2 py-2 text-base tabular-nums{% if errors.get('water_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('water_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['water_grams_actual'] }}</p>{% endif %}
     </label>
   </div>
+
+  {# --- Live brew-ratio readout (BREW-05) — sits directly under Dose/Water.
+     Bound to the enclosing brewRatio scope; dose 0/empty → "1:—". --- #}
+  <p class="text-base text-espresso-900 dark:text-cream-100">
+    Ratio <span class="tabular-nums font-semibold">1:<span x-text="ratio">—</span></span>
+    <span class="text-sm text-espresso-600 dark:text-cream-300">(water : coffee)</span>
+  </p>
 
   {# --- Temp / Grind (recipe-wins template fields) --- #}
   <div class="flex gap-3">
@@ -131,7 +183,12 @@
     </label>
   </div>
 
-  {# --- D-11 advertised quick-add chips for the selected coffee --- #}
+  {# --- D-11 advertised quick-add chips for the selected coffee ---
+     x-on:click resolves in the enclosing observedFlavorNotes scope:
+     addAdvertised($el) reads data-advertised-id/name, adds the note to the
+     observed list, and dims the suggestion so it isn't double-added. These
+     chips READ advertised_chips but NEVER write advertised_flavor_note_ids
+     (the observed hidden inputs use flavor_note_ids_observed). #}
   {% if advertised_chips %}
     <div id="brew-advertised-chips" class="flex flex-wrap items-center gap-2">
       <span class="text-sm font-semibold">Advertised:</span>
@@ -139,6 +196,7 @@
         <button type="button"
                 data-advertised-id="{{ chip.id }}"
                 data-advertised-name="{{ chip.name }}"
+                x-on:click="addAdvertised($el)"
                 aria-label="Add advertised note {{ chip.name }}"
                 class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm border border-espresso-300 text-espresso-800 hover:bg-cream-200 dark:border-espresso-700 dark:text-cream-200 min-h-[44px]">
           <span aria-hidden="true">+</span>{{ chip.name }}
