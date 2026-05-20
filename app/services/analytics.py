@@ -174,7 +174,11 @@ def get_roast_freshness_buckets(db: Session, user_id: int) -> list[Row]:
     Sessions without a bag or with roast_date=NULL are excluded by INNER JOIN.
     Buckets require >=2 rated sessions each (D-07).
     """
-    days_expr = cast(BrewSession.brewed_at, SaDate) - Bag.roast_date
+    # Cast brewed_at in an explicit zone (UTC) so the day-count is stable
+    # regardless of the DB session's TimeZone GUC — a bare timestamptz->date
+    # cast uses the connection timezone and can shift a near-midnight brew
+    # across a bucket boundary (WR-03). The household logs in UTC.
+    days_expr = cast(func.timezone("UTC", BrewSession.brewed_at), SaDate) - Bag.roast_date
 
     bucket_expr = case(
         (days_expr <= 3, "0-3 days"),
@@ -204,6 +208,7 @@ def get_roast_freshness_buckets(db: Session, user_id: int) -> list[Row]:
             BrewSession.user_id == user_id,
             BrewSession.rating.is_not(None),
             Bag.roast_date.is_not(None),
+            days_expr >= 0,  # exclude brews dated before the roast date (WR-02)
         )
         .group_by(bucket_expr)
         .having(func.count(BrewSession.id) >= 2)
