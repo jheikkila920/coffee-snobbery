@@ -108,8 +108,10 @@ def clean_csv() -> Iterator[None]:
             conn.execute(text("DELETE FROM brew_sessions"))
             conn.execute(text("DELETE FROM brew_drafts"))
             conn.execute(
-                text("DELETE FROM bags WHERE coffee_id IN "
-                     "(SELECT id FROM coffees WHERE name LIKE 'CSV %')")
+                text(
+                    "DELETE FROM bags WHERE coffee_id IN "
+                    "(SELECT id FROM coffees WHERE name LIKE 'CSV %')"
+                )
             )
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'CSV %'"))
             conn.execute(text("DELETE FROM roasters WHERE name LIKE 'CSV %'"))
@@ -161,7 +163,7 @@ def test_import_outcomes(clean_csv: None) -> None:
         r1 = _seed_roaster(db, name="CSV Roaster One")
         r2 = _seed_roaster(db, name="CSV Roaster Two")
         # Unique coffee (single roaster) — resolves.
-        solo = _seed_coffee(db, name="CSV Solo", roaster_id=r1.id)
+        _seed_coffee(db, name="CSV Solo", roaster_id=r1.id)
         # Ambiguous coffee — same name under two roasters.
         _seed_coffee(db, name="CSV Ambiguous", roaster_id=r1.id)
         _seed_coffee(db, name="CSV Ambiguous", roaster_id=r2.id)
@@ -177,8 +179,9 @@ def test_import_outcomes(clean_csv: None) -> None:
     # Pre-seed an existing session to trigger the dedup-skip branch.
     dup_brewed_at = datetime(2026, 5, 10, 8, 0, 0, tzinfo=UTC)
     with SessionLocal() as db:
-        from app.models.coffee import Coffee
         from sqlalchemy import select
+
+        from app.models.coffee import Coffee
 
         solo_id = db.execute(select(Coffee.id).where(Coffee.name == "CSV Solo")).scalar_one()
         brew_svc.create_brew_session(
@@ -213,23 +216,49 @@ def test_import_outcomes(clean_csv: None) -> None:
     ]
     rows = [
         # 1. coffee not in catalog -> refused
-        {"coffee_name": "CSV Nonexistent", "dose_grams": "15", "water_grams": "250",
-         "brewed_at": "2026-05-11T08:00:00+00:00"},
+        {
+            "coffee_name": "CSV Nonexistent",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-11T08:00:00+00:00",
+        },
         # 2. ambiguous coffee, no roaster -> refused
-        {"coffee_name": "CSV Ambiguous", "dose_grams": "15", "water_grams": "250",
-         "brewed_at": "2026-05-11T09:00:00+00:00"},
+        {
+            "coffee_name": "CSV Ambiguous",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-11T09:00:00+00:00",
+        },
         # 3. duplicate of the pre-seeded session -> skipped
-        {"coffee_name": "CSV Solo", "dose_grams": "15", "water_grams": "250",
-         "brewed_at": "2026-05-10T08:00:00+00:00"},
+        {
+            "coffee_name": "CSV Solo",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-10T08:00:00+00:00",
+        },
         # 4. names a bag (roast_date) that does not resolve -> refused
-        {"coffee_name": "CSV Bagged", "roast_date": "2099-01-01", "dose_grams": "15",
-         "water_grams": "250", "brewed_at": "2026-05-11T10:00:00+00:00"},
+        {
+            "coffee_name": "CSV Bagged",
+            "roast_date": "2099-01-01",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-11T10:00:00+00:00",
+        },
         # 5. freestyle (no bag named) -> inserted
-        {"coffee_name": "CSV Solo", "dose_grams": "16", "water_grams": "256",
-         "brewed_at": "2026-05-11T11:00:00+00:00"},
+        {
+            "coffee_name": "CSV Solo",
+            "dose_grams": "16",
+            "water_grams": "256",
+            "brewed_at": "2026-05-11T11:00:00+00:00",
+        },
         # 6. names a resolving bag -> inserted with bag_id
-        {"coffee_name": "CSV Bagged", "roast_date": "2026-05-01", "dose_grams": "17",
-         "water_grams": "272", "brewed_at": "2026-05-11T12:00:00+00:00"},
+        {
+            "coffee_name": "CSV Bagged",
+            "roast_date": "2026-05-01",
+            "dose_grams": "17",
+            "water_grams": "272",
+            "brewed_at": "2026-05-11T12:00:00+00:00",
+        },
     ]
     raw = _csv(rows, fieldnames=fieldnames)
 
@@ -269,10 +298,18 @@ def test_import_single_transaction(clean_csv: None, monkeypatch) -> None:
 
     fieldnames = ["coffee_name", "dose_grams", "water_grams", "brewed_at"]
     rows = [
-        {"coffee_name": "CSV TxnCoffee", "dose_grams": "15", "water_grams": "250",
-         "brewed_at": "2026-05-12T08:00:00+00:00"},
-        {"coffee_name": "CSV TxnCoffee", "dose_grams": "16", "water_grams": "256",
-         "brewed_at": "2026-05-12T09:00:00+00:00"},
+        {
+            "coffee_name": "CSV TxnCoffee",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-12T08:00:00+00:00",
+        },
+        {
+            "coffee_name": "CSV TxnCoffee",
+            "dose_grams": "16",
+            "water_grams": "256",
+            "brewed_at": "2026-05-12T09:00:00+00:00",
+        },
     ]
     raw = _csv(rows, fieldnames=fieldnames)
 
@@ -320,10 +357,14 @@ def test_import_autocreates_observed_notes(clean_csv: None) -> None:
 
     fieldnames = ["coffee_name", "dose_grams", "water_grams", "brewed_at", "observed_flavor_notes"]
     rows = [
-        {"coffee_name": "CSV NotesCoffee", "dose_grams": "15", "water_grams": "250",
-         "brewed_at": "2026-05-13T08:00:00+00:00",
-         # one existing (case-variant), one brand new -> auto-create.
-         "observed_flavor_notes": "csvnote-blueberry; csvnote-Jasmine"},
+        {
+            "coffee_name": "CSV NotesCoffee",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-13T08:00:00+00:00",
+            # one existing (case-variant), one brand new -> auto-create.
+            "observed_flavor_notes": "csvnote-blueberry; csvnote-Jasmine",
+        },
     ]
     raw = _csv(rows, fieldnames=fieldnames)
 
@@ -332,9 +373,9 @@ def test_import_autocreates_observed_notes(clean_csv: None) -> None:
     assert [o.status for o in outcomes] == ["inserted"]
 
     with SessionLocal() as db:
-        notes = db.execute(
-            select(FlavorNote).where(FlavorNote.name.ilike("csvnote-%"))
-        ).scalars().all()
+        notes = (
+            db.execute(select(FlavorNote).where(FlavorNote.name.ilike("csvnote-%"))).scalars().all()
+        )
         names = sorted(n.name.lower() for n in notes)
         # Existing blueberry reused (not duplicated) + new jasmine created.
         assert names == ["csvnote-blueberry", "csvnote-jasmine"]
