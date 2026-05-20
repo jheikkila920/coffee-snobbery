@@ -54,27 +54,27 @@ def _require_analytics_tables() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _seed_analytics_scenario(db, *, username: str) -> int:
+def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     """Create a gate-cleared, rating-rich fixture for analytics tests.
 
-    Returns the user id.
+    Returns (user_id, coffee3_id, archived_coffee_id).
 
     Seeds:
     - 1 user
     - 1 roaster
-    - 3 coffees with distinct (origin, process, roast_level), one archived=True left UNBREWED
-    - bags with roast_date (varied dates)
-    - 1 brewer Equipment row
+    - 4 coffees: 2 brewed+rated, 1 never brewed (unrated candidate), 1 archived+never brewed
+    - bags with roast_date (varied dates for two freshness buckets)
+    - 1 brewer Equipment row (V60)
     - 1 recipe
     - 6 flavor notes
-    - Enough brew sessions to satisfy all per-card floors:
-      * HOME-01: >=2 rated sessions per coffee (coffee1 + coffee2)
+    - 6 rated brew sessions satisfying all per-card floors:
+      * HOME-01: >=2 rated sessions per coffee (coffee1=4, coffee2=2)
       * HOME-02: >=2 rated sessions per dimension value (origin/process/roaster/roast_level)
       * HOME-03: >=2 rated 4.0+ sessions sharing a descriptor
-      * HOME-04: >=2 rated sessions in a freshness bucket (brewed within 0-3 days of roast)
-      * HOME-05: >=3 rated sessions on the same (origin x process x brewer x recipe)
-      * HOME-08: 1 coffee never brewed + archived coffee excluded
-      * cold-start gate: >=3 sessions, >=5 distinct observed flavor notes
+      * HOME-04: >=2 rated sessions in 0-3 days bucket (bag1) and 8-14 days bucket (bag2)
+      * HOME-05: >=3 rated sessions on same (Ethiopia/washed/V60/recipe) combo
+      * HOME-08: coffee3 never brewed; archived coffee excluded
+      * cold-start gate: 6 sessions, 6 distinct observed notes (gate open)
     """
     from app.models.bag import Bag
     from app.models.brew_session import BrewSession
@@ -143,15 +143,16 @@ def _seed_analytics_scenario(db, *, username: str) -> int:
     )
     db.add(coffee_archived)
     db.flush()
+    archived_coffee_id = coffee_archived.id
 
     # Bags with roast_date for HOME-04 freshness buckets
-    # bag1: roast_date 3 days before brew → "0-3 days" bucket
-    brew_date = date(2026, 3, 10)
-    bag1 = Bag(coffee_id=coffee1.id, roast_date=date(2026, 3, 8))  # 2 days fresh
+    # bag1: brewed_at 2026-03-10, roast_date 2026-03-08 → 2 days fresh → "0-3 days" bucket
+    bag1 = Bag(coffee_id=coffee1.id, roast_date=date(2026, 3, 8))
     db.add(bag1)
     db.flush()
 
-    bag2 = Bag(coffee_id=coffee2.id, roast_date=date(2026, 3, 1))  # 9 days fresh
+    # bag2: brewed_at 2026-03-10, roast_date 2026-03-01 → 9 days fresh → "8-14 days" bucket
+    bag2 = Bag(coffee_id=coffee2.id, roast_date=date(2026, 3, 1))
     db.add(bag2)
     db.flush()
 
@@ -186,16 +187,15 @@ def _seed_analytics_scenario(db, *, username: str) -> int:
         db.flush()
         flavor_notes.append(fn)
 
-    fn_ids_primary = [flavor_notes[0].id, flavor_notes[1].id, flavor_notes[2].id]  # 3 shared notes
-    fn_ids_secondary = [flavor_notes[3].id, flavor_notes[4].id]
+    fn_ids_primary = [flavor_notes[0].id, flavor_notes[1].id, flavor_notes[2].id]
     fn_ids_all = [fn.id for fn in flavor_notes]
 
     brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc)
 
-    # Sessions for coffee1 (Ethiopia/washed/light):
-    # 4 rated sessions → satisfies HOME-01 (>=2), HOME-02 (same origin/process/roast/roaster),
-    # HOME-05 (>=3 same combo), HOME-04 (bag1 = 0-3 days fresh)
-    for i in range(4):
+    # 4 rated sessions for coffee1 (Ethiopia/washed/light) via bag1 (0-3 days fresh)
+    # Satisfies HOME-01 (>=2), HOME-02 origin+process+roaster+roast_level,
+    # HOME-04 "0-3 days" bucket, HOME-05 (>=3 same combo)
+    for _ in range(4):
         session = BrewSession(
             user_id=uid,
             coffee_id=coffee1.id,
@@ -211,9 +211,10 @@ def _seed_analytics_scenario(db, *, username: str) -> int:
         db.add(session)
         db.flush()
 
-    # Sessions for coffee2 (Colombia/natural/medium):
-    # 2 rated sessions → satisfies HOME-01 (>=2), HOME-02 different dimension values
-    for i in range(2):
+    # 2 rated sessions for coffee2 (Colombia/natural/medium) via bag2 (8-14 days fresh)
+    # Satisfies HOME-01 (>=2), HOME-02 different origin/process/roast_level,
+    # HOME-04 "8-14 days" bucket
+    for _ in range(2):
         session = BrewSession(
             user_id=uid,
             coffee_id=coffee2.id,
@@ -223,18 +224,18 @@ def _seed_analytics_scenario(db, *, username: str) -> int:
             dose_grams_actual=Decimal("15"),
             water_grams_actual=Decimal("250"),
             rating=Decimal("4.0"),
-            flavor_note_ids_observed=fn_ids_all,  # includes all 6 flavor notes
+            flavor_note_ids_observed=fn_ids_all,  # all 6 notes (for HOME-03 coverage)
             brewed_at=brew_ts,
         )
         db.add(session)
         db.flush()
 
     db.commit()
-    return uid
+    return uid, coffee3.id, archived_coffee_id
 
 
 def _seed_cold_start(db, *, username: str) -> int:
-    """Seed a below-gate user: <3 sessions OR <5 distinct flavor notes.
+    """Seed a below-gate user: 1 session, 2 distinct notes (gate requires >=3 AND >=5).
 
     Returns the user id.
     """
@@ -256,7 +257,7 @@ def _seed_cold_start(db, *, username: str) -> int:
     db.add(coffee)
     db.flush()
 
-    # Only 2 sessions with 2 distinct notes — gate requires >=3 AND >=5
+    # 1 session, 2 distinct notes — below both thresholds (3 sessions AND 5 notes)
     session = BrewSession(
         user_id=uid,
         coffee_id=coffee.id,
@@ -276,7 +277,7 @@ def _seed_cold_start(db, *, username: str) -> int:
 def _seed_all_unrated(db, *, username: str) -> int:
     """Seed a user who clears the gate (>=3 sessions, >=5 notes) but has NO rated sessions.
 
-    Returns the user id.
+    Returns the user id. Proves D-05: the all-unrated edge case.
     """
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
@@ -297,7 +298,7 @@ def _seed_all_unrated(db, *, username: str) -> int:
     db.add(coffee)
     db.flush()
 
-    # Create 5 distinct flavor notes
+    # 5 distinct flavor notes to clear the note-count gate
     fn_ids = []
     for i in range(5):
         fn = FlavorNote(name=f"analyticstest-fn-unrated-{i}-{username}", category="fruit")
@@ -305,15 +306,15 @@ def _seed_all_unrated(db, *, username: str) -> int:
         db.flush()
         fn_ids.append(fn.id)
 
-    # 3 sessions, all unrated — gate passes on count+notes but all rating=None
+    # 3 sessions, all rating=None — gate passes on count+notes, but no rated rows
     brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc)
-    for i in range(3):
+    for _ in range(3):
         session = BrewSession(
             user_id=uid,
             coffee_id=coffee.id,
             dose_grams_actual=Decimal("15"),
             water_grams_actual=Decimal("250"),
-            rating=None,  # explicitly unrated
+            rating=None,
             flavor_note_ids_observed=fn_ids,
             brewed_at=brew_ts,
         )
@@ -341,9 +342,16 @@ def clean_analytics() -> Iterator[None]:
             # brew_sessions references users, coffees, bags, equipment, recipes
             conn.execute(text("DELETE FROM brew_sessions"))
             conn.execute(text("DELETE FROM brew_drafts"))
-            conn.execute(text("DELETE FROM bags WHERE coffee_id IN (SELECT id FROM coffees WHERE name LIKE 'analyticstest-%')"))
+            conn.execute(
+                text(
+                    "DELETE FROM bags WHERE coffee_id IN "
+                    "(SELECT id FROM coffees WHERE name LIKE 'analyticstest-%')"
+                )
+            )
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'analyticstest-%'"))
-            conn.execute(text("DELETE FROM equipment WHERE brand IN ('Hario') AND model = 'V60'"))
+            conn.execute(
+                text("DELETE FROM equipment WHERE brand = 'Hario' AND model = 'V60'")
+            )
             conn.execute(text("DELETE FROM recipes WHERE name LIKE 'analyticstest-%'"))
             conn.execute(text("DELETE FROM flavor_notes WHERE name LIKE 'analyticstest-%'"))
             conn.execute(text("DELETE FROM roasters WHERE name LIKE 'analyticstest-%'"))
@@ -361,96 +369,354 @@ def clean_analytics() -> Iterator[None]:
 
 
 # --------------------------------------------------------------------------- #
-# Test stubs — assertions filled in by Task 3                                 #
+# Tests                                                                        #
 # --------------------------------------------------------------------------- #
 
 
 def test_top_coffees(clean_analytics: None) -> None:
-    """HOME-01: top 5 coffees by avg rating, min 2 sessions."""
+    """HOME-01: top 5 coffees by avg rating, min 2 rated sessions."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-top")
+
+    with SessionLocal() as db:
+        rows = analytics.get_top_coffees(db, uid)
+
+    assert len(rows) <= 5
+    assert all(r.session_count >= 2 for r in rows)
+    # Sorted avg_rating DESC
+    ratings = [float(r.avg_rating) for r in rows]
+    assert ratings == sorted(ratings, reverse=True)
+    # coffee1 (4.5 avg) must rank above coffee2 (4.0 avg)
+    assert len(rows) >= 2
+    assert float(rows[0].avg_rating) >= float(rows[-1].avg_rating)
 
 
 def test_preference_profile(clean_analytics: None) -> None:
     """HOME-02: preference profile by origin/process/roaster/roast_level, min 2 sessions."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-profile")
+
+    with SessionLocal() as db:
+        profile = analytics.get_preference_profile(db, uid)
+
+    assert isinstance(profile, dict)
+    assert set(profile.keys()) == {"origin", "process", "roaster", "roast_level"}
+
+    for dim, rows in profile.items():
+        for row in rows:
+            assert row.session_count >= 2, (
+                f"Dimension '{dim}' has row with session_count={row.session_count} < 2"
+            )
+
+    # Roaster entries must carry the roaster name (label not None or empty)
+    roaster_rows = profile["roaster"]
+    assert len(roaster_rows) >= 1
+    for row in roaster_rows:
+        assert row.label is not None
+        assert len(row.label) > 0
 
 
 def test_flavor_descriptors(clean_analytics: None) -> None:
-    """HOME-03: top-10 flavor descriptors from 4.0+ rated sessions, min 2."""
+    """HOME-03: top-10 descriptors from 4.0+ rated sessions (observed array), min 2."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-flavors")
+
+    with SessionLocal() as db:
+        rows = analytics.get_flavor_descriptors(db, uid)
+
+    assert len(rows) <= 10
+    # All returned descriptors must meet the HAVING count>=2 floor (D-07)
+    assert all(r.session_count >= 2 for r in rows)
+    # We seeded primary notes (blueberry/jasmine/chocolate) in 4 coffee1 sessions rated 4.5
+    # and all 6 notes in 2 coffee2 sessions rated 4.0. All qualify at 4.0+ and count>=2.
+    assert len(rows) >= 3  # at least the 3 primary notes appear in >=4 sessions each
 
 
 def test_roast_freshness_buckets(clean_analytics: None) -> None:
-    """HOME-04: roast freshness buckets using bags.roast_date, min 2 rated sessions."""
+    """HOME-04: freshness buckets using bags.roast_date only, min 2 rated sessions."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-freshness")
+
+    with SessionLocal() as db:
+        rows = analytics.get_roast_freshness_buckets(db, uid)
+
+    valid_buckets = {"0-3 days", "4-7 days", "8-14 days", "15-21 days", "22+ days"}
+    for row in rows:
+        assert row.freshness_bucket in valid_buckets
+        assert row.session_count >= 2  # D-07 floor
+
+    bucket_labels = {r.freshness_bucket for r in rows}
+    # bag1 (2 days fresh, 4 sessions) → "0-3 days" bucket
+    assert "0-3 days" in bucket_labels
+    # bag2 (9 days fresh, 2 sessions) → "8-14 days" bucket
+    assert "8-14 days" in bucket_labels
 
 
 def test_sweet_spots(clean_analytics: None) -> None:
     """HOME-05: top 3 (origin x process x brewer x recipe), min 3 sessions."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-sweet")
+
+    with SessionLocal() as db:
+        rows = analytics.get_sweet_spots(db, uid)
+
+    assert len(rows) <= 3
+    assert all(r.session_count >= 3 for r in rows)
+    # Results ordered avg_rating DESC
+    if len(rows) > 1:
+        ratings = [float(r.avg_rating) for r in rows]
+        assert ratings == sorted(ratings, reverse=True)
+    # We seeded 4 Ethiopia/washed/V60/recipe sessions (avg 4.5) → must appear
+    assert len(rows) >= 1
+    assert rows[0].origin == "Ethiopia"
+    assert rows[0].process == "washed"
 
 
 def test_recent_brews(clean_analytics: None) -> None:
-    """HOME-07: last 10 sessions ordered brewed_at DESC."""
+    """HOME-07: last 10 sessions ordered brewed_at DESC; includes any rating state."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-recent")
+
+    with SessionLocal() as db:
+        rows = analytics.get_recent_brews(db, uid)
+
+    assert len(rows) <= 10
+    assert len(rows) >= 1
+    # All rows must have coffee_name (join to coffees is required)
+    assert all(r.coffee_name is not None for r in rows)
+    # Rows must be ordered brewed_at DESC (all seeded at same ts, so stable)
+    brew_times = [r.brewed_at for r in rows]
+    assert brew_times == sorted(brew_times, reverse=True)
 
 
 def test_unrated_coffees(clean_analytics: None) -> None:
-    """HOME-08: non-archived coffees this user has never brewed; excludes archived."""
+    """HOME-08: non-archived coffees the user never brewed; archived coffee EXCLUDED."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, coffee3_id, archived_coffee_id = _seed_analytics_scenario(
+            db, username="analyticstest-unrated"
+        )
+
+    with SessionLocal() as db:
+        rows = analytics.get_unrated_coffees(db, uid)
+
+    result_ids = {r.id for r in rows}
+
+    # coffee3 (never brewed, not archived) MUST appear
+    assert coffee3_id in result_ids, "coffee3 (unbrewed, active) must be in unrated coffees"
+
+    # The archived coffee must NOT appear — proves Coffee.archived==False branch (HOME-08)
+    assert archived_coffee_id not in result_ids, (
+        "archived coffee must be excluded from get_unrated_coffees (HOME-08)"
+    )
+
+    # Coffees that WERE brewed (coffee1, coffee2) must NOT appear
+    for row in rows:
+        assert "Coffee1" not in row.name, f"Brewed coffee1 appeared in unrated_coffees: {row.name}"
+        assert "Coffee2" not in row.name, f"Brewed coffee2 appeared in unrated_coffees: {row.name}"
 
 
 def test_cold_start_counts(clean_analytics: None) -> None:
     """Gate counts: sessions + distinct_notes + gate_open + needed fields."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    # Below-gate scenario
+    with SessionLocal() as db:
+        cold_uid = _seed_cold_start(db, username="analyticstest-cold")
+
+    with SessionLocal() as db:
+        counts = analytics.get_cold_start_counts(db, cold_uid)
+
+    assert set(counts.keys()) >= {"sessions", "distinct_notes", "gate_open", "sessions_needed", "notes_needed"}
+    assert counts["gate_open"] is False
+    assert counts["sessions"] == 1
+    assert counts["sessions_needed"] == 2  # needs 2 more to reach the 3 threshold
+
+    # Gate-cleared scenario
+    with SessionLocal() as db:
+        gate_uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-gate")
+
+    with SessionLocal() as db:
+        gate_counts = analytics.get_cold_start_counts(db, gate_uid)
+
+    assert gate_counts["gate_open"] is True
+    assert gate_counts["sessions"] >= 3   # 6 sessions seeded
+    assert gate_counts["distinct_notes"] >= 5  # 6 distinct notes seeded
+    assert gate_counts["sessions_needed"] == 0
+    assert gate_counts["notes_needed"] == 0
+
+    # Confirm the cold-start count INCLUDES unrated sessions (D-09 note)
+    # cold_uid's 1 session had rating=None and was still counted as sessions==1
+    # This is already verified above (counts["sessions"] == 1 for an unrated session)
+
+
+def test_all_unrated_returns_empty(clean_analytics: None) -> None:
+    """D-05: user past gate but all sessions unrated → rating-dependent cards empty."""
+    _require_postgres()
+    _require_analytics_tables()
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid = _seed_all_unrated(db, username="analyticstest-allunrated")
+
+    with SessionLocal() as db:
+        gate_counts = analytics.get_cold_start_counts(db, uid)
+        top_coffees = analytics.get_top_coffees(db, uid)
+        profile = analytics.get_preference_profile(db, uid)
+        descriptors = analytics.get_flavor_descriptors(db, uid)
+        sweet_spots = analytics.get_sweet_spots(db, uid)
+
+    # Gate is OPEN (3 sessions, 5 notes) — but all unrated
+    assert gate_counts["gate_open"] is True
+    assert gate_counts["sessions"] == 3
+
+    # Rating-dependent cards return empty (all WHERE rating IS NOT NULL → no rows)
+    assert top_coffees == []
+    assert profile["origin"] == []
+    assert profile["process"] == []
+    assert profile["roaster"] == []
+    assert profile["roast_level"] == []
+    assert descriptors == []
+    assert sweet_spots == []
 
 
 def test_signature_determinism(clean_analytics: None) -> None:
-    """compute_input_signature returns identical hash across two calls on identical state."""
+    """compute_input_signature returns identical hash on two separate calls."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
 
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-sigdet")
 
-def test_signature_excludes_free_text(clean_analytics: None) -> None:
-    """Signature changes on rating change; does NOT change on notes text change (D-08)."""
-    _require_postgres()
-    _require_analytics_tables()
-    pass
+    with SessionLocal() as db:
+        sig1 = analytics.compute_input_signature(db, uid)
+
+    with SessionLocal() as db:
+        sig2 = analytics.compute_input_signature(db, uid)
+
+    assert sig1 == sig2, "Signature must be deterministic across calls on identical DB state"
+    assert len(sig1) == 64  # SHA256 hex digest
 
 
 def test_signature_order_independent(clean_analytics: None) -> None:
-    """Signature is stable: two consecutive calls on same state produce same hash (Pitfall 5)."""
+    """Signature is stable within the same session (Pitfall 5)."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-sigord")
+
+    with SessionLocal() as db:
+        sig_a = analytics.compute_input_signature(db, uid)
+        sig_b = analytics.compute_input_signature(db, uid)
+
+    assert sig_a == sig_b, "Signature must be stable across consecutive calls in same session"
+
+
+def test_signature_excludes_free_text(clean_analytics: None) -> None:
+    """Signature unchanged by notes-text edit; changes when rating changes (D-08)."""
+    _require_postgres()
+    _require_analytics_tables()
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models.brew_session import BrewSession
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-sigtext")
+
+    with SessionLocal() as db:
+        sig_baseline = analytics.compute_input_signature(db, uid)
+
+    # Change notes text (excluded from signature per D-08)
+    with SessionLocal() as db:
+        db.execute(
+            update(BrewSession)
+            .where(BrewSession.user_id == uid)
+            .values(notes="Changed notes — excluded from signature")
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        sig_after_notes = analytics.compute_input_signature(db, uid)
+
+    assert sig_baseline == sig_after_notes, (
+        "Changing notes text must NOT change the signature (D-08 free-text exclusion)"
+    )
+
+    # Change rating (included in signature per D-08)
+    with SessionLocal() as db:
+        db.execute(
+            update(BrewSession)
+            .where(BrewSession.user_id == uid)
+            .values(rating=Decimal("3.0"))
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        sig_after_rating = analytics.compute_input_signature(db, uid)
+
+    assert sig_baseline != sig_after_rating, (
+        "Changing rating MUST change the signature (D-08: rating is an AI-input field)"
+    )
 
 
 def test_signature_zero_rated_sentinel(clean_analytics: None) -> None:
     """User with zero RATED sessions → signature == analytics._EMPTY_SIGNATURE."""
     _require_postgres()
     _require_analytics_tables()
-    pass
+    from app.db import SessionLocal
+    from app.services import analytics
 
+    with SessionLocal() as db:
+        uid = _seed_all_unrated(db, username="analyticstest-sentinel")
 
-def test_all_unrated_returns_empty(clean_analytics: None) -> None:
-    """D-05: user past gate but all sessions unrated → aggregate cards empty."""
-    _require_postgres()
-    _require_analytics_tables()
-    pass
+    with SessionLocal() as db:
+        sig = analytics.compute_input_signature(db, uid)
+
+    assert sig == analytics._EMPTY_SIGNATURE, (
+        f"User with zero rated sessions must return _EMPTY_SIGNATURE; got {sig!r}"
+    )

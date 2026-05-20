@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from decimal import Decimal
 from typing import Any
 
 import structlog
 from sqlalchemy import Date as SaDate
-from sqlalchemy import case, cast, func, literal, select
+from sqlalchemy import case, cast, func, select, text
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session, aliased
 
@@ -30,7 +29,6 @@ from app.models.bag import Bag
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
 from app.models.equipment import Equipment
-from app.models.flavor_note import FlavorNote
 from app.models.recipe import Recipe
 from app.models.roaster import Roaster
 
@@ -140,30 +138,28 @@ def get_flavor_descriptors(db: Session, user_id: int) -> list[Row]:
     """Top-10 flavor descriptors from the user's 4.0+ rated sessions, min 2 (D-07).
 
     Unnests brew_sessions.flavor_note_ids_observed (the OBSERVED array — never
-    coffees.advertised_flavor_note_ids, Pitfall 2) via func.unnest().column_valued().
-    """
-    unnested = func.unnest(BrewSession.flavor_note_ids_observed).column_valued("note_id")
+    coffees.advertised_flavor_note_ids, Pitfall 2).
 
-    stmt = (
-        select(
-            FlavorNote.id,
-            FlavorNote.name,
-            func.count().label("session_count"),
-        )
-        .select_from(BrewSession)
-        .join(unnested, literal(True))
-        .join(FlavorNote, FlavorNote.id == unnested.c.note_id)
-        .where(
-            BrewSession.user_id == user_id,
-            BrewSession.rating.is_not(None),
-            BrewSession.rating >= Decimal("4.0"),
-        )
-        .group_by(FlavorNote.id, FlavorNote.name)
-        .having(func.count() >= 2)
-        .order_by(func.count().desc())
-        .limit(10)
+    Uses raw SQL for the unnest + implicit lateral join pattern because
+    func.unnest().column_valued() produces a TableValuedColumn that SQLAlchemy's
+    ORM join layer cannot resolve (Assumption A2 from RESEARCH.md, confirmed at
+    runtime). The bound :user_id parameter prevents SQL injection (T-06-03).
+    """
+    stmt = text(
+        """
+        SELECT fn.id, fn.name, count(*) AS session_count
+        FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
+        JOIN flavor_notes fn ON fn.id = note_id
+        WHERE bs.user_id = :user_id
+          AND bs.rating IS NOT NULL
+          AND bs.rating >= 4.0
+        GROUP BY fn.id, fn.name
+        HAVING count(*) >= 2
+        ORDER BY session_count DESC
+        LIMIT 10
+        """
     )
-    return db.execute(stmt).all()
+    return db.execute(stmt, {"user_id": user_id}).all()
 
 
 # --------------------------------------------------------------------------- #
@@ -332,16 +328,19 @@ def get_cold_start_counts(db: Session, user_id: int) -> dict[str, Any]:
         or 0
     )
 
-    unnested = func.unnest(BrewSession.flavor_note_ids_observed).column_valued("note_id")
-    note_count: int = (
-        db.scalar(
-            select(func.count(func.distinct(unnested.c.note_id)))
-            .select_from(BrewSession)
-            .join(unnested, literal(True))
-            .where(BrewSession.user_id == user_id)
-        )
-        or 0
-    )
+    # Use raw SQL for unnest — column_valued() lateral join is not supported
+    # in this SQLAlchemy 2.0 + ORM context (Assumption A2, RESEARCH.md fallback).
+    note_count_row = db.execute(
+        text(
+            """
+            SELECT count(DISTINCT note_id) AS cnt
+            FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
+            WHERE bs.user_id = :user_id
+            """
+        ),
+        {"user_id": user_id},
+    ).first()
+    note_count: int = (note_count_row.cnt if note_count_row else 0) or 0
 
     return {
         "sessions": session_count,
