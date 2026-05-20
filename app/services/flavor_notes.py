@@ -59,24 +59,39 @@ def create_flavor_note(
     name: str,
     category: str,
     by_user_id: int,
+    commit: bool = True,
 ) -> FlavorNote:
     """Insert a new flavor note row and emit ``catalog.flavor_note.created``.
 
     ORM instantiate → ``add`` → ``flush`` (populate id) → ``commit``.
     The ``flush`` is what makes ``flavor_note.id`` available for the
     audit event AND for the router's HX-Trigger payload.
+
+    ``commit=False`` makes this a no-commit creation path: it only flushes so
+    the caller's open transaction can own the single commit (BREW-11 / CR-01 —
+    the CSV importer auto-creates observed notes WITHIN its one transaction, so
+    a later-row failure rolls everything back). The D-09 HTTP endpoint keeps the
+    default ``commit=True`` so its HMTX response reflects a persisted note. On
+    the no-commit path the caller is responsible for handling a UNIQUE-citext
+    ``IntegrityError`` (e.g. the importer treats a concurrent collision as
+    "link existing" after the batch); no ``DuplicateNameError`` is raised here.
     """
     flavor_note = FlavorNote(name=name, category=category)
     db.add(flavor_note)
-    try:
+    if commit:
+        try:
+            db.flush()
+            db.commit()
+        except IntegrityError as exc:
+            # UNIQUE CITEXT name collision (incl. case-variant). Roll back the
+            # poisoned session so a subsequent valid write succeeds, then
+            # re-raise the typed sentinel the router maps to a friendly inline
+            # name error.
+            db.rollback()
+            raise DuplicateNameError from exc
+    else:
+        # No-commit path: only populate the id; the caller commits once.
         db.flush()
-        db.commit()
-    except IntegrityError as exc:
-        # UNIQUE CITEXT name collision (incl. case-variant). Roll back the
-        # poisoned session so a subsequent valid write succeeds, then re-raise
-        # the typed sentinel the router maps to a friendly inline name error.
-        db.rollback()
-        raise DuplicateNameError from exc
     log.info(
         CATALOG_FLAVOR_NOTE_CREATED,
         flavor_note_id=flavor_note.id,

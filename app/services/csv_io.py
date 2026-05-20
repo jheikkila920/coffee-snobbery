@@ -54,6 +54,7 @@ from typing import Any
 import structlog
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.events import BREW_CSV_EXPORTED, BREW_CSV_IMPORTED
@@ -66,7 +67,6 @@ from app.models.recipe import Recipe
 from app.models.roaster import Roaster
 from app.schemas.brew_csv import BrewCsvRow
 from app.services.flavor_notes import create_flavor_note
-from app.services.form_validation import DuplicateNameError
 
 log = structlog.get_logger(__name__)
 
@@ -296,9 +296,15 @@ def _resolve_observed_notes(db: Session, *, names_raw: str, by_user_id: int) -> 
     """Resolve/auto-create observed flavor notes by citext name (D-09).
 
     Splits the delimited cell, links existing notes (CITEXT case-insensitive),
-    and auto-creates the rest with ``category="other"`` in the caller's open
-    transaction. A concurrent UNIQUE-citext collision is treated as
-    "link existing" (re-query) per :func:`create_flavor_note`'s contract.
+    and auto-creates the rest with ``category="other"`` WITHIN the importer's
+    single open transaction — ``create_flavor_note(..., commit=False)`` only
+    flushes, so the whole batch commits exactly once at the end and a later-row
+    failure rolls every auto-created note back too (BREW-11 / Pitfall 4 / CR-01).
+
+    A concurrent UNIQUE-citext collision is treated as "link existing": the
+    no-commit create runs inside a SAVEPOINT (``begin_nested``) so a collision
+    rolls back only that note's insert (not the batch), then the now-existing
+    row is re-queried.
     """
     ids: list[int] = []
     for part in names_raw.split(_NOTE_DELIMITER):
@@ -313,10 +319,14 @@ def _resolve_observed_notes(db: Session, *, names_raw: str, by_user_id: int) -> 
                 ids.append(existing)
             continue
         try:
-            created = create_flavor_note(db, name=name, category="other", by_user_id=by_user_id)
+            with db.begin_nested():
+                created = create_flavor_note(
+                    db, name=name, category="other", by_user_id=by_user_id, commit=False
+                )
             note_id = created.id
-        except DuplicateNameError:
-            # Concurrent insert won the race — link the now-existing row.
+        except IntegrityError:
+            # Concurrent insert won the race — the SAVEPOINT rolled back this
+            # note only; link the now-existing row (outer batch txn intact).
             note_id = (
                 db.execute(select(FlavorNote.id).where(FlavorNote.name == name)).scalars().one()
             )

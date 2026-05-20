@@ -333,6 +333,79 @@ def test_import_single_transaction(clean_csv: None, monkeypatch) -> None:
     assert rows_db == []
 
 
+def test_import_observed_note_autocreate_rolls_back_on_later_failure(
+    clean_csv: None, monkeypatch
+) -> None:
+    """CR-01: a row that auto-creates a brand-new observed note is fully rolled
+    back when a LATER row makes the batch commit fail — no brew_sessions rows AND
+    the auto-created flavor note must NOT persist (genuine single transaction)."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.flavor_note import FlavorNote
+    from app.services import brew_sessions as brew_svc
+    from app.services import csv_io
+
+    with SessionLocal() as db:
+        user = _seed_user(db, username="csvtest-rollback")
+        r1 = _seed_roaster(db, name="CSV Roaster Rollback")
+        _seed_coffee(db, name="CSV RollbackCoffee", roaster_id=r1.id)
+        db.commit()
+        uid = user.id
+
+    fieldnames = ["coffee_name", "dose_grams", "water_grams", "brewed_at", "observed_flavor_notes"]
+    rows = [
+        # Row A: carries a brand-new observed note that gets auto-created.
+        {
+            "coffee_name": "CSV RollbackCoffee",
+            "dose_grams": "15",
+            "water_grams": "250",
+            "brewed_at": "2026-05-18T08:00:00+00:00",
+            "observed_flavor_notes": "csvnote-RollbackOnly",
+        },
+        # Row B: a second valid row — present so the batch holds >1 pending insert
+        # before the forced commit failure.
+        {
+            "coffee_name": "CSV RollbackCoffee",
+            "dose_grams": "16",
+            "water_grams": "256",
+            "brewed_at": "2026-05-18T09:00:00+00:00",
+        },
+    ]
+    raw = _csv(rows, fieldnames=fieldnames)
+
+    # Force the single batch commit to fail AFTER the note was flushed in-batch.
+    # The note is only flushed (commit=False) under the fix, so the forced
+    # rollback must drop it too. The SAVEPOINT release for the auto-create runs
+    # through SessionTransaction.commit (a different method), so patching
+    # Session.commit cleanly targets only the outer batch commit.
+    from sqlalchemy.exc import OperationalError
+
+    def _boom(self):  # noqa: ANN001, ANN202
+        raise OperationalError("forced", {}, Exception("forced commit failure"))
+
+    monkeypatch.setattr("sqlalchemy.orm.Session.commit", _boom)
+
+    with SessionLocal() as db:
+        with pytest.raises(Exception):  # noqa: B017, PT011
+            csv_io.import_brews(db, raw_bytes=raw, by_user_id=uid)
+
+    monkeypatch.undo()
+
+    # Nothing committed: no sessions AND the auto-created note is gone.
+    with SessionLocal() as db:
+        rows_db = brew_svc.list_brew_sessions(db, by_user_id=uid)
+        assert rows_db == []
+        leaked = (
+            db.execute(select(FlavorNote).where(FlavorNote.name.ilike("csvnote-rollbackonly")))
+            .scalars()
+            .all()
+        )
+        assert leaked == [], "auto-created observed note must roll back with the batch (CR-01)"
+
+
 def test_import_autocreates_observed_notes(clean_csv: None) -> None:
     """Observed flavor notes that don't exist are auto-created (category='other')
     inside the same transaction (D-09) and linked to the inserted session."""
