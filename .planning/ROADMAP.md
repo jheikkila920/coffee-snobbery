@@ -176,7 +176,7 @@ Plans:
 - [x] 05-01-PLAN.md — brew_sessions + brew_drafts models, schemas, GENERATED-EY migration, events, Wave 0 tests (BREW-01, BREW-04, MOB-05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 05-02-PLAN.md — brew_sessions service (CRUD + prefill D-04/05/06/08 + usage_count) + brew_drafts service (BREW-02, BREW-06, BREW-07, BREW-09)
+- [x] 05-02-PLAN.md — brew_sessions service (CRUD + prefill D-04/05/06/08 + usage_count) + brew_drafts service (BREW-02, BREW-06, BREW-07, BREW-09)
 - [ ] 05-03-PLAN.md — csv_io service: header-driven import (resolve/dedup/single-txn) + name-based round-trip export (BREW-10, BREW-11)
 
 **Wave 3** *(blocked on Wave 2 completion)*

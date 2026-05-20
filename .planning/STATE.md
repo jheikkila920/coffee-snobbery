@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-05-20T01:50:07.900Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-05-20T02:02:46.195Z"
 last_activity: 2026-05-20
 progress:
   total_phases: 13
   completed_phases: 5
   total_plans: 49
-  completed_plans: 44
-  percent: 90
+  completed_plans: 45
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 ## Current Position
 
 Phase: 05 (brew-sessions) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-05-20
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 90%
 
 *Updated after each plan completion*
 | Phase 05 P01 | 12 | 4 tasks | 10 files |
+| Phase 05 P02 | 8 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,10 @@ Recent decisions from PROJECT.md Key Decisions table:
 - Phase 8: APScheduler `SQLAlchemyJobStore` + `misfire_grace_time=3600` + `coalesce=True` — defaults would silently miss every restart-bracketing nightly run
 - Phase 5: tds_pct stored as WHOLE PERCENT (1.35 = 1.35%); GENERATED extraction_yield_pct = (yield * tds/100.0)/dose*100 yields whole-percent EY
 - Phase 5: brew_sessions.user_id ondelete=RESTRICT (not CASCADE) — brew history never silently vanishes on a user delete; Phase 9 admin delete handles logs explicitly
+- Phase 5: brew_sessions is the first per-user service — every read/update/delete scoped by user_id; update returns None / delete returns False for non-owned ids (router maps to 404, T-05-05 IDOR)
+- Phase 5: equipment.usage_count maintained in the session write transaction — +1 per non-null FK on create, ±1 diff on edit, -1 on delete across all three FKs (Pitfall 6 no-drift)
+- Phase 5: brew prefill ordering — source (D-08 named session OR D-04 last/last-with-coffee) then D-06 default bag then D-05 recipe-wins on the four template fields then always blank rating/observed/notes on /brew/new
+- Phase 5: brew_drafts upsert via Postgres INSERT ON CONFLICT (user_id) DO UPDATE — atomic one-row-per-user, no read-then-write race on double autosave-on-blur
 
 ### Pending Todos
 
@@ -101,6 +106,6 @@ None yet. Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-20T01:50:07.876Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-05-20T02:02:46.176Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
