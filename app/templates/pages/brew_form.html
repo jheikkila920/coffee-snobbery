@@ -122,17 +122,22 @@
                   {# Star glyph — empty outline beneath, fill clipped to the
                      left half / full per fillState(i). Two <button> tap-zones
                      overlay it (left = i+0.5, right = i+1.0). #}
-                  <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-espresso-300" fill="currentColor" aria-hidden="true">
+                  {# Star color orientation (Phase 5 round-3 user preference,
+                     deviation from UI-SPEC §Tap-on-Stars which had it inverted):
+                     UNSELECTED stars are a DARK espresso outline; SELECTED
+                     (filled / half) stars are a brighter warm amber so the chosen
+                     rating reads high-contrast and lighter than the unselected. #}
+                  <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-espresso-800" fill="currentColor" aria-hidden="true">
                     <path d="M12 2.5l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.9 6.16 21l1.11-6.5-4.72-4.6 6.53-.95z"/>
                   </svg>
                   {# Filled overlay — full when fillState=='full', left-half via
                      a clipPath when 'half', hidden when 'empty'. #}
-                  <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-espresso-700 fill-espresso-700"
+                  <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-amber-400 fill-amber-400"
                        fill="currentColor" aria-hidden="true"
                        x-show="fillState({{ i }}) === 'full'">
                     <path d="M12 2.5l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.9 6.16 21l1.11-6.5-4.72-4.6 6.53-.95z"/>
                   </svg>
-                  <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-espresso-700 fill-espresso-700"
+                  <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-amber-400 fill-amber-400"
                        fill="currentColor" aria-hidden="true"
                        x-show="fillState({{ i }}) === 'half'">
                     <defs><clipPath id="half-clip-{{ i }}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>
@@ -276,18 +281,22 @@
              is a plain link home. Target is "/" — the sessions list (/brew) is a
              later plan's GET route and does not exist yet (a GET /brew would 405
              against POST /brew). --- #}
-          <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex items-center justify-end gap-3 dark:bg-espresso-950/95 dark:border-espresso-800"
+          {# Both controls are flex-1 (equal width) with identical px-4 py-2
+             (equal height), vertically centered (items-center) and each an
+             inline-flex/justify-center so the ghost anchor and the accent button
+             match exactly on mobile and desktop (Phase 5 round-3 fix). #}
+          <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex items-center gap-3 dark:bg-espresso-950/95 dark:border-espresso-800"
                style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
             {% if is_edit %}
               <a href="/"
-                 class="inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
+                 class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
             {% else %}
               <button type="button"
                       x-on:click="discardAndLeave()"
-                      class="inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</button>
+                      class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</button>
             {% endif %}
             <button type="submit"
-                    class="inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
+                    class="flex-1 inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
               {% if is_edit %}Save session{% else %}Log session{% endif %}
             </button>
           </div>
