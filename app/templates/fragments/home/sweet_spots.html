@@ -7,7 +7,7 @@
 {% if rows %}
   <ul class="space-y-2">
     {% for row in rows %}
-      <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+      <li class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
         <span class="text-base text-espresso-900 dark:text-cream-100">
           {{ row.origin }} &middot; {{ row.process }} &middot; {{ row.brewer_name }} &middot; {{ row.recipe_name }}
         </span>
@@ -16,7 +16,7 @@
           <span class="text-espresso-700" aria-hidden="true">★</span>
           <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
         </span>
-      </div>
+      </li>
     {% endfor %}
   </ul>
 {% else %}

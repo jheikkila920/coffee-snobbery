@@ -6,14 +6,14 @@
 {% if rows %}
   <ul class="space-y-2">
     {% for row in rows %}
-      <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+      <li class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
         <span class="text-base">{{ row.name }}</span>
         <span class="text-sm text-espresso-600 dark:text-cream-300 flex items-center gap-2">
           <span class="inline-flex items-center rounded-full bg-espresso-700 px-2 py-1 text-sm text-cream-50">{{ row.session_count }}</span>
           <span class="text-espresso-700" aria-hidden="true">★</span>
           <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
         </span>
-      </div>
+      </li>
     {% endfor %}
   </ul>
 {% else %}
