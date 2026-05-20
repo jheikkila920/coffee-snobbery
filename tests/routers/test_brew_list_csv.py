@@ -431,3 +431,49 @@ def test_import_requires_csrf(app, seeded_regular_user, clean_brew_list) -> None
         files={"file": ("sessions.csv", io.BytesIO(_csv_bytes(rows)), "text/csv")},
     )
     assert r.status_code == 403, f"tokenless import POST must 403, got {r.status_code}"
+
+
+def test_import_oversized_content_length_rejected(
+    app, seeded_regular_user, clean_brew_list
+) -> None:
+    """POST /brew/import with oversized Content-Length is rejected before buffering (W-01).
+
+    httpx (used by TestClient) auto-computes Content-Length from the request body.
+    To test the pre-check in isolation we override the header to an oversized value
+    while sending a small body. httpx 0.x honors explicit header overrides on
+    multipart requests, so the handler receives a large Content-Length with a tiny
+    body and must reject at the pre-check without buffering.
+
+    Limitation: if a future httpx version refuses to send a Content-Length that
+    mismatches the actual body, this test will need to be rewritten as a unit test
+    calling the handler directly with a mocked request object.
+    """
+    _require_postgres()
+    _require_p5_migration_applied()
+    _require_brew_router()
+    from app.db import SessionLocal
+    from app.services import brew_sessions as svc
+    from app.services.csv_io import MAX_CSV_BYTES
+
+    uid = seeded_regular_user["user"].id
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+
+    rows = ["AnyCoffee,,,,,,,Filtered,15,250,,,93,22,4,,x,2026-05-12T07:30"]
+    oversized_cl = str(MAX_CSV_BYTES + 1)
+
+    r = client.post(
+        "/brew/import",
+        files={"file": ("sessions.csv", io.BytesIO(_csv_bytes(rows)), "text/csv")},
+        headers={"Content-Length": oversized_cl},
+    )
+    assert r.status_code == 200, f"oversized CL must return 200 fragment, got {r.status_code}"
+    assert "too large" in r.text.lower(), (
+        f"expected 'too large' error in response, got: {r.text[:300]}"
+    )
+
+    # No rows must have been inserted — the pre-check fired before body processing.
+    with SessionLocal() as db:
+        sessions_after = svc.list_brew_sessions(db, by_user_id=uid)
+    assert len(sessions_after) == 0, (
+        f"pre-check rejection must insert 0 rows, got {len(sessions_after)}"
+    )

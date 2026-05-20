@@ -557,12 +557,31 @@ async def import_sessions(
 ) -> Response:
     """Single-transaction CSV import (BREW-11) → per-row result fragment.
 
-    Enforces a content-type allow-list + a size ceiling BEFORE buffering the
-    full body (T-05-27 DoS guard), then hands the bytes to
-    :func:`csv_io.import_brews` which resolves / dedups / validates and inserts
-    all accepted rows in ONE transaction. CSRF-enforced (not exempt, T-05-26);
-    ``user_id`` is server-set, never from the file.
+    Layer 1 — Content-Length pre-check (T-05-27 / W-01): if the ``Content-Length``
+    request header is present, all-digit, and exceeds ``MAX_CSV_BYTES``, reject
+    immediately BEFORE ``await request.form()`` buffers the body. This stops the
+    multipart body from being read at all for obviously oversized uploads.
+    Non-digit or absent values (chunked transfer-encoding has no Content-Length)
+    fall through — the post-read check below covers those cases.
+
+    Layer 2 — Post-read size check (defense-in-depth): retained as-is. Catches
+    absent or lying Content-Length headers (chunked clients, adversarial clients).
+
+    Layer 3 — Content-type allow-list: enforced on the parsed upload object.
+
+    CSRF-enforced (not exempt, T-05-26); ``user_id`` is server-set, never from
+    the file.
     """
+    cl_header = request.headers.get("content-length")
+    if (
+        cl_header is not None
+        and cl_header.isdigit()
+        and int(cl_header) > csv_io_service.MAX_CSV_BYTES
+    ):
+        return _render_import_results(
+            request, outcomes=[], error="That file is too large to import."
+        )
+
     form = await request.form()
     upload = form.get("file")
     if not isinstance(upload, UploadFile):
