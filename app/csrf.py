@@ -43,10 +43,15 @@ CSRF_COOKIE_NAME: str = "csrftoken"
 #: default for consistency with the project's conventional naming.
 CSRF_HEADER_NAME: str = "X-CSRF-Token"
 
-#: Cookies whose presence triggers CSRF enforcement. The session cookie is the
-#: only one listed: an unauthenticated POST that nevertheless carries the
-#: ``csrftoken`` cookie (always present after the first safe GET) still gets
-#: checked because the double-submit pattern remains intact.
+#: Cookies whose presence triggers CSRF enforcement. ``starlette-csrf`` checks
+#: CSRF only when one of these cookies is present on the request, so enforcement
+#: is scoped to requests carrying the ``session_id`` cookie — i.e. authenticated
+#: sessions. Unauthenticated POSTs to ``/login`` and ``/setup`` carry no
+#: ``session_id`` cookie and are therefore intentionally NOT CSRF-enforced. This
+#: is a deliberate design choice: ``sensitive_cookies`` scopes enforcement to
+#: authenticated sessions. The residual login-CSRF exposure is an accepted,
+#: low-impact exception for this household-scale threat model (no public
+#: registration; admin-provisioned users only).
 CSRF_SENSITIVE_COOKIES: set[str] = {"session_id"}
 
 #: URL patterns exempt from the CSRF check. CSP violation reports are POSTed by
