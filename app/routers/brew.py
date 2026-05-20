@@ -467,6 +467,23 @@ async def save_draft(
     return Response(status_code=204)
 
 
+@router.post("/draft/clear")
+def clear_draft(
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Discard the per-user brew draft on demand (UI-SPEC §Draft Persistence).
+
+    The "Discard changes" / "Discard" affordance abandons the in-progress
+    ``/brew/new`` form: brew-draft.js wipes the namespaced ``localStorage`` key
+    and POSTs here to delete the server backstop draft so a later open does not
+    restore stale content (BREW-07 localStorage-primary / server-fallback).
+    CSRF-enforced (never exempt); per-user keyed (T-05-08). Silent ``204``.
+    """
+    brew_drafts_service.clear_draft(db, by_user_id=user.id)
+    return Response(status_code=204)
+
+
 @router.post("", response_class=HTMLResponse)
 async def create_brew(
     request: Request,
@@ -561,6 +578,16 @@ def edit_brew_form(
     )
     context["disclosure_open"] = (
         session.yield_grams_actual is not None or session.tds_pct is not None
+    )
+    # Pre-hydration fallback for the read-only Extraction-yield line: the stored
+    # GENERATED column (None when no yield/tds → template renders the em dash).
+    # The brewRatio Alpine scope recomputes the same value live from
+    # dose+yield+tds on hydration; passing it here avoids a flash of "—" before
+    # Alpine boots. NEVER an input, never submitted (T-05-23).
+    context["extraction_yield_pct"] = (
+        _num_str(session.extraction_yield_pct)
+        if session.extraction_yield_pct is not None
+        else None
     )
     return templates.TemplateResponse(request=request, name="pages/brew_form.html", context=context)
 

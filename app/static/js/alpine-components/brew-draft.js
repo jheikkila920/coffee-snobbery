@@ -172,11 +172,24 @@ document.addEventListener('alpine:init', () => {
       if (pill) pill.remove();
     },
 
-    // Discard the restored draft and start blank (UI-SPEC §Draft Persistence).
+    // Discard the restored draft and start blank, staying on /brew/new
+    // (UI-SPEC §Draft Persistence — the inline restore-notice "Discard").
     discard() {
       this.clearDraft();
+      this._clearServerDraft();
       if (this._form && typeof this._form.reset === 'function') this._form.reset();
       this.restored = false;
+    },
+
+    // Abandon the in-progress form entirely and navigate away (the sticky-bar
+    // "Discard changes" on /brew/new). Wipes localStorage + the server backstop,
+    // then leaves the page. The sessions list (/brew) is a later plan's route, so
+    // we navigate home ("/"). The localStorage clear is synchronous and
+    // authoritative for BREW-07 reconciliation; the server clear is best-effort.
+    discardAndLeave() {
+      this.clearDraft();
+      this._clearServerDraft();
+      window.location.assign('/');
     },
 
     clearDraft() {
@@ -184,6 +197,18 @@ document.addEventListener('alpine:init', () => {
         window.localStorage.removeItem(this.storageKey);
       } catch (_err) {
         /* nothing to do */
+      }
+    },
+
+    // Delete the server backstop draft (POST /brew/draft/clear). Routed through
+    // htmx.ajax so the global htmx:configRequest listener attaches X-CSRF-Token
+    // (T-05-21) — no raw fetch, no hand-set header. Best-effort: localStorage is
+    // the canonical reconciliation source.
+    _clearServerDraft() {
+      try {
+        htmx.ajax('POST', '/brew/draft/clear', { swap: 'none' });
+      } catch (_err) {
+        /* network hiccup — localStorage clear already happened. */
       }
     },
   }));
