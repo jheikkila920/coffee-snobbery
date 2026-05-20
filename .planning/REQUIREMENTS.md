@@ -70,8 +70,8 @@
 - [x] **BREW-07**: Server-side draft autosave on field blur (POST `/brew/draft`); restore from server when localStorage is empty; defends against iOS Safari 7-day ITP wipe
 - [ ] **BREW-08**: Sticky Save/Cancel buttons at bottom of long forms on mobile
 - [x] **BREW-09**: Quick re-log action on every session row: opens a new session form prefilled with that session's coffee, bag (if active), recipe, brewer, grinder, kettle, water type, dose, water, temp, grind setting; leaves rating, observed flavor notes, notes blank
-- [ ] **BREW-10**: Sessions list view per user with filters: coffee, brewer, rating range, date range; CSV export
-- [ ] **BREW-11**: CSV import of brew sessions (limited scope: refuse rows where coffee or bag not in catalog; force conscious add)
+- [x] **BREW-10**: Sessions list view per user with filters: coffee, brewer, rating range, date range; CSV export
+- [x] **BREW-11**: CSV import of brew sessions (limited scope: refuse rows where coffee or bag not in catalog; force conscious add)
 - [ ] **BREW-12**: Guided Brew Mode full-screen interface: large countdown timer, current step highlighted with cumulative water target and elapsed time, audio chime + vibration at step transitions (configurable), pause/resume, cancel-without-logging, "Done brewing" returns to session form with timer data + recipe + selected coffee prefilled
 - [ ] **BREW-13**: Guided Brew Mode requests `wakeLock`; re-acquires on `visibilitychange`; iOS Safari fallback via silent audio loop or NoSleep.js; visible indicator when wake lock is held
 
@@ -248,8 +248,8 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | BREW-07 | Phase 5 — Brew Sessions | Complete |
 | BREW-08 | Phase 5 — Brew Sessions | Pending |
 | BREW-09 | Phase 5 — Brew Sessions | Complete |
-| BREW-10 | Phase 5 — Brew Sessions | Pending |
-| BREW-11 | Phase 5 — Brew Sessions | Pending |
+| BREW-10 | Phase 5 — Brew Sessions | Complete |
+| BREW-11 | Phase 5 — Brew Sessions | Complete |
 | BREW-12 | Phase 11 — PWA + Mobile Polish | Pending |
 | BREW-13 | Phase 11 — PWA + Mobile Polish | Pending |
 | HOME-01 | Phase 6 — Analytics (Home Page) | Pending |

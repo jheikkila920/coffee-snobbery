@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: milestone
 status: executing
 stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-05-20T02:02:46.195Z"
+last_updated: "2026-05-20T02:10:20.007Z"
 last_activity: 2026-05-20
 progress:
   total_phases: 13
   completed_phases: 5
   total_plans: 49
-  completed_plans: 45
-  percent: 92
+  completed_plans: 46
+  percent: 94
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 ## Current Position
 
 Phase: 05 (brew-sessions) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-05-20
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [█████████░] 92%
 *Updated after each plan completion*
 | Phase 05 P01 | 12 | 4 tasks | 10 files |
 | Phase 05 P02 | 8 | 3 tasks | 5 files |
+| Phase 05 P03 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions from PROJECT.md Key Decisions table:
 - Phase 5: equipment.usage_count maintained in the session write transaction — +1 per non-null FK on create, ±1 diff on edit, -1 on delete across all three FKs (Pitfall 6 no-drift)
 - Phase 5: brew prefill ordering — source (D-08 named session OR D-04 last/last-with-coffee) then D-06 default bag then D-05 recipe-wins on the four template fields then always blank rating/observed/notes on /brew/new
 - Phase 5: brew_drafts upsert via Postgres INSERT ON CONFLICT (user_id) DO UPDATE — atomic one-row-per-user, no read-then-write race on double autosave-on-blur
+- [Phase ?]: Phase 5: brew CSV import is header-driven (csv.DictReader + case-insensitive alias map); Snobbery-native EXPORT_FIELDNAMES is the authoritative round-trip format, Beanconqueror aliases shipped TODO-confirm pending a real export file
+- [Phase ?]: Phase 5: CSV formula injection (T-05-13) mitigated by prefixing leading = + - @ with a single quote on free-text export columns only; numeric columns untouched
+- [Phase ?]: Phase 5: CSV import single-transaction (BREW-11) — refused/skipped rows never enter the txn, all accepted rows + D-09 notes commit once, DB error rolls back the whole batch (no partial commit)
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet. Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-20T02:02:46.176Z
+Last session: 2026-05-20T02:09:59.498Z
 Stopped at: Completed 05-02-PLAN.md
 Resume file: None
