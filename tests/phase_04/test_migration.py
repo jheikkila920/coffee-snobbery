@@ -90,8 +90,12 @@ def test_alembic_downgrade_p4_then_upgrade() -> None:
     _ensure_head()
     cfg = _alembic_config()
 
-    # Downgrade one step — reverts p4_shared_catalog.
-    command.downgrade(cfg, "-1")
+    # Downgrade to the revision BELOW p4 (p3_api_credentials), which reverts
+    # p4_shared_catalog (and any newer revision such as p5_brew_sessions) so
+    # the coffees-dropped assertion holds regardless of the current head.
+    # Targeting an explicit revision (not a moving "-1") keeps this test stable
+    # as later phases add migrations on top of p4.
+    command.downgrade(cfg, "p3_api_credentials")
 
     # coffees must no longer exist; to_regclass returns NULL for an
     # unknown relation rather than raising.
