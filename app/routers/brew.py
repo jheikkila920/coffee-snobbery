@@ -496,7 +496,9 @@ def list_sessions(
 
     if request.headers.get("HX-Request") == "true":
         return templates.TemplateResponse(
-            request=request, name="fragments/session_list.html", context=list_context
+            request=request,
+            name="fragments/session_list.html",
+            context={**list_context, "is_fragment": True},
         )
 
     # Full-page render also needs the filter-bar dropdown sources.
