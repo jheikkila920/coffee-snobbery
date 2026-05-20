@@ -25,7 +25,6 @@ from decimal import Decimal
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Skip gates (mirror tests/phase_04/test_services_recipes.py)                 #
 # --------------------------------------------------------------------------- #
@@ -108,8 +107,12 @@ def clean_brew() -> Iterator[None]:
             conn.execute(text("DELETE FROM brew_drafts"))
             conn.execute(text("DELETE FROM equipment WHERE model = 'M'"))
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'Test Coffee%'"))
-            conn.execute(text("DELETE FROM sessions WHERE user_id IN "
-                              "(SELECT id FROM users WHERE username LIKE 'brewtest-%')"))
+            conn.execute(
+                text(
+                    "DELETE FROM sessions WHERE user_id IN "
+                    "(SELECT id FROM users WHERE username LIKE 'brewtest-%')"
+                )
+            )
             conn.execute(text("DELETE FROM users WHERE username LIKE 'brewtest-%'"))
 
     _reset()
@@ -361,9 +364,7 @@ def test_list_user_scoped(clean_brew: None) -> None:
     with SessionLocal() as db:
         assert svc.get_brew_session(db, session_id=a_sid, by_user_id=b_id) is None
     with SessionLocal() as db:
-        assert (
-            svc.update_brew_session(db, session_id=a_sid, by_user_id=b_id, notes="hax") is None
-        )
+        assert svc.update_brew_session(db, session_id=a_sid, by_user_id=b_id, notes="hax") is None
     with SessionLocal() as db:
         assert svc.delete_brew_session(db, session_id=a_sid, by_user_id=b_id) is False
 
