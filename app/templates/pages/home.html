@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block page_title %}Home{% endblock %}
+{% block content %}
+  {# Analytics home page (Phase 6). Eager render: recent brews (D-01, HOME-07) +
+     cold-start gate check. Above-gate users see five staggered lazy-load aggregate
+     cards (HOME-09). The Phase 7 AI-card slot is a Jinja comment — not a live trigger.
+     All values autoescaped. CSP-clean. #}
+  <main class="mx-auto max-w-6xl px-6 py-12">
+    <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <h1 class="text-2xl font-semibold">Home</h1>
+      <a href="/brew/new"
+         class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+        Log session
+      </a>
+    </header>
+
+    <div class="space-y-8">
+
+      {# Recent brews — always visible regardless of gate (D-01, HOME-07).
+         Eager inline include: no HTMX request needed for first paint. #}
+      <section aria-labelledby="recent-brews-heading"
+               class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+        <h2 id="recent-brews-heading" class="text-xl font-semibold mb-4">Recent brews</h2>
+        {% include "fragments/home/recent_brews.html" %}
+      </section>
+
+      {# Unrated coffees — lazy loaded (load delay:150ms) but always visible (D-01, HOME-08). #}
+      <section aria-labelledby="unrated-heading"
+               class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+        <h2 id="unrated-heading" class="text-xl font-semibold mb-4">Not tried yet</h2>
+        <div hx-get="/home/cards/unrated-coffees"
+             hx-trigger="load delay:150ms"
+             hx-swap="innerHTML">
+          <div class="animate-pulse space-y-2">
+            <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+            <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+          </div>
+        </div>
+      </section>
+
+      {# Cold-start gate: below-gate users see the progress meter; above-gate users
+         see the five staggered aggregate cards (HOME-09) + the Phase 7 AI-card slot. #}
+      {% if not gate.gate_open %}
+        {% include "fragments/home/_cold_start.html" %}
+      {% else %}
+
+        {# Five aggregate-card lazy slots — staggered 100/200/300/400/500ms (HOME-09).
+           Plan 06-03 implements the fragment endpoints these reference. #}
+
+        <section aria-labelledby="top-coffees-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="top-coffees-heading" class="text-xl font-semibold mb-4">Top Coffees</h2>
+          <div hx-get="/home/cards/top-coffees"
+               hx-trigger="load delay:100ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="preference-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="preference-heading" class="text-xl font-semibold mb-4">Preference Profile</h2>
+          <div hx-get="/home/cards/preference-profile"
+               hx-trigger="load delay:200ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="flavor-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="flavor-heading" class="text-xl font-semibold mb-4">Top Flavor Descriptors</h2>
+          <div hx-get="/home/cards/flavor-descriptors"
+               hx-trigger="load delay:300ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="freshness-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="freshness-heading" class="text-xl font-semibold mb-4">Roast Freshness</h2>
+          <div hx-get="/home/cards/roast-freshness"
+               hx-trigger="load delay:400ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="sweet-spots-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="sweet-spots-heading" class="text-xl font-semibold mb-4">Sweet Spots</h2>
+          <div hx-get="/home/cards/sweet-spots"
+               hx-trigger="load delay:500ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        {# Phase 7: AI recommendation card slot — will use hx-get="/home/cards/ai-recommendation" hx-trigger="revealed" hx-swap="innerHTML". HOME-06. Do not implement here. #}
+
+      {% endif %}
+
+    </div>
+  </main>
+{% endblock %}
