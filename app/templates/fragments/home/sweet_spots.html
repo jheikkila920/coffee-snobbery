@@ -1,0 +1,27 @@
+{# Sweet-spots card body (HOME-05).
+   Context: rows — list of Row(origin, process, brewer_name, recipe_name, avg_rating, session_count)
+            from analytics.get_sweet_spots(); all_unrated — bool (D-05).
+   Shows top 3 combos. Ends after the SQL-derived list — Phase 7 owns the recommendation prose (HOME-06).
+   All values autoescaped. CSP-clean. #}
+
+{% if rows %}
+  <ul class="space-y-2">
+    {% for row in rows %}
+      <div class="flex items-baseline justify-between gap-4 border-b border-espresso-100 dark:border-espresso-800 py-2">
+        <span class="text-base text-espresso-900 dark:text-cream-100">
+          {{ row.origin }} &middot; {{ row.process }} &middot; {{ row.brewer_name }} &middot; {{ row.recipe_name }}
+        </span>
+        <span class="text-sm text-espresso-600 dark:text-cream-300 flex items-center gap-2 shrink-0">
+          <span class="inline-flex items-center rounded-full bg-espresso-700 px-2 py-1 text-sm text-cream-50">{{ row.session_count }}</span>
+          <span class="text-espresso-700" aria-hidden="true">★</span>
+          <span class="tabular-nums font-semibold">{{ "%.2f"|format(row.avg_rating | float) }}</span>
+        </span>
+      </div>
+    {% endfor %}
+  </ul>
+{% else %}
+  {% set hint_type = "unrated" if all_unrated else "sparse" %}
+  {% set sparse_text = "Not enough sessions per combination yet (need 3 per match)." %}
+  {% set unrated_text = "Rate some brews to find your sweet spots." %}
+  {% include "fragments/home/_card_sparse.html" %}
+{% endif %}

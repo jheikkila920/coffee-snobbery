@@ -276,3 +276,278 @@ def test_ai_slot_placeholder_present(app: Any, seeded_regular_user: dict, clean_
     assert "Phase 7: AI recommendation card slot" in source, (
         "Phase 7 AI slot placeholder comment missing from home.html"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Plan 06-03 tests — aggregate-card fragment endpoints                        #
+# --------------------------------------------------------------------------- #
+
+# Routes under test
+_AGGREGATE_ROUTES = [
+    "/home/cards/top-coffees",
+    "/home/cards/preference-profile",
+    "/home/cards/flavor-descriptors",
+    "/home/cards/roast-freshness",
+    "/home/cards/sweet-spots",
+]
+
+
+def _make_authed_client_for_user(app: Any, user_id: int) -> Any:
+    """Build a TestClient authed as an arbitrary seeded user (by id).
+
+    Reuses the session-creation pattern from ``test_ai_slot_placeholder_present``.
+    """
+    import asyncio
+
+    from app.main import async_session_factory
+    from app.services.sessions import regenerate_session
+    from app.signing import sign_session_id
+
+    async def _make_session() -> str:
+        async with async_session_factory() as db:
+            session_id = await regenerate_session(db, None, user_id)
+            return sign_session_id(session_id)
+
+    signed = asyncio.run(_make_session())
+    return _authed_client(app, signed)
+
+
+def _seed_gate_cleared_no_sweet_spots(db: Any, *, username: str) -> int:
+    """Seed a gate-cleared user whose rated sessions span different combos (< 3 per combo).
+
+    Returns user_id.  The user has 3 rated sessions on 3 different coffees, so no
+    (origin × process × brewer × recipe) combination reaches the min-3 threshold.
+    The gate is open (3 sessions, 5 distinct notes).
+    """
+    from decimal import Decimal
+    from datetime import datetime, timezone
+
+    from app.models.brew_session import BrewSession
+    from app.models.coffee import Coffee
+    from app.models.equipment import Equipment
+    from app.models.flavor_note import FlavorNote
+    from app.models.recipe import Recipe
+    from app.models.user import User
+
+    user = User(
+        username=username,
+        password_hash="x" * 16,
+        is_admin=False,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    uid = user.id
+
+    # Create 5 flavor notes so the gate clears
+    fn_ids = []
+    for i in range(5):
+        fn = FlavorNote(name=f"analyticstest-fn-sparse-{i}-{username}", category="fruit")
+        db.add(fn)
+        db.flush()
+        fn_ids.append(fn.id)
+
+    brewer = Equipment(type="brewer", brand="Hario", model="V60")
+    db.add(brewer)
+    db.flush()
+
+    recipe = Recipe(
+        name=f"analyticstest-Recipe-sparse-{username}",
+        dose_grams=15,
+        water_grams=250,
+        water_temp_c=93,
+        grind_setting="22",
+    )
+    db.add(recipe)
+    db.flush()
+
+    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc)
+
+    # 3 sessions on 3 different coffees (different origins) — no combo reaches min-3
+    for i, origin in enumerate(["Ethiopia", "Colombia", "Kenya"]):
+        coffee = Coffee(
+            name=f"analyticstest-SparseCoffee{i}-{username}",
+            origin=origin,
+            process="washed",
+            roast_level="light",
+        )
+        db.add(coffee)
+        db.flush()
+
+        session = BrewSession(
+            user_id=uid,
+            coffee_id=coffee.id,
+            brewer_id=brewer.id,
+            recipe_id=recipe.id,
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            rating=Decimal("4.0"),
+            flavor_note_ids_observed=fn_ids,
+            brewed_at=brew_ts,
+        )
+        db.add(session)
+        db.flush()
+
+    db.commit()
+    return uid
+
+
+# --- Fragment header tests ---------------------------------------------------
+
+
+def test_top_coffees_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/top-coffees returns 200 with no-store + Vary:HX-Request."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/home/cards/top-coffees", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("cache-control", "")
+    assert "HX-Request" in resp.headers.get("vary", "")
+
+
+def test_preference_profile_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/preference-profile returns 200 with cache headers."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/home/cards/preference-profile", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("cache-control", "")
+    assert "HX-Request" in resp.headers.get("vary", "")
+
+
+def test_flavor_descriptors_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/flavor-descriptors returns 200 with cache headers."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/home/cards/flavor-descriptors", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("cache-control", "")
+    assert "HX-Request" in resp.headers.get("vary", "")
+
+
+def test_roast_freshness_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/roast-freshness returns 200 with cache headers."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/home/cards/roast-freshness", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("cache-control", "")
+    assert "HX-Request" in resp.headers.get("vary", "")
+
+
+def test_sweet_spots_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/sweet-spots returns 200 with cache headers."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/home/cards/sweet-spots", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("cache-control", "")
+    assert "HX-Request" in resp.headers.get("vary", "")
+
+
+# --- Auth gate tests ---------------------------------------------------------
+
+
+def test_top_coffees_requires_auth(app: Any, clean_home_router: None) -> None:
+    """GET /home/cards/top-coffees without session returns 401 (T-06-08)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    resp = client.get("/home/cards/top-coffees", follow_redirects=False)
+    assert resp.status_code == 401
+
+
+def test_sweet_spots_requires_auth(app: Any, clean_home_router: None) -> None:
+    """GET /home/cards/sweet-spots without session returns 401 (T-06-08)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    resp = client.get("/home/cards/sweet-spots", follow_redirects=False)
+    assert resp.status_code == 401
+
+
+# --- Sparse hint test --------------------------------------------------------
+
+
+def test_sweet_spots_sparse_hint(app: Any, clean_home_router: None) -> None:
+    """Gate-cleared user with no qualifying combo sees the sparse hint text (D-04)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        uid = _seed_gate_cleared_no_sweet_spots(
+            db, username="hometest-sparse-sweet-spots"
+        )
+
+    client = _make_authed_client_for_user(app, uid)
+    resp = client.get("/home/cards/sweet-spots", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "Not enough sessions per combination yet (need 3 per match)." in resp.text
+
+
+# --- All-unrated nudge test (D-05) ------------------------------------------
+
+
+def test_top_coffees_all_unrated_nudge(app: Any, clean_home_router: None) -> None:
+    """Gate-cleared user with zero rated sessions sees the D-05 nudge (T-06-08)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from tests.services.test_analytics import _seed_all_unrated
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        uid = _seed_all_unrated(db, username="hometest-all-unrated-top")
+
+    client = _make_authed_client_for_user(app, uid)
+    resp = client.get("/home/cards/top-coffees", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "Rate some brews to see your top coffees." in resp.text
+
+
+# --- AI placeholder scope guard (HOME-06) ------------------------------------
+
+
+def test_sweet_spots_no_ai_placeholder(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/sweet-spots contains no AI coming-soon placeholder (T-06-11)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/home/cards/sweet-spots", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    body = resp.text
+    # The sweet-spots card must not render any AI prose placeholder
+    assert "coming soon" not in body.lower()
+    assert "ai insight" not in body.lower()
+    assert "recommendation" not in body.lower()

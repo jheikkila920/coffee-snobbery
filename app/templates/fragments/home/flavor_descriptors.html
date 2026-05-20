@@ -1,0 +1,21 @@
+{# Flavor-descriptors card body (HOME-03).
+   Context: rows — list of Row(id, name, session_count) from analytics.get_flavor_descriptors();
+            all_unrated — bool (D-05).
+   Renders descriptor names as pills with session counts.
+   All values autoescaped. CSP-clean. #}
+
+{% if rows %}
+  <div class="flex flex-wrap gap-2">
+    {% for row in rows %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-espresso-700 px-2 py-1 text-sm text-cream-50">
+        {{ row.name }}
+        <span class="tabular-nums text-cream-200">&times;{{ row.session_count }}</span>
+      </span>
+    {% endfor %}
+  </div>
+{% else %}
+  {% set hint_type = "unrated" if all_unrated else "sparse" %}
+  {% set sparse_text = "No flavor notes in 4.0+ rated sessions yet." %}
+  {% set unrated_text = "Rate some brews 4.0+ and add observed flavor notes to see top descriptors." %}
+  {% include "fragments/home/_card_sparse.html" %}
+{% endif %}
