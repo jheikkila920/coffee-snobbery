@@ -1,18 +1,18 @@
-"""SEC-05 + D-04: forbidden patterns in ``app/templates/pages/`` templates.
+"""SEC-05 + D-04: forbidden patterns in ``app/templates/`` (pages + fragments).
 
 Source of truth: ``.planning/phases/01-middleware/01-RESEARCH.md`` §18.5 and
 ``.planning/phases/01-middleware/01-CONTEXT.md`` §"Specific Ideas". Decisions
 covered:
 
 - **SEC-05 (Jinja2 autoescape + |safe ban):** ``|safe`` is forbidden under
-  ``app/templates/pages/``. Autoescape stays ON globally; if a template
-  ever needs to render trusted HTML, it does so via a typed component, not
-  via the |safe filter.
+  ``app/templates/``. Autoescape stays ON globally; if a template ever needs
+  to render trusted HTML, it does so via a typed component, not via the
+  |safe filter.
 - **D-04 (ban hx-on:* inline handlers):** HTMX's ``hx-on:click="..."``
   attribute compiles its argument with ``new Function()`` and requires CSP
   ``'unsafe-eval'``. We commit to Alpine CSP build + nonce-only scripts, so
-  ``hx-on:`` MUST NOT appear in ``app/templates/pages/``. JS behavior lives
-  in ``app/static/js/htmx-listeners.js`` (event delegation via
+  ``hx-on:`` MUST NOT appear anywhere under ``app/templates/``. JS behavior
+  lives in ``app/static/js/htmx-listeners.js`` (event delegation via
   ``htmx:configRequest``, ``htmx:beforeRequest``, ``htmx:afterSwap``).
 - **D-04 supplement:** the same restriction extends to
   ``hx-vals='js:...'`` and ``hx-headers='js:...'`` — both run their argument
@@ -25,9 +25,10 @@ strip is conservative (regex, single-pass, non-greedy) — it is not a Jinja
 parser. If a future template embeds the forbidden token inside a more
 complex comment shape, the test may need a real parser.
 
-When ``app/templates/pages/`` is empty (or absent), pytest's parametrize
-collects zero cases and the test is reported as skipped, not failed. The
-test re-engages automatically the moment a real page template lands.
+When ``app/templates/`` is empty (or absent), pytest's parametrize collects
+zero cases and the test is reported as skipped, not failed. The test
+re-engages automatically the moment any template lands (W-02: widened from
+``pages/`` only to cover ``fragments/`` and any future subdirs).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from pathlib import Path
 
 import pytest
 
-PAGES_DIR = Path("app/templates/pages")
+TEMPLATES_DIR = Path("app/templates")
 
 FORBIDDEN_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
@@ -71,20 +72,18 @@ def _strip_comments(source: str) -> str:
 
 @pytest.mark.parametrize(
     "template_path",
-    list(PAGES_DIR.rglob("*.html")) if PAGES_DIR.exists() else [],
+    list(TEMPLATES_DIR.rglob("*.html")) if TEMPLATES_DIR.exists() else [],
 )
 def test_template_safety(template_path: Path) -> None:
-    """Every ``.html`` under ``app/templates/pages/`` is free of forbidden patterns.
+    """Every ``.html`` under ``app/templates/`` is free of forbidden patterns.
 
-    Parametrized over the file tree at collection time. An empty tree yields
-    zero collected cases (pytest reports the test as skipped, which is the
-    correct "no work to do" state for an unfinished UI phase).
+    Covers ``pages/``, ``fragments/``, and any future subdirs (W-02). Parametrized
+    over the file tree at collection time. An empty tree yields zero collected
+    cases (pytest reports the test as skipped, which is the correct "no work to
+    do" state for an unfinished UI phase).
     """
     raw = template_path.read_text(encoding="utf-8")
     scannable = _strip_comments(raw)
     for pattern, message in FORBIDDEN_PATTERNS:
         match = pattern.search(scannable)
-        assert not match, (
-            f"{template_path}: {message} "
-            f"(matched: {match.group(0)!r})"
-        )
+        assert not match, f"{template_path}: {message} (matched: {match.group(0)!r})"
