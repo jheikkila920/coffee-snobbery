@@ -28,19 +28,41 @@ import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import pytest
 import pytest_asyncio
 
-# Wave 0 env-var stubs. Values are syntactically valid but not real secrets;
-# the test suite does not perform encryption / decryption round-trips in Wave 0.
+# Wave 0 env-var stubs + dedicated test-database guard.
+#
+# app/config.py evaluates ``settings = Settings()`` at import and app/db.py binds
+# its engine to ``settings.DATABASE_URL``; the destructive autouse ``fresh_db``
+# fixture below issues DELETE/ALTER through that engine. In the app container
+# POSTGRES_DB and DATABASE_URL are ALREADY set to the LIVE database (e.g.
+# "snobbery"), so a plain ``setdefault`` is a no-op there — which previously let
+# the suite TRUNCATE the live DB on every in-container run. Force a sibling
+# "<db>_test" database on the SAME server BEFORE any ``from app...`` import so
+# settings, the engine, and alembic env.py all resolve the test DB.
+# ``_provision_test_db`` (below) creates + migrates it; ``fresh_db`` carries a
+# second interlock that refuses to mutate any non-"*test*" database.
 os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
-os.environ.setdefault("POSTGRES_DB", "test")
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+psycopg://test:test@localhost:5432/test",
-)
+
+_app_database_url = os.environ.get("DATABASE_URL")
+if _app_database_url:
+    _parsed_url = urlparse(_app_database_url)
+    _test_db_name = _parsed_url.path.lstrip("/") or "test"
+    if "test" not in _test_db_name.lower():
+        _test_db_name = f"{_test_db_name}_test"
+    os.environ["DATABASE_URL"] = urlunparse(_parsed_url._replace(path=f"/{_test_db_name}"))
+    os.environ["POSTGRES_DB"] = _test_db_name
+else:
+    os.environ.setdefault("POSTGRES_DB", "test")
+    os.environ.setdefault(
+        "DATABASE_URL",
+        "postgresql+psycopg://test:test@localhost:5432/test",
+    )
+
 # 64-character urlsafe string — satisfies Settings.APP_SECRET_KEY.min_length=32.
 os.environ.setdefault("APP_SECRET_KEY", "x" * 64)
 # 44-character urlsafe-base64-shaped string — valid Fernet key shape, suitable
@@ -200,6 +222,57 @@ async def async_client(app: Any) -> AsyncIterator[Any]:
         yield ac
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _provision_test_db() -> Iterator[None]:
+    """Create + migrate the dedicated "<db>_test" database once per session.
+
+    Guarantees the suite runs against an isolated test database, never the live
+    app DB. A clean no-op when Postgres is unreachable or provisioning fails —
+    DB-dependent tests then skip via their own probes rather than touching
+    production data. Runs before the function-scoped ``fresh_db`` reset.
+    """
+    if not _postgres_reachable():
+        yield
+        return
+    try:
+        import psycopg
+
+        from app.config import settings as _settings
+    except Exception:
+        yield
+        return
+
+    _parsed = urlparse(_settings.DATABASE_URL.replace("postgresql+psycopg://", "postgresql://"))
+    _test_db = _parsed.path.lstrip("/")
+    if "test" not in _test_db.lower():
+        # Refuse to CREATE/migrate against a non-test database.
+        yield
+        return
+
+    _admin_url = urlunparse(_parsed._replace(path="/postgres"))
+    try:
+        with psycopg.connect(_admin_url, autocommit=True) as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s", (_test_db,)
+            ).fetchone()
+            if exists is None:
+                conn.execute(f'CREATE DATABASE "{_test_db}"')
+    except Exception:
+        yield
+        return
+
+    try:
+        from alembic import command
+        from alembic.config import Config
+
+        command.upgrade(Config("alembic.ini"), "head")
+    except Exception:
+        # Schema not provisioned; DB-dependent tests skip on their own probes.
+        pass
+
+    yield
+
+
 @pytest.fixture(autouse=True)
 def fresh_db() -> Iterator[None]:
     """Reset ``users`` + ``app_settings.setup_completed`` before each test.
@@ -240,6 +313,21 @@ def fresh_db() -> Iterator[None]:
     # "if Postgres isn't already reachable, skip cleanly" intent without
     # adding any cost in docker (where the loopback socket is instant).
     if not _postgres_reachable():
+        yield
+        return
+
+    # Safety interlock (defense in depth): NEVER issue the destructive reset
+    # against a non-test database. Even if the env-forcing at module top is
+    # somehow bypassed, this stops the suite from wiping the live app DB.
+    try:
+        from app.config import settings as _settings
+
+        _active_db = urlparse(
+            _settings.DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
+        ).path.lstrip("/")
+    except Exception:
+        _active_db = ""
+    if "test" not in _active_db.lower():
         yield
         return
 
