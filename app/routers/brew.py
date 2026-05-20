@@ -37,14 +37,18 @@ gotcha: Starlette's int matcher would otherwise capture ``/new`` etc.):
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
+from app.config import settings
 from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
 from app.models.user import User
@@ -52,6 +56,7 @@ from app.schemas.brew_session import BrewSessionCreate, BrewSessionUpdate
 from app.services import brew_drafts as brew_drafts_service
 from app.services import brew_sessions as brew_sessions_service
 from app.services import coffees as coffees_service
+from app.services import csv_io as csv_io_service
 from app.services import equipment as equipment_service
 from app.services import recipes as recipes_service
 from app.services.form_validation import errors_by_field
@@ -346,6 +351,256 @@ def _hydrate_form_context(
 
 
 # --------------------------------------------------------------------------- #
+# Sessions list + CSV export/import (BREW-10 / BREW-11)                         #
+# (LITERAL paths declared BEFORE /{session_id} — route-order gotcha)          #
+# --------------------------------------------------------------------------- #
+
+# The six list/export filter query params, shared by GET /brew and
+# GET /brew/export so the export is exactly the currently-filtered view.
+_LIST_FILTER_KEYS = (
+    "coffee_id",
+    "brewer_id",
+    "rating_min",
+    "rating_max",
+    "date_from",
+    "date_to",
+)
+
+
+def _decimal_or_none(value: object) -> Decimal | None:
+    """Best-effort Decimal coercion; ``None`` on empty / non-numeric."""
+    if value is None or value == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _date_or_none(value: object, *, end_of_day: bool = False) -> datetime | None:
+    """Parse a ``YYYY-MM-DD`` (or ISO datetime) filter bound to tz-aware UTC.
+
+    A bare date as ``date_to`` is widened to the end of that day so an
+    inclusive ``<=`` upper bound captures the whole day's sessions.
+    """
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%d")  # noqa: DTZ007 — tz set below
+        except ValueError:
+            return None
+    if end_of_day and parsed.hour == 0 and parsed.minute == 0 and parsed.second == 0:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _parse_list_filters(qp: Any) -> dict[str, Any]:
+    """Parse the list/export query params into typed service kwargs.
+
+    Returns only the keys with a non-``None`` value so the service applies
+    each filter solely when provided. All clauses are parameterized in the
+    service ``select()`` (SQLi defense T-05-25).
+    """
+    parsed: dict[str, Any] = {
+        "coffee_id": _int_or_none(qp.get("coffee_id")),
+        "brewer_id": _int_or_none(qp.get("brewer_id")),
+        "rating_min": _decimal_or_none(qp.get("rating_min")),
+        "rating_max": _decimal_or_none(qp.get("rating_max")),
+        "date_from": _date_or_none(qp.get("date_from")),
+        "date_to": _date_or_none(qp.get("date_to"), end_of_day=True),
+    }
+    return {k: v for k, v in parsed.items() if v is not None}
+
+
+def _raw_filters(qp: Any) -> dict[str, str]:
+    """Echo the raw filter strings back to the template (selected state + chips)."""
+    return {key: (qp.get(key) or "") for key in _LIST_FILTER_KEYS}
+
+
+def _local_dt(value: datetime | None) -> datetime | None:
+    """Render a stored-UTC timestamp in ``APP_TIMEZONE`` for display."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    try:
+        return value.astimezone(ZoneInfo(settings.APP_TIMEZONE))
+    except Exception:  # noqa: BLE001 — bad tz config must not break the list
+        return value.astimezone(UTC)
+
+
+def _brew_ratio(dose: Decimal | None, water: Decimal | None) -> str:
+    """``water / dose`` to 2 dp; em dash when dose is 0/null (never NaN/Inf)."""
+    if not dose or water is None:
+        return "—"
+    try:
+        return str((Decimal(water) / Decimal(dose)).quantize(Decimal("0.01")))
+    except (InvalidOperation, ZeroDivisionError):
+        return "—"
+
+
+def _session_view_rows(db: Session, sessions: list[Any]) -> list[dict[str, object]]:
+    """Resolve each session's display fields (names, local date, ratio).
+
+    Builds id→name caches in one query per entity type (no N+1 in the
+    template), reusing the same resolution shape as the CSV exporter.
+    """
+    caches = csv_io_service._build_name_caches(db, sessions)
+    rows: list[dict[str, object]] = []
+    for s in sessions:
+        coffee_name, roaster_name = caches["coffee"].get(s.coffee_id, ("", ""))
+        rows.append(
+            {
+                "id": s.id,
+                "brewed_at_local": _local_dt(s.brewed_at),
+                "coffee_name": coffee_name or "—",
+                "roaster_name": roaster_name or "",
+                "brewer_name": caches["equipment"].get(s.brewer_id, "") if s.brewer_id else "",
+                "recipe_name": caches["recipe"].get(s.recipe_id, "") if s.recipe_id else "",
+                "ratio": _brew_ratio(s.dose_grams_actual, s.water_grams_actual),
+                "rating": s.rating,
+            }
+        )
+    return rows
+
+
+@router.get("", response_class=HTMLResponse)
+def list_sessions(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Per-user sessions list (BREW-10). Page or HTMX fragment, filtered.
+
+    Returns ONLY the authed user's sessions, newest first (T-05-24 IDOR).
+    With an ``HX-Request`` header → the ``#session-list`` fragment (filter
+    swap); otherwise the full page. ``FragmentCacheHeadersMiddleware`` adds
+    ``no-store + Vary: HX-Request`` to the fragment for free.
+    """
+    qp = request.query_params
+    service_filters = _parse_list_filters(qp)
+    sessions = brew_sessions_service.list_brew_sessions(db, by_user_id=user.id, **service_filters)
+    raw_filters = _raw_filters(qp)
+    list_context = {
+        "rows": _session_view_rows(db, sessions),
+        "filters": raw_filters,
+        "active_filter_count": sum(1 for v in raw_filters.values() if v),
+        "export_query": request.url.query,
+    }
+
+    if request.headers.get("HX-Request") == "true":
+        return templates.TemplateResponse(
+            request=request, name="fragments/session_list.html", context=list_context
+        )
+
+    # Full-page render also needs the filter-bar dropdown sources.
+    equipment = equipment_service.list_equipment(db)
+    brewers = [eq for eq in equipment if eq.type == "brewer"]
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/sessions.html",
+        context={
+            **list_context,
+            "coffees": coffees_service.list_coffees(db),
+            "brewers": brewers,
+            "equipment_name_map": _name_map(brewers),
+        },
+    )
+
+
+@router.get("/export")
+def export_sessions(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Download the currently-filtered sessions as name-resolved CSV (D-15).
+
+    Same filter query params as ``GET /brew`` so the export mirrors the
+    on-screen view. User-scoped (T-05-24); round-trip-safe + formula-injection
+    neutralized by the csv_io service.
+    """
+    service_filters = _parse_list_filters(request.query_params)
+    csv_text = csv_io_service.export_brews(db, by_user_id=user.id, **service_filters)
+    filename = f"snobbery-sessions-{datetime.now(UTC).date().isoformat()}.csv"
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/import", response_class=HTMLResponse)
+def import_form(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+) -> Response:
+    """Render the CSV import upload page (before-upload empty state)."""
+    return templates.TemplateResponse(
+        request=request, name="pages/brew_import.html", context={"results": None}
+    )
+
+
+@router.post("/import", response_class=HTMLResponse)
+async def import_sessions(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Single-transaction CSV import (BREW-11) → per-row result fragment.
+
+    Enforces a content-type allow-list + a size ceiling BEFORE buffering the
+    full body (T-05-27 DoS guard), then hands the bytes to
+    :func:`csv_io.import_brews` which resolves / dedups / validates and inserts
+    all accepted rows in ONE transaction. CSRF-enforced (not exempt, T-05-26);
+    ``user_id`` is server-set, never from the file.
+    """
+    form = await request.form()
+    upload = form.get("file")
+    if not isinstance(upload, UploadFile):
+        return _render_import_results(request, outcomes=[], error="Choose a CSV file to import.")
+
+    content_type = (upload.content_type or "").split(";")[0].strip().lower()
+    if content_type not in csv_io_service.ALLOWED_CSV_CONTENT_TYPES:
+        return _render_import_results(
+            request, outcomes=[], error="That file is not a CSV. Export a CSV and try again."
+        )
+
+    raw_bytes = await upload.read()
+    if len(raw_bytes) > csv_io_service.MAX_CSV_BYTES:
+        return _render_import_results(
+            request, outcomes=[], error="That file is too large to import."
+        )
+
+    outcomes = csv_io_service.import_brews(db, raw_bytes=raw_bytes, by_user_id=user.id)
+    return _render_import_results(request, outcomes=outcomes, error=None)
+
+
+def _render_import_results(request: Request, *, outcomes: list[Any], error: str | None) -> Response:
+    """Render the per-row import outcome fragment (or an upload error)."""
+    inserted = sum(1 for o in outcomes if o.status == "inserted")
+    skipped = sum(1 for o in outcomes if o.status == "skipped")
+    refused = sum(1 for o in outcomes if o.status == "refused")
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/csv_import_results.html",
+        context={
+            "outcomes": outcomes,
+            "inserted": inserted,
+            "skipped": skipped,
+            "refused": refused,
+            "error": error,
+        },
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Create — GET form + POST                                                     #
 # (LITERAL paths declared BEFORE /{session_id} — route-order gotcha)          #
 # --------------------------------------------------------------------------- #
@@ -585,9 +840,7 @@ def edit_brew_form(
     # dose+yield+tds on hydration; passing it here avoids a flash of "—" before
     # Alpine boots. NEVER an input, never submitted (T-05-23).
     context["extraction_yield_pct"] = (
-        _num_str(session.extraction_yield_pct)
-        if session.extraction_yield_pct is not None
-        else None
+        _num_str(session.extraction_yield_pct) if session.extraction_yield_pct is not None else None
     )
     return templates.TemplateResponse(request=request, name="pages/brew_form.html", context=context)
 
