@@ -186,7 +186,7 @@ Plans:
 - [x] 05-05-PLAN.md — four Alpine components + base.html + brew_form.html add/edit page + human-verify (BREW-02..08, MOB-05/06)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 05-06-PLAN.md — sessions list + filters + CSV export/import routes + list/import templates + human-verify (BREW-10, BREW-11, MOB-05)
+- [x] 05-06-PLAN.md — sessions list + filters + CSV export/import routes + list/import templates + human-verify (BREW-10, BREW-11, MOB-05)
 **Notes:** Carries MX-5 (LocalStorage draft namespacing `snobbery:draft:brew:<user_id>` + clear-on-logout), MX-6 (tap-on-stars not native range), HX-3 (flavor-note tag input — `hx-get` on focus, no OOB swap). **MX-1 correction:** the 16px input rule already ships in `app/static/css/tailwind.src.css @layer base` (verified Phase 0); `app/static/css/custom.css` must NOT be created — the only Phase 5 MOB-06 obligation is no input overriding font-size below 16px (the Playwright 375px assertion is deferred to Phase 12/TEST-06). Two plan-time decisions deferred to execution: Plan 01 Task 0 confirms the EY GENERATED-column unit (tds_pct whole-percent vs fraction) + `user_id` ondelete; Plan 03 confirms the literal Beanconqueror CSV headers against a real export (importer is header-driven so this needs no code change). Guided Brew Mode (BREW-12, BREW-13) is deferred to Phase 11 alongside the wake-lock fallback and full-screen mobile chrome.
 
 ### Phase 6: Analytics (Home Page)
@@ -289,7 +289,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 2. Auth | 0/TBD | Not started | - |
 | 3. Encryption + Settings | 0/TBD | Not started | - |
 | 4. Shared Catalog | 0/TBD | Not started | - |
-| 5. Brew Sessions | 5/6 | In Progress | - |
+| 5. Brew Sessions | 6/6 | Complete | 2026-05-20 |
 | 6. Analytics (Home Page) | 0/TBD | Not started | - |
 | 7. AI Services | 0/TBD | Not started | - |
 | 8. Scheduler + Backups | 0/TBD | Not started | - |

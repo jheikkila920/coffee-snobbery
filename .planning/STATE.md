@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: executing
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-05-20T15:54:58.877Z"
+status: verifying
+stopped_at: Completed 05-06-PLAN.md (sessions list + CSV import/export UI — human-verified); Phase 5 complete (6/6)
+last_updated: "2026-05-20T17:35:31.753Z"
 last_activity: 2026-05-20
 progress:
   total_phases: 13
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 49
-  completed_plans: 48
-  percent: 98
+  completed_plans: 49
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 
 ## Current Position
 
-Phase: 05 (brew-sessions) — EXECUTING
+Phase: 05 (brew-sessions) — COMPLETE (6/6 plans)
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-20
 
-Progress: [██████████] 98%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████████] 98%
 | Phase 05 P03 | 5 | 2 tasks | 2 files |
 | Phase 05 P04 | 14 | 3 tasks | 5 files |
 | Phase 05 P05 | 3 rounds | 3 tasks | 9 files |
+| Phase 05 P06 | 2 rounds | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,12 @@ Recent decisions from PROJECT.md Key Decisions table:
 - Phase 5 (P05): D-07 water type implemented as a native `<datalist>` (suggestions + free-typed Other in one field) instead of select+toggle — CSP-safe, no 5th Alpine component
 - Phase 5 (P05): added `POST /brew/draft/clear` (CSRF-enforced, 204) to `app/routers/brew.py` to back the Discard affordance — Discard wipes the namespaced localStorage key AND deletes the server backstop draft (BREW-07); cross-plan touch of the Plan-04-owned router
 - Phase 5 (P05): prefill wrapper id is `#brew-prefill-region` (the hx-target); restore notice hidden pre-hydration via inline `style="display:none"` + `x-show` (no `[x-cloak]` rule exists)
+- Phase 5 (P06): sessions-list filter panel is a native collapsed `<details>` on BOTH desktop and mobile (collapsed by default), per explicit user preference — CSP-safe, zero JS; replaces the Phase-4 always-visible bar / Alpine toggle
+- Phase 5 (P06): one `_parse_list_filters` helper feeds BOTH `GET /brew` and `GET /brew/export`, so "Export CSV" is always exactly the currently-filtered view (D-15) — no filter-logic drift between the two routes
+- Phase 5 (P06): the `hx-swap-oob` export-link sync anchor is gated by an `is_fragment` flag emitted ONLY on the HX-Request branch — keeps one persistent Export button on full-page `{% include %}` render while still syncing its href on every filter swap
+- Phase 5 (P06): import isinstance guard uses `starlette.datastructures.UploadFile` (not `fastapi.UploadFile`) — `request.form()` returns the Starlette type; the FastAPI class is a subclass so guarding on it wrongly refused valid uploads (Rule-1 bug caught under TDD)
+- Phase 5 (P06): app-wide readable anchor color pinned in `tailwind.src.css` `@layer base` (espresso-700 light / espresso-100 dark) — Preflight strips the UA anchor color; cross-cutting fix beyond this plan's files
+- Phase 5 (P06): "Discard changes" now returns to `/brew` (sessions list), not `/` (home) — a deliberate cross-plan touch of 05-05-owned `brew-draft.js` + `brew_form.html`, now that `GET /brew` exists
 
 ### Pending Todos
 
@@ -99,8 +106,9 @@ Recent decisions from PROJECT.md Key Decisions table:
 
 ### Blockers/Concerns
 
-None yet. Three plan-phase research flags carried forward:
+Three plan-phase research flags carried forward, plus one high-value defect from Phase 5:
 
+- **TEST-ISOLATION DEFECT (high value, fix next):** `tests/conftest.py` uses `os.environ.setdefault("POSTGRES_DB", "test")`, but the app container already sets `POSTGRES_DB=snobbery`, so `setdefault` is a no-op and the suite runs against the **live app DB** — its `TRUNCATE users CASCADE` fixture wipes the admin + `brew_sessions` on every in-container test run. Do NOT run pytest in-container until fixed. Being addressed as the immediate next task.
 - Phase 1: prototype Alpine CSP build to confirm `'unsafe-eval'` can be avoided
 - Phase 7: confirm citation-block projection and decide polling-vs-SSE
 - Phase 10: prototype Postgres FTS vs `pg_trgm` and pick one
@@ -120,7 +128,7 @@ None yet. Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-20T15:54:58.877Z
-Stopped at: Completed 05-05-PLAN.md (brew form UI — human-verified)
+Last session: 2026-05-20T17:34:50.151Z
+Stopped at: Completed 05-06-PLAN.md (sessions list + CSV import/export UI — human-verified). Phase 5 complete (6/6).
 Resume file: None
-Next: 05-06-PLAN.md (sessions list + filters + CSV export/import)
+Next: Fix the conftest POSTGRES_DB test-isolation defect (see Blockers), then Phase 6 (Analytics / home page) planning.
