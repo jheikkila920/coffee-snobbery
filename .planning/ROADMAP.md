@@ -279,7 +279,7 @@ Plans:
 
 **Wave 2** *(all blocked on 09-01; mutually parallel — disjoint files)*
 - [x] 09-02-PLAN.md — User CRUD (ADMIN-01): list/create/reset-password/toggle-admin/deactivate/delete with D-15 block-and-deactivate + D-16 last-admin/self-lockout guards + async session invalidation
-- [ ] 09-03-PLAN.md — API credential vault (ADMIN-02): set/update encrypted keys, model select, enable/disable, last-4 masked display (SEC-6) + per-provider Test connection probe (D-12)
+- [x] 09-03-PLAN.md — API credential vault (ADMIN-02): set/update encrypted keys, model select, enable/disable, last-4 masked display (SEC-6) + per-provider Test connection probe (D-12)
 - [ ] 09-04-PLAN.md — app_settings editor (ADMIN-03): value_type-driven inputs (D-05) + per-row inline save (D-06) + read-only system rows (D-04)
 - [ ] 09-05-PLAN.md — Backups page (ADMIN-04): list + admin-gated FileResponse download with strict path-traversal defense (D-08) + sync Run backup now (D-07)
 - [ ] 09-06-PLAN.md — System Info + API Health (ADMIN-05/06) on one /admin/system page + Run AI refresh now respect/force modes (D-13/D-14); raw-DB status reads (Pitfall 2)
