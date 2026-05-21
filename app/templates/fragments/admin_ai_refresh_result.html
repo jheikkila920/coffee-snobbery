@@ -1,0 +1,79 @@
+{# admin_ai_refresh_result.html — AI refresh result fragment (D-13/D-14).
+   Rendered by POST /admin/system/ai-refresh.
+   Context:
+     results: list[{user_id: int, status: str}]
+     force: bool — True = admin_force mode
+     tally: dict[str, int] — status -> count
+     total: int — number of eligible users processed
+   Autoescaped (Jinja global setting). No |safe filter used. #}
+<div class="rounded border border-espresso-200 bg-cream-50 p-4 dark:bg-espresso-950 dark:border-espresso-700">
+  <div class="mb-3">
+    <span class="text-sm font-semibold text-espresso-900 dark:text-cream-100">
+      {% if force %}
+        Force refresh complete
+        <span class="ml-1 text-xs font-normal text-red-600 dark:text-red-400">(admin_force — re-billed every eligible user)</span>
+      {% else %}
+        Refresh complete
+        <span class="ml-1 text-xs font-normal text-espresso-500">(respect signatures)</span>
+      {% endif %}
+    </span>
+    <span class="ml-2 text-xs text-espresso-500">{{ total }} eligible user{{ 's' if total != 1 }}</span>
+  </div>
+
+  {# Tally summary #}
+  {% if tally %}
+    <div class="flex flex-wrap gap-3 mb-3">
+      {% if tally.generated %}
+        <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          Generated: {{ tally.generated }}
+        </span>
+      {% endif %}
+      {% if tally.skipped %}
+        <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          Skipped: {{ tally.skipped }}
+        </span>
+      {% endif %}
+      {% if tally.locked %}
+        <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+          Locked: {{ tally.locked }}
+        </span>
+      {% endif %}
+      {% if tally.error %}
+        <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+          Errors: {{ tally.error }}
+        </span>
+      {% endif %}
+      {% if tally.not_configured %}
+        <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          Not configured: {{ tally.not_configured }}
+        </span>
+      {% endif %}
+      {% if tally.try_again %}
+        <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+          Try again: {{ tally.try_again }}
+        </span>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# Per-user status list #}
+  {% if results %}
+    <ul class="space-y-1 text-xs text-espresso-700 dark:text-espresso-300">
+      {% for r in results %}
+        <li class="flex items-center gap-2">
+          <span class="font-mono text-espresso-500">uid {{ r.user_id }}</span>
+          <span class="rounded px-1.5 py-0.5 font-medium
+            {% if r.status == 'generated' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+            {% elif r.status == 'skipped' %}bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400
+            {% elif r.status in ('locked', 'try_again') %}bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300
+            {% elif r.status in ('error', 'not_configured') %}bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300
+            {% else %}bg-gray-100 text-gray-600{% endif %}">
+            {{ r.status }}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-xs text-espresso-400">No eligible users found.</p>
+  {% endif %}
+</div>

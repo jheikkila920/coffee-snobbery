@@ -207,9 +207,14 @@ class TestSystemInfo:
         )
         body = resp.text
 
-        # App version — importlib.metadata.version("coffee-snobbery")
-        from importlib.metadata import version as pkg_version
-        app_version = pkg_version("coffee-snobbery")
+        # App version — either from importlib.metadata or pyproject.toml fallback.
+        # The container runs without pip install -e so we check for "0.1.0" or
+        # any version-like string (the handler reads pyproject.toml as fallback).
+        try:
+            from importlib.metadata import version as pkg_version
+            app_version = pkg_version("coffee-snobbery")
+        except Exception:
+            app_version = "0.1.0"  # pyproject.toml fallback value
         assert app_version in body, (
             f"App version '{app_version}' not found in /admin/system body"
         )
@@ -642,9 +647,9 @@ class TestTestConnection:
                 "/admin/system/test-connection/openai",
                 data={"X-CSRF-Token": client.headers.get("X-CSRF-Token", "")},
             )
-            # No SDK calls should have been made
-            assert mock.call_count == 0, (
-                f"Expected 0 SDK calls for not_configured, got {mock.call_count}"
+            # No SDK calls should have been made (respx uses .calls, not .call_count)
+            assert len(mock.calls) == 0, (
+                f"Expected 0 SDK calls for not_configured, got {len(mock.calls)}"
             )
 
         assert resp.status_code == 200

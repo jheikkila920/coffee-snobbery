@@ -1,0 +1,222 @@
+{# admin_system.html — ADMIN-05 + ADMIN-06: System Info + API Health page.
+   Extends admin_base.html; fills block admin_page_title + block admin_content.
+   Read-only display (D-11). Panels stack vertically at 375px (mobile-first).
+   Autoescaped — no |safe filter used. Long error_status strings are
+   pre-truncated in the router before reaching here. #}
+{% extends "admin_base.html" %}
+
+{% block admin_page_title %}System{% endblock %}
+
+{% block admin_content %}
+  {# ========================================================= #}
+  {# PANEL 1: System Info (ADMIN-05 / D-09)                    #}
+  {# ========================================================= #}
+  <section class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-6 dark:bg-espresso-900 dark:border-espresso-800">
+    <h2 class="text-lg font-semibold text-espresso-900 dark:text-cream-100 mb-4">System Info</h2>
+    <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+      <div class="flex flex-col">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-espresso-500 dark:text-espresso-400">App Version</dt>
+        <dd class="mt-0.5 text-sm text-espresso-900 dark:text-cream-100">{{ app_version }}</dd>
+      </div>
+
+      <div class="flex flex-col">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-espresso-500 dark:text-espresso-400">Database Version</dt>
+        <dd class="mt-0.5 text-sm text-espresso-900 dark:text-cream-100 break-all">{{ db_version }}</dd>
+      </div>
+
+      <div class="flex flex-col">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-espresso-500 dark:text-espresso-400">Active Sessions</dt>
+        <dd class="mt-0.5 text-sm text-espresso-900 dark:text-cream-100">{{ session_count }}</dd>
+      </div>
+
+      <div class="flex flex-col">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-espresso-500 dark:text-espresso-400">Photo Storage</dt>
+        <dd class="mt-0.5 text-sm text-espresso-900 dark:text-cream-100">{{ photo_size }}</dd>
+      </div>
+
+      <div class="flex flex-col">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-espresso-500 dark:text-espresso-400">Backup Storage</dt>
+        <dd class="mt-0.5 text-sm text-espresso-900 dark:text-cream-100">{{ backup_size }}</dd>
+      </div>
+
+      <div class="flex flex-col">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-espresso-500 dark:text-espresso-400">Last Backup</dt>
+        <dd class="mt-0.5 text-sm text-espresso-900 dark:text-cream-100">
+          {% if last_backup %}
+            <span class="{% if last_backup.status == 'ok' %}text-green-700 dark:text-green-400{% else %}text-red-700 dark:text-red-400{% endif %}">
+              {{ last_backup.status }}
+            </span>
+            {% if last_backup.timestamp %}
+              &mdash; {{ last_backup.timestamp }}
+            {% endif %}
+          {% else %}
+            <span class="text-espresso-400 dark:text-espresso-500">Never run</span>
+          {% endif %}
+        </dd>
+      </div>
+
+    </dl>
+  </section>
+
+  {# ========================================================= #}
+  {# PANEL 2: API Health (ADMIN-06 / D-10)                     #}
+  {# ========================================================= #}
+  <section class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-6 dark:bg-espresso-900 dark:border-espresso-800">
+    <h2 class="text-lg font-semibold text-espresso-900 dark:text-cream-100 mb-4">API Health</h2>
+
+    {# --- Last AI run summary --- #}
+    {% if last_ai_run %}
+      <div class="mb-5">
+        <h3 class="text-sm font-semibold text-espresso-700 dark:text-espresso-300 mb-2">Last Run Summary</h3>
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+          <div>
+            <dt class="text-xs text-espresso-500">Users processed</dt>
+            <dd class="text-sm font-medium text-espresso-900 dark:text-cream-100">{{ last_ai_run.users_processed }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-espresso-500">Regenerations</dt>
+            <dd class="text-sm font-medium text-espresso-900 dark:text-cream-100">{{ last_ai_run.regenerations }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-espresso-500">Skips</dt>
+            <dd class="text-sm font-medium text-espresso-900 dark:text-cream-100">{{ last_ai_run.skips }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-espresso-500">Errors</dt>
+            <dd class="text-sm font-medium {% if last_ai_run.errors %}text-red-700 dark:text-red-400{% else %}text-espresso-900 dark:text-cream-100{% endif %}">
+              {{ last_ai_run.errors }}
+            </dd>
+          </div>
+          {% if last_ai_run.tokens_input_total %}
+            <div>
+              <dt class="text-xs text-espresso-500">Input tokens</dt>
+              <dd class="text-sm font-medium text-espresso-900 dark:text-cream-100">{{ last_ai_run.tokens_input_total }}</dd>
+            </div>
+          {% endif %}
+          {% if last_ai_run.tokens_output_total %}
+            <div>
+              <dt class="text-xs text-espresso-500">Output tokens</dt>
+              <dd class="text-sm font-medium text-espresso-900 dark:text-cream-100">{{ last_ai_run.tokens_output_total }}</dd>
+            </div>
+          {% endif %}
+          {% if last_ai_run.timestamp %}
+            <div class="col-span-2">
+              <dt class="text-xs text-espresso-500">Timestamp</dt>
+              <dd class="text-sm text-espresso-900 dark:text-cream-100">{{ last_ai_run.timestamp }}</dd>
+            </div>
+          {% endif %}
+        </dl>
+      </div>
+    {% else %}
+      <p class="text-sm text-espresso-400 dark:text-espresso-500 mb-5">No AI runs recorded yet.</p>
+    {% endif %}
+
+    {# --- Per-provider health --- #}
+    {% for provider_name, pdata in per_provider.items() %}
+      <div class="mb-5 border-t border-espresso-100 dark:border-espresso-800 pt-4">
+        <h3 class="text-sm font-semibold text-espresso-700 dark:text-espresso-300 mb-2 capitalize">{{ provider_name }}</h3>
+        <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-3">
+          <div>
+            <dt class="text-xs text-espresso-500">Last success</dt>
+            <dd class="text-sm text-espresso-900 dark:text-cream-100">
+              {% if pdata.last_success %}
+                {{ pdata.last_success.model_used }} &mdash; {{ pdata.last_success.generated_at }}
+              {% else %}
+                <span class="text-espresso-400">None</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs text-espresso-500">Last error</dt>
+            <dd class="text-sm {% if pdata.last_error %}text-red-700 dark:text-red-400{% else %}text-espresso-400{% endif %}">
+              {% if pdata.last_error %}
+                {{ pdata.last_error_truncated }} &mdash; {{ pdata.last_error.generated_at }}
+              {% else %}
+                None
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+
+        {% if pdata.recent_errors %}
+          <div>
+            <p class="text-xs font-semibold text-espresso-500 mb-1">Recent errors (last {{ pdata.recent_errors | length }})</p>
+            <ul class="space-y-1">
+              {% for err in pdata.recent_errors %}
+                <li class="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950 rounded px-2 py-1">
+                  {{ err.error_status }} &mdash; {{ err.model_used }} &mdash; {{ err.generated_at }}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    {# --- Per-recommendation-type last run (ROADMAP success #5) --- #}
+    {% if per_rec_type %}
+      <div class="border-t border-espresso-100 dark:border-espresso-800 pt-4">
+        <h3 class="text-sm font-semibold text-espresso-700 dark:text-espresso-300 mb-2">Last Run by Recommendation Type</h3>
+        <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {% for rec in per_rec_type %}
+            <div>
+              <dt class="text-xs text-espresso-500 capitalize">{{ rec.rec_type }}</dt>
+              <dd class="text-sm text-espresso-900 dark:text-cream-100">
+                {{ rec.last_run }}
+                {% if rec.last_status %}
+                  &mdash; <span class="text-red-700 dark:text-red-400">{{ rec.last_status }}</span>
+                {% endif %}
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      </div>
+    {% else %}
+      <div class="border-t border-espresso-100 dark:border-espresso-800 pt-4">
+        <p class="text-xs text-espresso-400">No recommendation runs yet by type.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  {# ========================================================= #}
+  {# PANEL 3: AI Refresh Actions (D-13/D-14)                   #}
+  {# ========================================================= #}
+  <section class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-6 dark:bg-espresso-900 dark:border-espresso-800">
+    <h2 class="text-lg font-semibold text-espresso-900 dark:text-cream-100 mb-4">Run AI Refresh</h2>
+    <p class="text-sm text-espresso-600 dark:text-espresso-400 mb-4">
+      Triggers recommendation regeneration for all eligible users (active + &ge;3 brew sessions).
+    </p>
+
+    <div class="flex flex-wrap gap-3 mb-4">
+      {# Respect-signature mode (D-13: default, cost-safe) #}
+      <form hx-post="/admin/system/ai-refresh"
+            hx-target="#ai-refresh-result"
+            hx-swap="innerHTML">
+        <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+        <input type="hidden" name="force" value="false">
+        <button type="submit"
+                class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:bg-espresso-600 dark:hover:bg-espresso-500">
+          Refresh (respect signatures)
+        </button>
+      </form>
+
+      {# Force-all mode (D-14: expensive; re-bills every eligible user) #}
+      <form hx-post="/admin/system/ai-refresh"
+            hx-target="#ai-refresh-result"
+            hx-swap="innerHTML">
+        <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+        <input type="hidden" name="force" value="true">
+        <button type="submit"
+                class="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-950 dark:text-red-300 dark:hover:bg-red-900">
+          Force refresh all
+          <span class="ml-1 text-xs font-normal opacity-75">(re-bills every eligible user)</span>
+        </button>
+      </form>
+    </div>
+
+    {# Result mount for HTMX swaps #}
+    <div id="ai-refresh-result"></div>
+  </section>
+
+{% endblock %}
