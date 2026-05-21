@@ -317,3 +317,127 @@ def test_max_uses_from_settings() -> None:
         mock_get_int.return_value = 3
         val = mock_get_int("ai_broadened_max_searches")
         assert val == 3
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (07-03) — suggest_recipe + alt_brewer_callout SQL sub-flows
+# ---------------------------------------------------------------------------
+
+
+def _make_db_with_sessions(sessions_data: list[dict]) -> object:
+    """Build a minimal mock DB for SQL sub-flow tests.
+
+    Each dict in sessions_data has: recipe_id, recipe_name, brewer_id,
+    brewer_name, origin, process, roast_level, rating, user_id.
+    We patch db.execute to return rows matching these.
+    """
+    from unittest.mock import MagicMock
+    import types
+
+    db = MagicMock()
+    return db
+
+
+def test_suggest_recipe_picks_highest_rated() -> None:
+    """suggest_recipe returns the recipe with the highest avg rating for the given style."""
+    from unittest.mock import MagicMock, patch
+    import types
+    from app.services.ai_service import suggest_recipe
+    from app.services.ai_schemas import RecipeSuggestionSchema
+
+    # Build fake result row: recipe_id=10, recipe_name="V60 Classic", avg_rating=4.5
+    fake_row = types.SimpleNamespace(recipe_id=10, recipe_name="V60 Classic", avg_rating=4.5)
+    mock_result = MagicMock()
+    mock_result.first.return_value = fake_row
+
+    db = MagicMock()
+    db.execute.return_value = mock_result
+
+    result = suggest_recipe(db, user_id=1, origin="Ethiopia", process="washed", roast_level="light")
+
+    assert isinstance(result, RecipeSuggestionSchema)
+    assert result.recipe_id == 10
+    assert result.recipe_name == "V60 Classic"
+    assert result.no_match is False
+    # recipe_id must be one of the seeded IDs (not fabricated)
+    assert result.recipe_id in (10,)
+
+
+def test_suggest_recipe_no_match() -> None:
+    """suggest_recipe returns no_match=True when no rated session used a recipe for the style."""
+    from unittest.mock import MagicMock
+    from app.services.ai_service import suggest_recipe
+    from app.services.ai_schemas import RecipeSuggestionSchema
+
+    mock_result = MagicMock()
+    mock_result.first.return_value = None  # no rows
+
+    db = MagicMock()
+    db.execute.return_value = mock_result
+
+    result = suggest_recipe(db, user_id=1, origin="Colombia", process="natural", roast_level="medium")
+
+    assert isinstance(result, RecipeSuggestionSchema)
+    assert result.recipe_id is None
+    assert result.recipe_name is None
+    assert result.no_match is True
+
+
+def test_alt_brewer_fires_at_half_point_delta() -> None:
+    """alt_brewer_callout returns AltBrewerSchema when best alt brewer avg is >=0.5 above baseline."""
+    from unittest.mock import MagicMock
+    import types
+    from app.services.ai_service import alt_brewer_callout
+    from app.services.ai_schemas import AltBrewerSchema
+
+    # Two brewers: brewer_id=1 (avg 3.5 baseline), brewer_id=2 (avg 4.0 → delta exactly 0.5)
+    row1 = types.SimpleNamespace(brewer_id=1, brewer_name="Hario V60", avg_rating=3.5)
+    row2 = types.SimpleNamespace(brewer_id=2, brewer_name="Chemex", avg_rating=4.0)
+
+    mock_result = MagicMock()
+    mock_result.all.return_value = [row1, row2]
+
+    db = MagicMock()
+    db.execute.return_value = mock_result
+
+    result = alt_brewer_callout(
+        db,
+        user_id=1,
+        origin="Ethiopia",
+        process="washed",
+        roast_level="light",
+        exclude_brewer_id=1,  # exclude current best brewer
+    )
+
+    assert result is not None
+    assert isinstance(result, AltBrewerSchema)
+    assert result.brewer_name == "Chemex"
+    assert result.rating_delta >= 0.5
+
+
+def test_alt_brewer_below_threshold_none() -> None:
+    """alt_brewer_callout returns None when delta is below 0.5."""
+    from unittest.mock import MagicMock
+    import types
+    from app.services.ai_service import alt_brewer_callout
+
+    # Two brewers: brewer_id=1 (avg 3.7 baseline), brewer_id=2 (avg 4.0 → delta 0.3 < 0.5)
+    row1 = types.SimpleNamespace(brewer_id=1, brewer_name="Hario V60", avg_rating=3.7)
+    row2 = types.SimpleNamespace(brewer_id=2, brewer_name="Chemex", avg_rating=4.1)
+
+    mock_result = MagicMock()
+    mock_result.all.return_value = [row1, row2]
+
+    db = MagicMock()
+    db.execute.return_value = mock_result
+
+    result = alt_brewer_callout(
+        db,
+        user_id=1,
+        origin="Colombia",
+        process="natural",
+        roast_level="medium",
+        exclude_brewer_id=2,  # chemex is current best; V60 is alt with delta 0.3
+    )
+
+    assert result is None

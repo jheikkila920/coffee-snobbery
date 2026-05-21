@@ -21,35 +21,43 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json  # noqa: F401 — used in OpenAI fallback flow (07-03)
-import time  # noqa: F401 — used for duration_ms calculation (07-03)
+import json  # noqa: F401 — used in Task 2 OpenAI fallback flow
+import time  # noqa: F401 — used in Task 2/3 for duration_ms calculation
 from typing import Any
 
 import anthropic
 import httpx
 import openai
 import structlog
-from sqlalchemy import select, text  # noqa: F401 — select used in 07-03+ flows
+from pydantic import ValidationError  # noqa: F401 — used in Task 2 projection/validation
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.events import (
-    AI_FALLBACK_TRIGGERED,  # noqa: F401
-    AI_GENERATION_ERROR,  # noqa: F401
-    AI_GENERATION_START,  # noqa: F401
-    AI_GENERATION_SUCCESS,  # noqa: F401
-    AI_REGEN_SKIPPED,  # noqa: F401
-    AI_THROTTLE_BLOCK,  # noqa: F401
-    AI_TIER_FALLBACK,  # noqa: F401
+    AI_FALLBACK_TRIGGERED,  # noqa: F401 — used in Task 2 provider/tier fallback
+    AI_GENERATION_ERROR,  # noqa: F401 — used in Task 3 error handling
+    AI_GENERATION_START,  # noqa: F401 — used in Task 3 regenerate entry point
+    AI_GENERATION_SUCCESS,  # noqa: F401 — used in Task 3 regenerate entry point
+    AI_REGEN_SKIPPED,  # noqa: F401 — used in Task 3 signature skip
+    AI_THROTTLE_BLOCK,  # noqa: F401 — used in Task 3 throttle
+    AI_TIER_FALLBACK,  # noqa: F401 — used in Task 2 tier fallback
     AI_URL_VERIFY,  # noqa: F401
 )
 from app.models.ai_recommendation import AIRecommendation
-from app.services import credentials as credentials_service  # noqa: F401
-from app.services import settings as settings_service  # noqa: F401
-from app.services.ai_schemas import (  # noqa: F401
-    CoffeeRecSchema,
-    EquipmentRecSchema,
-    PasteRankSchema,
-    SweetSpotsProseSchema,
+from app.models.brew_session import BrewSession
+from app.models.coffee import Coffee
+from app.models.equipment import Equipment
+from app.models.recipe import Recipe
+from app.services import analytics as analytics_service  # noqa: F401 — used in Task 3
+from app.services import credentials as credentials_service
+from app.services import settings as settings_service  # noqa: F401 — used in Task 2
+from app.services.ai_schemas import (
+    AltBrewerSchema,
+    CoffeeRecSchema,  # noqa: F401 — used in Task 2
+    EquipmentRecSchema,  # noqa: F401
+    PasteRankSchema,  # noqa: F401
+    RecipeSuggestionSchema,
+    SweetSpotsProseSchema,  # noqa: F401 — used in Task 2
 )
 
 log = structlog.get_logger(__name__)
@@ -290,6 +298,175 @@ def _is_anthropic_fallback_error(exc: BaseException) -> bool:
         if "overloaded_error" in str(exc).lower():
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Voice constant (D-03/D-04) — used in all LLM prompts
+# ---------------------------------------------------------------------------
+
+#: System prompt encoding the D-03 voice (confident expert, lightly wry)
+#: and D-04 tight prose (1-2 sentences).  All prose stays plain text —
+#: rendered autoescaped + <br> in templates; NEVER piped through |safe.
+SYSTEM_PROMPT_VOICE: str = (
+    "You are a knowledgeable but approachable specialty coffee advisor. "
+    "Your recommendations are confident, specific, and lightly wry — "
+    "never sycophantic, never wishy-washy. "
+    "Keep prose tight: 1-2 sentences unless the field explicitly calls for more. "
+    "Cite concrete flavour descriptors and roast parameters. "
+    "Do not invent URLs — only include a buy_url if you find a verified, current product page."
+)
+
+
+# ---------------------------------------------------------------------------
+# Recipe suggestion sub-flow (AI-06, D-06 — no LLM)
+# ---------------------------------------------------------------------------
+
+
+def suggest_recipe(
+    db: Session,
+    *,
+    user_id: int,
+    origin: str | None,
+    process: str | None,
+    roast_level: str | None,
+) -> RecipeSuggestionSchema:
+    """Return the user's highest-avg-rated recipe for the given bean style.
+
+    Joins BrewSession → Coffee (case-insensitive match on origin/process/
+    roast_level) and BrewSession → Recipe; filters by user_id, non-null
+    rating, non-null recipe_id; groups by recipe and picks the top-rated.
+    Returns a no-match result when no matching sessions exist.
+
+    NEVER invents a recipe (D-06 / AI-06): recipe_id is always a real DB id
+    or None.
+    """
+    stmt = (
+        select(
+            Recipe.id.label("recipe_id"),
+            Recipe.name.label("recipe_name"),
+            func.avg(BrewSession.rating).label("avg_rating"),
+        )
+        .join(Coffee, BrewSession.coffee_id == Coffee.id)
+        .join(Recipe, BrewSession.recipe_id == Recipe.id)
+        .where(
+            BrewSession.user_id == user_id,
+            BrewSession.rating.is_not(None),
+            BrewSession.recipe_id.is_not(None),
+            # Case-insensitive style matching (Coffee columns are nullable)
+            func.lower(Coffee.origin) == func.lower(origin) if origin else text("TRUE"),
+            func.lower(Coffee.process) == func.lower(process) if process else text("TRUE"),
+            (
+                func.lower(Coffee.roast_level) == func.lower(roast_level)
+                if roast_level
+                else text("TRUE")
+            ),
+        )
+        .group_by(Recipe.id, Recipe.name)
+        .order_by(func.avg(BrewSession.rating).desc())
+        .limit(1)
+    )
+    row = db.execute(stmt).first()
+
+    if row is None:
+        return RecipeSuggestionSchema(
+            recipe_id=None,
+            recipe_name=None,
+            summary="No matching recipe yet — try the recipe builder.",
+            no_match=True,
+        )
+    return RecipeSuggestionSchema(
+        recipe_id=row.recipe_id,
+        recipe_name=row.recipe_name,
+        summary=(
+            f"Based on your rated sessions, {row.recipe_name!r} averaged "
+            f"{float(row.avg_rating):.2f}/5 on this bean style."
+        ),
+        no_match=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Alt-brewer callout sub-flow (AI-07, D-06 — no LLM)
+# ---------------------------------------------------------------------------
+
+
+def alt_brewer_callout(
+    db: Session,
+    *,
+    user_id: int,
+    origin: str | None,
+    process: str | None,
+    roast_level: str | None,
+    exclude_brewer_id: int | None = None,
+) -> AltBrewerSchema | None:
+    """Return an AltBrewerSchema if a different brewer shows >=0.5 higher avg rating.
+
+    Joins BrewSession → Coffee → Equipment(brewer) for the given bean style
+    and user; groups by brewer; computes avg rating per brewer.  Determines
+    the baseline (the exclude_brewer_id if provided, else the worst-rated
+    brewer the user has used for this style); returns an AltBrewerSchema
+    only when the best *alternate* brewer's avg is >=0.5 above the baseline.
+
+    Returns None below the 0.5 threshold (AI-07).
+    """
+    brewer = Equipment
+    stmt = (
+        select(
+            Equipment.id.label("brewer_id"),
+            Equipment.model.label("brewer_name"),
+            func.avg(BrewSession.rating).label("avg_rating"),
+        )
+        .join(Coffee, BrewSession.coffee_id == Coffee.id)
+        .join(brewer, BrewSession.brewer_id == brewer.id)
+        .where(
+            BrewSession.user_id == user_id,
+            BrewSession.rating.is_not(None),
+            BrewSession.brewer_id.is_not(None),
+            func.lower(Coffee.origin) == func.lower(origin) if origin else text("TRUE"),
+            func.lower(Coffee.process) == func.lower(process) if process else text("TRUE"),
+            (
+                func.lower(Coffee.roast_level) == func.lower(roast_level)
+                if roast_level
+                else text("TRUE")
+            ),
+        )
+        .group_by(Equipment.id, Equipment.model)
+        .order_by(func.avg(BrewSession.rating).desc())
+    )
+    rows = db.execute(stmt).all()
+
+    if not rows:
+        return None
+
+    # Determine the baseline avg (the excluded brewer's avg, or the overall lowest)
+    if exclude_brewer_id is not None:
+        baseline_rows = [r for r in rows if r.brewer_id == exclude_brewer_id]
+        baseline_avg = float(baseline_rows[0].avg_rating) if baseline_rows else None
+        alt_rows = [r for r in rows if r.brewer_id != exclude_brewer_id]
+    else:
+        # No exclusion: compare best vs worst
+        baseline_avg = float(rows[-1].avg_rating)
+        alt_rows = rows[:-1]
+
+    if baseline_avg is None or not alt_rows:
+        return None
+
+    # Best alternate brewer is the first in the sorted list
+    best_alt = alt_rows[0]
+    delta = float(best_alt.avg_rating) - baseline_avg
+
+    if delta < 0.5:
+        return None
+
+    return AltBrewerSchema(
+        brewer_name=best_alt.brewer_name,
+        rating_delta=round(delta, 2),
+        summary=(
+            f"Sessions with {best_alt.brewer_name} averaged "
+            f"{float(best_alt.avg_rating):.2f}/5 on this bean style — "
+            f"{delta:.2f} points above your current setup."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
