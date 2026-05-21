@@ -171,6 +171,17 @@ def _run_pg_dump(dest_path: str) -> None:
         raise RuntimeError(f"pg_dump failed (exit {result.returncode}): {result.stderr}")
 
 
+def _no_symlinks(ti: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """tarfile filter that skips symbolic and hard links (WR-04).
+
+    Prevents the tarball from dereferencing symlinks into arbitrary host
+    paths — a hardening measure for user-upload-fed backup archives.
+    """
+    if ti.issym() or ti.islnk():
+        return None  # skip links; archive only regular files and dirs
+    return ti
+
+
 def _tar_photos(dest_path: str, photos_dir: str = _DEFAULT_PHOTOS_DIR) -> None:
     """Write a gzip tarball of the photos directory to ``dest_path``.
 
@@ -178,11 +189,14 @@ def _tar_photos(dest_path: str, photos_dir: str = _DEFAULT_PHOTOS_DIR) -> None:
     structurally valid tarball rather than crashing the whole backup run. This
     is intentional: a new install with no photos yet should not cause a backup
     job error (D-03: artifacts are attempted independently).
+
+    Symlinks are skipped via the ``_no_symlinks`` filter to prevent archiving
+    arbitrary host-reachable paths from the container (WR-04).
     """
     photos_path = Path(photos_dir)
     with tarfile.open(dest_path, "w:gz") as tar:
         if photos_path.is_dir():
-            tar.add(photos_path, arcname="photos")
+            tar.add(photos_path, arcname="photos", filter=_no_symlinks)
         # If photos_dir doesn't exist or is empty, the tarball is valid but empty.
 
 
