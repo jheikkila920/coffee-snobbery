@@ -22,7 +22,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 6 | Analytics (Home Page) | 8 | 5 |
 | 7 | 4/7 | In Progress|  |
 | 8 | 3/3 | Complete   | 2026-05-21 |
-| 9 | 2/6 | In Progress|  |
+| 9 | 4/6 | In Progress|  |
 | 10 | Global Search | 4 | 4, 5 |
 | 11 | PWA + Mobile Polish | 17 | 6, 9 |
 | 12 | Hardening + Tests | 6 | 11 |
@@ -272,7 +272,7 @@ Plans:
   3. The `app_settings` editor renders one input per row driven by `value_type`: `string` â†’ text, `integer` â†’ number, `boolean` â†’ checkbox, `json` â†’ textarea; the description is shown as helper text; saving persists immediately and invalidates the in-memory cache.
   4. The backups page lists every retained file (size + timestamp), offers a per-file download, and a "Run backup now" button that synchronously invokes the same `services/backup.py` entry point the scheduler uses.
   5. The system info panel shows app version, DB server version, photo storage usage, backup storage usage, active session count, and last backup status with timestamp. The API health panel shows last AI run timestamp + status per recommendation type, last success/error per provider, and the last 5 error messages per provider â€” surfaces silent failures from model deprecation, quota, or key revocation.
-**Plans:** 2/6 plans executed
+**Plans:** 4/6 plans executed
 Plans:
 **Wave 1**
 - [x] 09-01-PLAN.md — Foundation: admin router sub-package + admin_base.html section nav + /admin hub + home admin link (D-03) + new admin.* events + Wave 0 self-seeding fixtures + require_admin/CSRF security suite
@@ -280,7 +280,7 @@ Plans:
 **Wave 2** *(all blocked on 09-01; mutually parallel — disjoint files)*
 - [x] 09-02-PLAN.md — User CRUD (ADMIN-01): list/create/reset-password/toggle-admin/deactivate/delete with D-15 block-and-deactivate + D-16 last-admin/self-lockout guards + async session invalidation
 - [x] 09-03-PLAN.md — API credential vault (ADMIN-02): set/update encrypted keys, model select, enable/disable, last-4 masked display (SEC-6) + per-provider Test connection probe (D-12)
-- [ ] 09-04-PLAN.md — app_settings editor (ADMIN-03): value_type-driven inputs (D-05) + per-row inline save (D-06) + read-only system rows (D-04)
+- [x] 09-04-PLAN.md — app_settings editor (ADMIN-03): value_type-driven inputs (D-05) + per-row inline save (D-06) + read-only system rows (D-04)
 - [ ] 09-05-PLAN.md — Backups page (ADMIN-04): list + admin-gated FileResponse download with strict path-traversal defense (D-08) + sync Run backup now (D-07)
 - [ ] 09-06-PLAN.md — System Info + API Health (ADMIN-05/06) on one /admin/system page + Run AI refresh now respect/force modes (D-13/D-14); raw-DB status reads (Pitfall 2)
 **Notes:** Carries COST-3 (model deprecation surfaced through the health panel by reading `app_settings.last_ai_run_status` + the latest `ai_recommendations.error_status` rows), AI-5 (the tool-version `app_settings` rows are editable here so a deprecated `web_search_20250305` can be swapped without redeploy). The `/debug/proxy` smoke endpoint promised in Phase 1 can be hardened or removed here once the deployment is verified end-to-end.
