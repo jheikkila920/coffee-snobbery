@@ -821,3 +821,64 @@ def test_sweet_spots_prose_in_context(
 
     assert resp.status_code == 200
     assert "Your best sweet spot is Ethiopia washed light." in resp.text
+
+
+# --------------------------------------------------------------------------- #
+# Plan 07-07 tests — home-page links to AI pages + equipment button           #
+# --------------------------------------------------------------------------- #
+
+
+def test_home_links_to_ai_pages(app: Any, clean_home_router: None) -> None:
+    """Gate-open home shell contains /ai/paste-rank and /ai/wishlist links (D-05/D-07/D-09)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from app.db import SessionLocal
+    from tests.services.test_analytics import _seed_analytics_scenario
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(
+            db, username="analyticstest-hometest-links"
+        )
+
+    client = _make_authed_client_for_user(app, uid)
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    assert "/ai/paste-rank" in body, "Home page must link to /ai/paste-rank (D-07)"
+    assert "/ai/wishlist" in body, "Home page must link to /ai/wishlist (D-09)"
+
+
+def test_home_has_equipment_button(app: Any, clean_home_router: None) -> None:
+    """Gate-open home shell contains the equipment hx-post button (D-05).
+
+    The button must have hx-post="/ai/equipment" and target #equipment-rec-result.
+    The result div must be present in the DOM but empty (not auto-loaded).
+    """
+    _require_postgres()
+    _require_analytics_tables()
+
+    from app.db import SessionLocal
+    from tests.services.test_analytics import _seed_analytics_scenario
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(
+            db, username="analyticstest-hometest-equipment"
+        )
+
+    client = _make_authed_client_for_user(app, uid)
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    assert 'hx-post="/ai/equipment"' in body, (
+        "Home page must have equipment hx-post button (D-05)"
+    )
+    assert 'id="equipment-rec-result"' in body, (
+        "Home page must have #equipment-rec-result target div"
+    )
+    # The result div must NOT be auto-loading (no hx-get or hx-trigger on it)
+    assert 'hx-get="/ai/equipment"' not in body, (
+        "Equipment result must NOT auto-load — generate-on-click only (D-05)"
+    )

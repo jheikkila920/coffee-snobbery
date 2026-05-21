@@ -62,6 +62,38 @@
           </div>
         </section>
 
+        {# AI tools: links to paste-rank and wishlist, plus on-demand equipment button (D-05).
+           Equipment result is NOT shown until the user clicks — generate-on-click only. #}
+        <section aria-labelledby="ai-tools-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="ai-tools-heading" class="text-xl font-semibold mb-4">AI tools</h2>
+          <div class="flex flex-wrap gap-3 mb-4">
+            <a href="/ai/paste-rank"
+               class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+              Rank these for me
+            </a>
+            <a href="/ai/wishlist"
+               class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+              Wishlist
+            </a>
+          </div>
+          {# Equipment rec: generate-on-click (D-05). Never auto-loads. #}
+          <div>
+            <form hx-post="/ai/equipment"
+                  hx-target="#equipment-rec-result"
+                  hx-swap="innerHTML">
+              <input type="hidden"
+                     name="X-CSRF-Token"
+                     value="{{ request.cookies.get('csrftoken', '') }}">
+              <button type="submit"
+                      class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800">
+                Analyze my setup
+              </button>
+            </form>
+            <div id="equipment-rec-result" class="mt-3"></div>
+          </div>
+        </section>
+
         {# Five aggregate-card lazy slots — staggered 100/200/300/400/500ms (HOME-09).
            Plan 06-03 implements the fragment endpoints these reference. #}
 
