@@ -257,7 +257,7 @@ Plans:
 - [x] 08-01-PLAN.md — Wave 0 test scaffolding (test_scheduler/test_backup stubs + sync_db/mock_regenerate fixtures) + scheduler.*/backup.* event taxonomy (SCHED-01..04)
 
 **Wave 2** *(blocked on 08-01)*
-- [ ] 08-02-PLAN.md — services/backup.py: pg_dump (plain .sql) + photos tarball + filename-date prune + keep-partial structured result + last_backup_status JSON write (SCHED-04)
+- [x] 08-02-PLAN.md — services/backup.py: pg_dump (plain .sql) + photos tarball + filename-date prune + keep-partial structured result + last_backup_status JSON write (SCHED-04)
 - [ ] 08-03-PLAN.md — scheduler.py AsyncIOScheduler + sync-engine SQLAlchemyJobStore + idempotent jobs + nightly AI refresh (eligibility, async-regenerate bridge, token split, SCHED-03 summary) + lifespan wiring (SCHED-01, SCHED-02, SCHED-03)
 **Notes:** Carries the top-2 pitfall SH-1 (default `MemoryJobStore` would lose jobs; default `misfire_grace_time=1s` would silently skip restarts), SH-5 (version-matched `pg_dump` â€” already installed in Phase 0), COST-3 (`last_ai_run_status` for admin health panel). Re-references the Phase 0 single-worker rule â€” if a future operator sets `--workers 4`, every nightly job fires four times.
 
