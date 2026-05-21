@@ -39,7 +39,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -262,7 +262,6 @@ def run_nightly_ai_refresh() -> None:
 
     log.info(SCHEDULER_JOB_START, job_id="nightly_ai_refresh")
 
-    run_start = datetime.now(UTC)
     summary: dict[str, Any] = {
         "users_processed": 0,
         "regenerations": 0,
@@ -274,7 +273,11 @@ def run_nightly_ai_refresh() -> None:
     }
 
     # Step 1: eligibility query — one short session, read eligible IDs.
+    # run_start is read from the DB clock (SELECT now()) so it is on the same
+    # clock as generated_at (server_default=func.now()), making the
+    # aggregate_tokens_since filter comparable (WR-01).
     with SessionLocal() as db:
+        run_start: datetime = db.execute(text("SELECT now()")).scalar_one()
         eligible_user_ids = _get_eligible_user_ids(db)
 
     # Step 2: per-user regenerate — one fresh session per user.
