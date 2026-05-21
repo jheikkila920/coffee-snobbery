@@ -22,7 +22,7 @@
       <span class="font-semibold">{{ date_label }}</span>
       <span class="text-sm text-espresso-600 dark:text-cream-300">
         {% if row.rating is not none %}
-          <span class="text-espresso-700" aria-hidden="true">★</span>
+          <span class="text-amber-400" aria-hidden="true">★</span>
           <span class="tabular-nums">{{ row.rating }}</span>
         {% else %}
           —
@@ -67,7 +67,7 @@
     <td class="py-2 tabular-nums">1:{{ row.ratio }}</td>
     <td class="py-2">
       {% if row.rating is not none %}
-        <span class="text-espresso-700" aria-hidden="true">★</span>
+        <span class="text-amber-400" aria-hidden="true">★</span>
         <span class="tabular-nums">{{ row.rating }}</span>
       {% else %}
         —
