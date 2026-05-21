@@ -19,13 +19,17 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def test_idempotent_job_registration() -> None:
+@pytest.mark.asyncio
+async def test_idempotent_job_registration() -> None:
     """Exactly 2 jobs registered after N register_jobs() calls — no duplicates.
 
     Highest-risk behavior #5 per 08-VALIDATION.md: calling register_jobs()
     multiple times (i.e., on every container restart) must not add duplicate
     rows in apscheduler_jobs. Stable explicit job IDs + replace_existing=True
     is the mechanism (08-RESEARCH.md Pitfall 3, T-08-09 threat mitigation).
+
+    Async because AsyncIOScheduler.start() binds to the running event loop —
+    same context it runs in under FastAPI's lifespan.
     """
     from apscheduler.jobstores.memory import MemoryJobStore
 
