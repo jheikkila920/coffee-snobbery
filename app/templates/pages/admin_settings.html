@@ -1,0 +1,18 @@
+{# Admin settings editor — ADMIN-03.
+   Extends admin_base.html; fills admin_content block.
+   Renders every app_settings row via admin_setting_row.html fragment. #}
+{% extends "admin_base.html" %}
+{% block admin_page_title %}Settings{% endblock %}
+{% block admin_content %}
+  <header class="flex items-center justify-between mb-6">
+    <h2 class="text-xl font-semibold text-espresso-900 dark:text-cream-100">Settings</h2>
+  </header>
+  <p class="text-sm text-espresso-600 dark:text-cream-400 mb-6">
+    Edit application settings below. System-managed rows are shown read-only.
+  </p>
+  <div id="admin-settings-list" class="space-y-3">
+    {% for row in settings %}
+      {% include "fragments/admin_setting_row.html" %}
+    {% endfor %}
+  </div>
+{% endblock %}

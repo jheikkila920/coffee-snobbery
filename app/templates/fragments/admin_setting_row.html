@@ -1,0 +1,94 @@
+{# Per-row settings editor fragment — ADMIN-03.
+   Used in two ways:
+   1. Included by admin_settings.html (iterating over {{ row }} from context)
+   2. Returned directly by the POST /admin/settings/{key} handler (single {{ row }})
+
+   Context variables expected:
+   - row: dict with keys: key, value, value_type, description, editable,
+     input_kind ("number_int"|"number_float"|"checkbox"|"text"|"readonly"),
+     saved (bool), error (str|None)
+
+   Security: CSRF hidden field on every form (T-09-18).
+   Accessibility: input text-base (>=16px per mobile-first rule).
+#}
+<div id="admin-setting-{{ row.key }}"
+     data-setting-row
+     class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <div class="flex flex-col gap-1 mb-2">
+    <span class="font-mono text-sm font-semibold text-espresso-800 dark:text-cream-200">{{ row.key }}</span>
+    {% if row.description %}
+      <span class="text-xs text-espresso-500 dark:text-cream-500">{{ row.description }}</span>
+    {% endif %}
+  </div>
+
+  {% if row.editable %}
+    {# Editable row — inline HTMX save form #}
+    <form hx-post="/admin/settings/{{ row.key }}"
+          hx-target="#admin-setting-{{ row.key }}"
+          hx-swap="outerHTML"
+          class="flex flex-wrap items-center gap-3">
+      {# T-09-18: CSRF hidden field — CSRFFormFieldShim hoists to X-CSRF-Token header #}
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+      {% if row.input_kind == "checkbox" %}
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox"
+                 name="value"
+                 value="on"
+                 {% if row.value and row.value.lower() == "true" %}checked{% endif %}
+                 class="h-5 w-5 rounded border-espresso-300 text-espresso-700 focus:ring-espresso-500">
+          <span class="text-sm text-espresso-700 dark:text-cream-300">
+            {% if row.value and row.value.lower() == "true" %}Enabled{% else %}Disabled{% endif %}
+          </span>
+        </label>
+
+      {% elif row.input_kind == "number_float" %}
+        <input type="number"
+               name="value"
+               value="{{ row.value or '' }}"
+               step="0.25"
+               class="rounded border border-espresso-200 px-2 py-1 text-base w-32 dark:bg-espresso-800 dark:border-espresso-600 dark:text-cream-100">
+
+      {% elif row.input_kind == "number_int" %}
+        <input type="number"
+               name="value"
+               value="{{ row.value or '' }}"
+               step="1"
+               class="rounded border border-espresso-200 px-2 py-1 text-base w-32 dark:bg-espresso-800 dark:border-espresso-600 dark:text-cream-100">
+
+      {% else %}
+        {# text #}
+        <input type="text"
+               name="value"
+               value="{{ row.value or '' }}"
+               class="rounded border border-espresso-200 px-2 py-1 text-base flex-1 min-w-0 dark:bg-espresso-800 dark:border-espresso-600 dark:text-cream-100">
+      {% endif %}
+
+      <button type="submit"
+              class="rounded bg-espresso-700 px-3 py-1 text-sm text-cream-50 hover:bg-espresso-800 whitespace-nowrap">
+        Save
+      </button>
+
+      {% if row.saved %}
+        <span class="text-sm text-green-700 dark:text-green-400 font-medium">Saved</span>
+      {% endif %}
+      {% if row.error %}
+        <span class="text-sm text-red-700 dark:text-red-400">{{ row.error }}</span>
+      {% endif %}
+    </form>
+
+  {% else %}
+    {# Read-only row — display only; no form or save control (D-04) #}
+    <div class="flex items-start gap-2">
+      {% if row.value_type == "null" or row.value is none %}
+        <span class="text-sm italic text-espresso-400 dark:text-cream-600">no value</span>
+      {% elif row.value | length > 80 %}
+        {# Long JSON/status blobs — monospace block #}
+        <pre class="text-xs font-mono bg-espresso-50 dark:bg-espresso-800 rounded px-2 py-1 overflow-x-auto max-w-full whitespace-pre-wrap break-all">{{ row.value }}</pre>
+      {% else %}
+        <span class="text-sm font-mono text-espresso-700 dark:text-cream-300">{{ row.value }}</span>
+      {% endif %}
+      <span class="ml-auto text-xs text-espresso-400 dark:text-cream-600 italic whitespace-nowrap">system-managed</span>
+    </div>
+  {% endif %}
+</div>
