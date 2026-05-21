@@ -1,7 +1,9 @@
 ---
 phase: 08-scheduler-backups
 verified: 2026-05-21T20:00:00Z
-status: human_needed
+status: passed
+human_verification_completed: 2026-05-21T20:12:00Z
+human_verification_result: "5/5 drills passed in-container (see 08-HUMAN-UAT.md); 2 test/code defects fixed; infra Gap G-01 (volume perms) resolved via Dockerfile fix"
 score: 7/7 must-haves verified
 overrides_applied: 1
 overrides:

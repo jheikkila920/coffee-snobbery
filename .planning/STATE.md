@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: verifying
+status: ready_to_plan
 stopped_at: Completed 08-01-PLAN.md
 last_updated: "2026-05-21T19:24:06.197Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 13
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 62
   completed_plans: 62
-  percent: 100
+  percent: 77
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 
 ## Current Position
 
-Phase: 08 (scheduler-backups) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 9
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-21
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 54
+- Total plans completed: 57
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100%
 | 05 | 6 | - | - |
 | 06 | 3 | - | - |
 | 07 | 7 | - | - |
+| 08 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -135,7 +136,7 @@ Three plan-phase research flags carried forward:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| Deploy (infra) | G-01: VPS volumes are root-owned — next deploy needs a one-time `docker compose run --rm -u root coffee-snobbery chown -R app:app /app/data` (or recreate empty volumes) so the app user can write backups + photos. Dockerfile now creates app-owned mountpoints for fresh volumes; existing VPS volumes predate the fix. | open | 2026-05-21 (Phase 08) |
 
 ## Session Continuity
 
