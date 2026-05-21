@@ -551,3 +551,67 @@ def test_sweet_spots_no_ai_placeholder(
     assert "coming soon" not in body.lower()
     assert "ai insight" not in body.lower()
     assert "recommendation" not in body.lower()
+
+
+# --- HOME-09 staggered lazy-load regression (GAP fill) ----------------------
+
+
+def test_home_shell_staggered_lazy_load(app: Any, clean_home_router: None) -> None:
+    """Gate-open home shell renders >=5 staggered hx-trigger delays, distinct and ascending.
+
+    Requirement HOME-09: the five aggregate cards use staggered hx-trigger="load delay:Nms"
+    to spread fragment requests across 500ms.  A future edit that collapses the delays to a
+    single value or drops slots would silently break this requirement without this test.
+
+    The test seeds a GATE-OPEN user (reuses _seed_analytics_scenario from Plan 06-01),
+    GETs /, and asserts that the rendered HTML contains at least 5 occurrences of
+    hx-trigger="load delay:Nms" whose millisecond values are distinct and strictly
+    ascending (100 < 200 < 300 < 400 < 500).
+    """
+    _require_postgres()
+    _require_analytics_tables()
+
+    from tests.services.test_analytics import _seed_analytics_scenario
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(
+            db, username="analyticstest-hometest-stagger"
+        )
+
+    client = _make_authed_client_for_user(app, uid)
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+
+    # Extract all hx-trigger="load delay:Nms" delay values from the rendered HTML.
+    # The gate-open branch must contain at least 5 such slots (one per aggregate card).
+    # The unrated-coffees slot (150ms) also appears, so total >= 6 -- but we only
+    # require the five aggregate-card delays which must be distinct and ascending.
+    delay_matches = re.findall(r'hx-trigger="load delay:(\d+)ms"', body)
+    delay_values = [int(m) for m in delay_matches]
+
+    assert len(delay_values) >= 5, (
+        f"Expected >=5 hx-trigger='load delay:Nms' slots in gate-open home shell, "
+        f"got {len(delay_values)}: {delay_values}"
+    )
+
+    # The five aggregate card delays must be distinct (no two slots share a delay value
+    # among the five smallest after removing the 150ms unrated-coffees slot).
+    # Strategy: sort all delay values and verify the five aggregate-card slots
+    # (100/200/300/400/500ms per spec) are all present.
+    expected_aggregate_delays = {100, 200, 300, 400, 500}
+    actual_delay_set = set(delay_values)
+    assert expected_aggregate_delays <= actual_delay_set, (
+        f"Expected aggregate card delays {expected_aggregate_delays} to be present; "
+        f"found delay values: {sorted(actual_delay_set)}"
+    )
+
+    # The aggregate delays must be strictly ascending (100 < 200 < 300 < 400 < 500),
+    # proving they are staggered in DOM order as the spec requires.
+    aggregate_delays_in_order = [v for v in delay_values if v in expected_aggregate_delays]
+    assert aggregate_delays_in_order == sorted(aggregate_delays_in_order), (
+        f"Aggregate card delays must appear in ascending order in the DOM; "
+        f"found: {aggregate_delays_in_order}"
+    )

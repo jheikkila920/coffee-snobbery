@@ -648,21 +648,95 @@ def test_signature_determinism(clean_analytics: None) -> None:
     assert len(sig1) == 64  # SHA256 hex digest
 
 
-def test_signature_order_independent(clean_analytics: None) -> None:
-    """Signature is stable within the same session (Pitfall 5)."""
+def test_signature_excludes_unrated_sessions(clean_analytics: None) -> None:
+    """D-09: only RATED sessions feed compute_input_signature.
+
+    Adding an UNRATED (rating=None) session must NOT change the signature — it is
+    invisible to the canonical payload. Once that same session is given a rating,
+    it MUST change the signature, because rating it makes it an AI-input row.
+
+    Within-user determinism / "order-independence" is covered separately by
+    ``test_signature_determinism``: the signature is intentionally id-ordered
+    (``ORDER BY BrewSession.id``), not a cross-user order-independent property.
+    """
     _require_postgres()
     _require_analytics_tables()
+
+    from sqlalchemy import select, update
+
     from app.db import SessionLocal
+    from app.models.bag import Bag
+    from app.models.brew_session import BrewSession
+    from app.models.coffee import Coffee
+    from app.models.equipment import Equipment
+    from app.models.recipe import Recipe
     from app.services import analytics
 
-    with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-sigord")
+    username = "analyticstest-sigunrated"
 
+    # 1. Seed a gate-open user with a rating-rich scenario.
     with SessionLocal() as db:
-        sig_a = analytics.compute_input_signature(db, uid)
-        sig_b = analytics.compute_input_signature(db, uid)
+        uid, _c3, _ca = _seed_analytics_scenario(db, username=username)
 
-    assert sig_a == sig_b, "Signature must be stable across consecutive calls in same session"
+    # 2. Baseline signature over only the rated sessions.
+    with SessionLocal() as db:
+        sig_baseline = analytics.compute_input_signature(db, uid)
+
+    # 3. Add ONE new UNRATED session, reusing scenario catalog rows so the row is
+    #    valid (coffee1 + its bag + the seeded recipe + the V60 brewer).
+    with SessionLocal() as db:
+        coffee_id = db.scalar(
+            select(Coffee.id).where(Coffee.name == f"analyticstest-Coffee1-{username}")
+        )
+        bag_id = db.scalar(select(Bag.id).where(Bag.coffee_id == coffee_id))
+        recipe_id = db.scalar(
+            select(Recipe.id).where(Recipe.name == f"analyticstest-Recipe-{username}")
+        )
+        brewer_id = db.scalar(
+            select(Equipment.id).where(Equipment.brand == "Hario", Equipment.model == "V60")
+        )
+
+        unrated = BrewSession(
+            user_id=uid,
+            coffee_id=coffee_id,
+            bag_id=bag_id,
+            recipe_id=recipe_id,
+            brewer_id=brewer_id,
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            rating=None,  # D-09: unrated → excluded from the signature
+            flavor_note_ids_observed=[],
+            brewed_at=datetime(2026, 3, 11, 10, 0, 0, tzinfo=timezone.utc),
+        )
+        db.add(unrated)
+        db.flush()
+        unrated_id = unrated.id
+        db.commit()
+
+    # 4. Unrated session must be invisible to the signature (D-09).
+    with SessionLocal() as db:
+        sig_after_unrated = analytics.compute_input_signature(db, uid)
+
+    assert sig_after_unrated == sig_baseline, (
+        "Adding an UNRATED session must NOT change the signature (D-09: rated sessions only)"
+    )
+
+    # 5. Rate that same session.
+    with SessionLocal() as db:
+        db.execute(
+            update(BrewSession)
+            .where(BrewSession.id == unrated_id)
+            .values(rating=Decimal("4.0"))
+        )
+        db.commit()
+
+    # 6. Now-rated session MUST change the signature vs baseline (D-09).
+    with SessionLocal() as db:
+        sig_after_rating = analytics.compute_input_signature(db, uid)
+
+    assert sig_after_rating != sig_baseline, (
+        "Rating a previously-unrated session MUST change the signature (D-09: it is now an AI-input row)"
+    )
 
 
 def test_signature_excludes_free_text(clean_analytics: None) -> None:
