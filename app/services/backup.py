@@ -217,7 +217,7 @@ def prune_old_backups(
     cutoff = today - timedelta(days=retention_days)
     pattern = re.compile(r"(?:db|photos)_(\d{4}-\d{2}-\d{2})\.(sql|tar\.gz)$")
     deleted = 0
-    for f in Path(backup_dir).iterdir():
+    for f in list(Path(backup_dir).iterdir()):
         m = pattern.match(f.name)
         if m:
             file_date = date.fromisoformat(m.group(1))
