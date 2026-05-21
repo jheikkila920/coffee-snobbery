@@ -220,14 +220,14 @@ def test_cold_start_branch_renders_meter(app: Any, seeded_regular_user: dict, cl
 
 
 def test_ai_slot_placeholder_present(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
-    """Gate-open user renders the aggregate slots; no live AI trigger (T-06-12).
+    """Gate-open user renders the aggregate slots and the AI hero slot (D-01).
 
-    Jinja2 comments ({# ... #}) are stripped at render time, so we verify the
-    Phase 7 slot comment in the TEMPLATE SOURCE FILE (which the Task 2 probe
-    already verifies). Here we assert two things via the HTTP response:
+    Phase 7 (plan 07-06) replaced the Jinja comment placeholder with a real
+    lazy-load hero section.  This test verifies:
     1. The gate-open branch renders (aggregate slot headings visible).
-    2. No live hx-get="/home/cards/ai-recommendation" hx-trigger="revealed" div
-       was emitted in the rendered HTML (the endpoint does not exist in Phase 6).
+    2. The AI hero slot is rendered as a live hx-get div (load delay:600ms pattern).
+    3. The old "revealed" trigger pattern (Phase 6 placeholder) is NOT present.
+    4. The live slot uses hx-get="/home/cards/ai-recommendation".
     """
     _require_postgres()
     _require_analytics_tables()
@@ -264,18 +264,14 @@ def test_ai_slot_placeholder_present(app: Any, seeded_regular_user: dict, clean_
     # Gate-open branch: at least one aggregate card heading should appear
     assert "Top Coffees" in body
 
-    # No live AI trigger in rendered HTML (Jinja comment is stripped at render time;
-    # the slot exists only as a {# ... #} comment in the template source)
-    assert 'hx-get="/home/cards/ai-recommendation" hx-trigger="revealed"' not in body
+    # Phase 7 AI hero slot is now live in the rendered HTML (D-01)
+    assert 'hx-get="/home/cards/ai-recommendation"' in body
 
-    # Verify the Phase 7 slot comment exists in the template source file
-    import pathlib
-    template_path = pathlib.Path("app/templates/pages/home.html")
-    assert template_path.exists(), "home.html template not found"
-    source = template_path.read_text(encoding="utf-8")
-    assert "Phase 7: AI recommendation card slot" in source, (
-        "Phase 7 AI slot placeholder comment missing from home.html"
-    )
+    # Must use load delay pattern (not the old "revealed" trigger from the Phase 6 comment)
+    assert 'hx-trigger="revealed"' not in body
+
+    # The live AI card slot heading should appear
+    assert "What to buy next" in body
 
 
 # --------------------------------------------------------------------------- #
@@ -615,3 +611,213 @@ def test_home_shell_staggered_lazy_load(app: Any, clean_home_router: None) -> No
         f"Aggregate card delays must appear in ascending order in the DOM; "
         f"found: {aggregate_delays_in_order}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Plan 07-06 tests — AI hero-card fragment endpoint                           #
+# --------------------------------------------------------------------------- #
+#
+# These tests mock credentials_service, ai_service, and analytics at the
+# module level inside home.py so no real DB or LLM calls are made.
+# All monkeypatching targets the imported names in app.routers.home.
+
+
+def _make_gate_open() -> dict:
+    """Minimal gate dict representing a gate-open user (3 sessions, 5 notes)."""
+    return {
+        "gate_open": True,
+        "sessions": 3,
+        "distinct_notes": 5,
+        "sessions_needed": 0,
+        "notes_needed": 0,
+    }
+
+
+def _make_gate_closed() -> dict:
+    """Minimal gate dict representing a cold-start user (0 sessions)."""
+    return {
+        "gate_open": False,
+        "sessions": 0,
+        "distinct_notes": 0,
+        "sessions_needed": 3,
+        "notes_needed": 5,
+    }
+
+
+def _make_mock_rec(*, url_verified: bool | None = None) -> Any:
+    """Build a minimal mock AIRecommendation row with coffee prose."""
+    from unittest.mock import MagicMock
+
+    rec = MagicMock()
+    rec.url_verified = url_verified
+    rec.response_json = {
+        "coffee_name": "Ethiopia Yirgacheffe",
+        "roaster_name": "Test Roasters",
+        "origin": "Ethiopia",
+        "process": "washed",
+        "roast_level": "light",
+        "buy_url": "https://example.com/buy",
+        "search_tier": "primary",
+        "summary_prose": "A bright, floral coffee.",
+        "recipe_suggestion": None,
+        "alt_brewer": None,
+    }
+    return rec
+
+
+def test_ai_card_cold_start(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """GET /home/cards/ai-recommendation when gate is closed → cold-start fragment.
+
+    Monkeypatches analytics.get_cold_start_counts to return a gate-closed dict.
+    No credentials or ai_service calls should be made.
+    """
+    _require_postgres()
+    _require_analytics_tables()
+
+    from unittest.mock import patch
+
+    import app.routers.home as home_module
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+
+    with patch.object(
+        home_module.analytics, "get_cold_start_counts", return_value=_make_gate_closed()
+    ):
+        resp = client.get("/home/cards/ai-recommendation", headers={"HX-Request": "true"})
+
+    assert resp.status_code == 200
+    # Cold-start fragment includes the progress-meter markup from _cold_start.html
+    assert 'role="progressbar"' in resp.text
+
+
+def test_ai_card_not_configured(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """Gate open but no provider enabled → not-configured fragment (AI-16)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from unittest.mock import patch
+
+    import app.routers.home as home_module
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+
+    with (
+        patch.object(
+            home_module.analytics, "get_cold_start_counts", return_value=_make_gate_open()
+        ),
+        patch.object(
+            home_module.credentials_service, "get_provider_credential", return_value=None
+        ),
+        patch.object(home_module.ai_service, "in_flight", return_value=False),
+    ):
+        resp = client.get("/home/cards/ai-recommendation", headers={"HX-Request": "true"})
+
+    assert resp.status_code == 200
+    assert "not configured" in resp.text.lower()
+
+
+def test_ai_card_in_flight(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """in_flight lock held → in-flight fragment carries hx-trigger for polling (AI-14)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from unittest.mock import MagicMock, patch
+
+    import app.routers.home as home_module
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+
+    mock_cred = MagicMock()
+
+    with (
+        patch.object(
+            home_module.analytics, "get_cold_start_counts", return_value=_make_gate_open()
+        ),
+        patch.object(
+            home_module.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(home_module.ai_service, "in_flight", return_value=True),
+    ):
+        resp = client.get("/home/cards/ai-recommendation", headers={"HX-Request": "true"})
+
+    assert resp.status_code == 200
+    # In-flight fragment must carry the polling trigger so HTMX keeps polling
+    assert 'hx-trigger="every 2s"' in resp.text
+
+
+def test_ai_card_hero(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """Rec present → hero card rendered; no hx-trigger on root (polling stops, Pattern 8)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from unittest.mock import MagicMock, patch
+
+    import app.routers.home as home_module
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+
+    mock_cred = MagicMock()
+    mock_rec = _make_mock_rec(url_verified=True)
+
+    with (
+        patch.object(
+            home_module.analytics, "get_cold_start_counts", return_value=_make_gate_open()
+        ),
+        patch.object(
+            home_module.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(home_module.ai_service, "in_flight", return_value=False),
+        patch.object(
+            home_module.ai_service, "get_latest_recommendation", return_value=mock_rec
+        ),
+        patch.object(home_module.ai_service, "is_stale", return_value=False),
+    ):
+        resp = client.get("/home/cards/ai-recommendation", headers={"HX-Request": "true"})
+
+    assert resp.status_code == 200
+    body = resp.text
+    # Hero card must contain the coffee name
+    assert "Ethiopia Yirgacheffe" in body
+    # Hero card root div must have id="ai-rec-hero" (polling stops — no hx-trigger)
+    assert 'id="ai-rec-hero"' in body
+    # Verified buy URL → a live Buy link
+    assert "Buy" in body
+
+
+def test_sweet_spots_prose_in_context(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """sweet_spots row present → prose renders in the sweet-spots card (HOME-06)."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from unittest.mock import MagicMock, patch
+
+    import app.routers.home as home_module
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+
+    mock_ss_row = MagicMock()
+    mock_ss_row.response_json = {
+        "summary_prose": "Your best sweet spot is Ethiopia washed light."
+    }
+
+    with patch.object(
+        home_module.ai_service, "get_latest_recommendation", return_value=mock_ss_row
+    ):
+        resp = client.get("/home/cards/sweet-spots", headers={"HX-Request": "true"})
+
+    assert resp.status_code == 200
+    assert "Your best sweet spot is Ethiopia washed light." in resp.text

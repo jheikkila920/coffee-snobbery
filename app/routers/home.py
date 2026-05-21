@@ -31,7 +31,8 @@ from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
 from app.models.brew_session import BrewSession
 from app.models.user import User
-from app.services import analytics
+from app.services import ai_service, analytics
+from app.services import credentials as credentials_service
 from app.templates_setup import templates
 
 router = APIRouter()
@@ -219,12 +220,93 @@ def card_sweet_spots(
     """Fragment endpoint for the sweet-spots card (HOME-05).
 
     Rating-dependent: passes ``all_unrated`` to the template (D-05).
-    No AI prose / 'coming soon' placeholder — HOME-06 is Phase 7 (T-06-11).
+    Also passes ``sweet_spots_prose`` from the latest sweet_spots AI row (HOME-06).
     """
     rows = analytics.get_sweet_spots(db, user.id)
     all_unrated = not rows and not _has_rated_sessions(db, user.id)
+    ss_row = ai_service.get_latest_recommendation(
+        db, user_id=user.id, rec_type="sweet_spots"
+    )
+    sweet_spots_prose = (
+        ss_row.response_json.get("summary_prose") if ss_row else None
+    )
     return templates.TemplateResponse(
         request=request,
         name="fragments/home/sweet_spots.html",
-        context={"rows": rows, "all_unrated": all_unrated},
+        context={
+            "rows": rows,
+            "all_unrated": all_unrated,
+            "sweet_spots_prose": sweet_spots_prose,
+        },
+    )
+
+
+@router.get("/home/cards/ai-recommendation", response_class=HTMLResponse)
+def card_ai_recommendation(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """AI hero card fragment — polling endpoint (AI-14).
+
+    Returns one of five fragments based on current state, evaluated in order:
+    1. cold_start  — gate not cleared (< 3 sessions or < 5 flavor notes, AI-11)
+    2. not_configured — no provider credential enabled (AI-16)
+    3. in_flight   — a regeneration run holds the in-memory lock (HTMX polls)
+    4. hero card   — latest successful coffee row present (stale badge if sig changed)
+    5. in_flight   — gate open + configured but no row yet (keep polling)
+
+    ``FragmentCacheHeadersMiddleware`` applies ``no-store`` + ``Vary: HX-Request``
+    automatically on ``HX-Request: true`` responses.
+    All user_id reads come from ``request.state.user.id`` (T-07-12 IDOR defense).
+    """
+    gate = analytics.get_cold_start_counts(db, user.id)
+    if not gate["gate_open"]:
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/home/ai_rec_cold_start.html",
+            context={"gate": gate},
+        )
+
+    # AI-16: not configured when both providers return None
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    if anthropic_cred is None and openai_cred is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/home/ai_rec_not_configured.html",
+            context={"user": user},
+        )
+
+    # AI-14: in-flight lock held → show spinner and poll
+    if ai_service.in_flight(user.id):
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/home/ai_rec_in_flight.html",
+            context={},
+        )
+
+    # Load the latest coffee recommendation row
+    rec = ai_service.get_latest_recommendation(db, user_id=user.id, rec_type="coffee")
+    if rec is None:
+        # Gate open + configured + no row yet → keep polling (triggers scheduler or
+        # manual refresh to generate the first recommendation)
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/home/ai_rec_in_flight.html",
+            context={},
+        )
+
+    # AI-04: try_again state when the stored row is an error (error_status set).
+    # get_latest_recommendation filters error_status IS NULL, so rec is always
+    # a valid row here.  A separate check for a try_again sentinel is not needed;
+    # the scheduler writes a row with error_status when generation fails — those
+    # are filtered out, leaving rec=None which is handled above.  The try_again
+    # fragment is returned by the scheduler path via a future extension point.
+    prose = rec.response_json or {}
+    stale = ai_service.is_stale(db, user_id=user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/ai_rec_hero.html",
+        context={"rec": rec, "prose": prose, "stale": stale, "user": user},
     )

@@ -39,10 +39,28 @@
       </section>
 
       {# Cold-start gate: below-gate users see the progress meter; above-gate users
-         see the five staggered aggregate cards (HOME-09) + the Phase 7 AI-card slot. #}
+         see the AI top-hero card (D-01) + five staggered aggregate cards (HOME-09). #}
       {% if not gate.gate_open %}
         {% include "fragments/home/_cold_start.html" %}
       {% else %}
+
+        {# AI "what to buy next" hero — D-01 top position, above aggregate cards.
+           Lazy-loaded with delay:600ms (staggered after the other eager elements).
+           hx-swap="outerHTML" replaces this div with the fragment root (polling stops
+           when the hero card returns no hx-trigger — Pattern 8). #}
+        <section aria-labelledby="ai-rec-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="ai-rec-heading" class="text-xl font-semibold mb-4">What to buy next</h2>
+          <div id="ai-rec-hero"
+               hx-get="/home/cards/ai-recommendation"
+               hx-trigger="load delay:600ms"
+               hx-swap="outerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
 
         {# Five aggregate-card lazy slots — staggered 100/200/300/400/500ms (HOME-09).
            Plan 06-03 implements the fragment endpoints these reference. #}
@@ -112,7 +130,6 @@
           </div>
         </section>
 
-        {# Phase 7: AI recommendation card slot — will use hx-get="/home/cards/ai-recommendation" hx-trigger="revealed" hx-swap="innerHTML". HOME-06. Do not implement here. #}
 
       {% endif %}
 
