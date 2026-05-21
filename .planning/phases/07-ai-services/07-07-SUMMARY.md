@@ -57,7 +57,7 @@ requirements: [AI-08, AI-09, HOME-06]
 
 # Phase 7 Plan 07: AI Pages (Paste-Rank, Wishlist, Equipment Button) Summary
 
-**One-liner:** Dedicated paste-and-rank page (text/URL textarea, top-3 ranked results with reasoning), minimal wishlist view (list/mark-purchased/remove with IDOR guard), on-demand equipment button + result fragment, and home-page links to both pages — all CSP-clean and CSRF-protected, human-verify checkpoint pending.
+**One-liner:** Dedicated paste-and-rank page (text/URL textarea, top-3 ranked results with reasoning), minimal wishlist view (list/mark-purchased/remove with IDOR guard), on-demand equipment button + result fragment, and home-page links to both pages — all CSP-clean and CSRF-protected, human-verify checkpoint approved at 375px.
 
 ## Tasks Completed
 
@@ -65,7 +65,7 @@ requirements: [AI-08, AI-09, HOME-06]
 |---|------|--------|-------|
 | 1 | GET handlers + paste-rank page + results fragment + equipment fragment | 9f00f36 | app/routers/ai.py, pages/paste_rank.html, fragments/ai/paste_rank_results.html, fragments/home/equipment_rec.html, tests/routers/test_ai_router.py |
 | 2 | Wishlist page + home-page links + equipment button | 26964cd | pages/wishlist.html, pages/home.html, tests/routers/test_home.py, tests/routers/test_ai_router.py |
-| 3 | Human verify — paste-rank, wishlist, equipment button at 375px | AWAITING | checkpoint returned |
+| 3 | Human verify — paste-rank, wishlist, equipment button at 375px | APPROVED | verified 2026-05-21 at 375px (gate seeded open; pages, home AI-tools links, equipment-button placement, and wishlist add/purchase/remove flow confirmed; live AI ranking/equipment output deferred to provider-key configuration) |
 
 ## Verification
 
@@ -94,7 +94,7 @@ requirements: [AI-08, AI-09, HOME-06]
 | test_home_links_to_ai_pages passes | PASS |
 | test_home_has_equipment_button passes | PASS |
 | Full pytest exits 0 (41 passed) | PASS |
-| Human verify at 375px | AWAITING |
+| Human verify at 375px | PASS (approved 2026-05-21) |
 
 ## Deviations from Plan
 

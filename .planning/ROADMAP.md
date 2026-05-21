@@ -239,7 +239,7 @@ Plans:
 - [x] 07-06-PLAN.md — Home integration: top-hero AI card endpoint + 5 state fragments + HOME-06 sweet-spots prose append + 375px human-verify (AI-04, AI-05, AI-10, AI-11, AI-14, AI-15, AI-16, HOME-06)
 
 **Wave 6** *(blocked on 07-05, 07-06)*
-- [ ] 07-07-PLAN.md — Paste-rank page + wishlist page + on-demand equipment button + home links + 375px human-verify (AI-08, AI-09, HOME-06)
+- [x] 07-07-PLAN.md — Paste-rank page + wishlist page + on-demand equipment button + home links + 375px human-verify (AI-08, AI-09, HOME-06)
 **Notes:** Carries the top-1 pitfall AI-1 (token cost from web search), AI-2 (URL verification via ranged GET + body-contains-name + 5s timeout + no cross-host redirects), AI-3 (citation-block projector before Pydantic), AI-4 (fallback only on non-retryable), AI-5 (tool version in `app_settings`, not hardcoded), AI-6 (Postgres advisory lock backstop alongside in-memory lock), COST-2 (5-minute throttle on manual refresh), COST-4 (signature uses content hash of *user's own* sessions only), COST-5 (`max_uses=5/3`). **Plan-phase research flags:** confirm Anthropic structured-output via tool_use returns citations as a separate content block (verify projector strips them correctly); decide polling-vs-SSE for response delivery (SUMMARY recommends polling for v1).
 
 ### Phase 8: Scheduler + Backups
