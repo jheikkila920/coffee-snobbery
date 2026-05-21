@@ -98,6 +98,8 @@ from app.routers import roasters as roasters_router
 from app.services import credentials
 from app.services import settings as settings_service
 from app.services.encryption import startup_check as encryption_startup_check
+from app.services.scheduler import shutdown as scheduler_shutdown
+from app.services.scheduler import start as scheduler_start
 from app.templates_setup import templates
 
 # Configure logging at module import so uvicorn's first log line already
@@ -145,10 +147,11 @@ def compute_tailwind_css_path() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Startup smoke check + Phase 3 hooks + clean shutdown.
+    """Startup smoke check + Phase 3 hooks + APScheduler start + clean shutdown.
 
-    Phase 8 will start APScheduler here; Phase 0's sync ``SELECT 1`` smoke
-    against the main engine is preserved. Shutdown disposes both engines.
+    Phase 8 starts APScheduler after Phase 3 hooks so jobs may read cached
+    settings. Phase 0's sync ``SELECT 1`` smoke against the main engine is
+    preserved. Shutdown: scheduler first (wait=False), then engine disposal.
 
     Phase 3 hooks (D-16). All three are sync; await-free is fine inside the
     async lifespan body. ``encryption_startup_check`` runs FIRST so a bad
@@ -166,8 +169,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         credentials.rewrap_if_needed(db)
         settings_service.prewarm_cache(db)
     log.info("app.startup", version=app.version)
+    # Phase 8: start APScheduler after Phase 3 hooks + prewarm_cache so jobs may read settings.
+    scheduler_start()
     yield
     log.info("app.shutdown")
+    # Phase 8: shut down non-blocking so a mid-flight pg_dump never blocks container stop.
+    scheduler_shutdown()
     dispose_engine()
     await _async_engine.dispose()
 
