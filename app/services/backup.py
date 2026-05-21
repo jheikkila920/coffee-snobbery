@@ -222,8 +222,17 @@ def prune_old_backups(
         if m:
             file_date = date.fromisoformat(m.group(1))
             if file_date < cutoff:
-                f.unlink()
-                deleted += 1
+                try:
+                    f.unlink()
+                    deleted += 1
+                except Exception as exc:
+                    # One undeletable file must not stop pruning the rest (WR-03).
+                    log.warning(
+                        "backup.prune_file_failed",
+                        filename=f.name,
+                        error_class=type(exc).__name__,
+                        error_msg=str(exc),
+                    )
     return deleted
 
 
@@ -352,7 +361,14 @@ def run_backup(
         )
 
     # --- Prune old backups ---
-    pruned_count = prune_old_backups(backup_dir, settings.BACKUP_RETENTION_DAYS, _today=today)
+    # Isolated try/except so a prune failure degrades gracefully (D-03 keep-partial):
+    # both artifacts have already been attempted; a filesystem error here must not
+    # prevent last_backup_status from being written (WR-03).
+    try:
+        pruned_count = prune_old_backups(backup_dir, settings.BACKUP_RETENTION_DAYS, _today=today)
+    except Exception as exc:
+        pruned_count = 0
+        log.warning("backup.prune_failed", error_class=type(exc).__name__, error_msg=str(exc))
     result.pruned_count = pruned_count
     log.info(
         BACKUP_PRUNED,
