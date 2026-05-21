@@ -131,15 +131,12 @@ def test_eligibility_filter(sync_db: Any) -> None:
     user_c = _make_user("sched_inactive_5", False)
 
     # Seed brew sessions — only need a minimal valid row.
-    # BrewSession requires user_id and coffee_id (NOT NULL FK); use a
-    # real seeded coffee or skip if none exists.
+    # BrewSession requires user_id and coffee_id (NOT NULL FK); seed one in-test.
     from app.models.coffee import Coffee
 
-    coffee = sync_db.execute(
-        __import__("sqlalchemy").select(Coffee).limit(1)
-    ).scalar_one_or_none()
-    if coffee is None:
-        pytest.skip("No coffee rows in test DB — eligibility test needs at least one coffee")
+    coffee = Coffee(name=f"sched_test_{suffix}")
+    sync_db.add(coffee)
+    sync_db.flush()
 
     def _add_sessions(user: User, count: int) -> None:
         for _ in range(count):
@@ -255,16 +252,14 @@ def test_token_aggregation(sync_db: Any) -> None:
     sync_db.add(user)
     sync_db.flush()
 
-    # Seed a coffee for the ai_recommendation FK
-    from app.models.coffee import Coffee
+    # run_start must be <= the DB transaction clock (func.now()) used for
+    # generated_at server_default. The sync_db fixture opens its transaction
+    # before this test body runs, so func.now() == transaction_start < any
+    # Python datetime.now() call here. Subtract 1 second to ensure the filter
+    # generated_at >= run_start includes the rows seeded in this transaction.
+    from datetime import timedelta
 
-    coffee = sync_db.execute(
-        __import__("sqlalchemy").select(Coffee).limit(1)
-    ).scalar_one_or_none()
-    if coffee is None:
-        pytest.skip("No coffee rows in test DB — token aggregation test needs a coffee")
-
-    run_start = datetime.now(UTC)
+    run_start = datetime.now(UTC) - timedelta(seconds=1)
 
     # Row 1: this-run scheduler row WITH web-search tokens
     row1 = AIRecommendation(
