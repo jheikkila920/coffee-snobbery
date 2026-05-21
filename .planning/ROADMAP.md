@@ -251,7 +251,14 @@ Plans:
   2. The nightly AI refresh at 00:00 iterates every active user with â‰¥3 brew sessions, computes the input signature, and triggers `ai_service.regenerate(user_id, generated_by="scheduler")` only when the signature differs from the stored one. The same in-memory lock + advisory lock from Phase 7 keeps it from racing a manual refresh.
   3. After the nightly run, structured logs show a single summary line per run with `users_processed`, `regenerations`, `skips`, `tokens_input_total`, `tokens_output_total`, `tokens_input_search_total`, `errors`. A separate `app_settings.last_ai_run_status` row (success/error + message) updates so the admin "API health" panel (Phase 9) can show it.
   4. The nightly backup at 02:00 runs `pg_dump` from inside the web container (matching `postgresql-client-16` version), writes `db_YYYY-MM-DD.sql` + `photos_YYYY-MM-DD.tar.gz` into the named `coffee_snobbery_backups` volume, and deletes files older than `BACKUP_RETENTION_DAYS`. After a simulated container restart at 23:55, the 00:00 AI job and 02:00 backup both still fire.
-**Plans:** TBD
+**Plans:** 3 plans
+Plans:
+**Wave 1**
+- [ ] 08-01-PLAN.md — Wave 0 test scaffolding (test_scheduler/test_backup stubs + sync_db/mock_regenerate fixtures) + scheduler.*/backup.* event taxonomy (SCHED-01..04)
+
+**Wave 2** *(blocked on 08-01)*
+- [ ] 08-02-PLAN.md — services/backup.py: pg_dump (plain .sql) + photos tarball + filename-date prune + keep-partial structured result + last_backup_status JSON write (SCHED-04)
+- [ ] 08-03-PLAN.md — scheduler.py AsyncIOScheduler + sync-engine SQLAlchemyJobStore + idempotent jobs + nightly AI refresh (eligibility, async-regenerate bridge, token split, SCHED-03 summary) + lifespan wiring (SCHED-01, SCHED-02, SCHED-03)
 **Notes:** Carries the top-2 pitfall SH-1 (default `MemoryJobStore` would lose jobs; default `misfire_grace_time=1s` would silently skip restarts), SH-5 (version-matched `pg_dump` â€” already installed in Phase 0), COST-3 (`last_ai_run_status` for admin health panel). Re-references the Phase 0 single-worker rule â€” if a future operator sets `--workers 4`, every nightly job fires four times.
 
 ### Phase 9: Admin

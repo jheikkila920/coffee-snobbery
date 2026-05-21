@@ -639,7 +639,9 @@ BACKUP_PRUNED = "backup.pruned"
 
 **If this table is empty:** All other claims in this research were verified or cited.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Both resolved inline below and implemented in the plans (08-02/T2 + 08-03/T2 raw-DB-read contract for Phase 9; 08-03/T1 apscheduler_jobs Alembic-ownership note).
 
 1. **`set_setting()` cache invalidation on status writes**
    - What we know: `set_setting()` pops the key from `_cache` after commit; does not re-populate.
