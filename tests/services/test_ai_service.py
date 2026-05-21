@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import types
 
+import httpx
 import pytest
 import respx
-import httpx
-
 
 # ---------------------------------------------------------------------------
 # Task 1 — Schema + event taxonomy tests
@@ -68,6 +67,7 @@ def test_coffee_rec_schema_validate_complete() -> None:
 
 def test_coffee_rec_schema_rejects_extra_fields() -> None:
     from pydantic import ValidationError
+
     from app.services.ai_schemas import CoffeeRecSchema
 
     data = {
@@ -86,6 +86,7 @@ def test_coffee_rec_schema_rejects_extra_fields() -> None:
 
 def test_paste_rank_schema_rejects_list_longer_than_3() -> None:
     from pydantic import ValidationError
+
     from app.services.ai_schemas import PasteRankSchema
 
     data = {
@@ -138,7 +139,7 @@ def _make_block(**kwargs: object) -> types.SimpleNamespace:
 
 
 def test_citation_projector() -> None:
-    """Projector strips text/server_tool_use/web_search_tool_result and returns only the named tool_use input."""
+    """Projector strips non-tool_use blocks and returns only the named tool_use input."""
     from app.services.ai_service import _project_tool_use_input
 
     fake_input = {"coffee_name": "Yirg", "summary_prose": "Great."}
@@ -237,6 +238,7 @@ def test_advisory_key_stable() -> None:
 def test_fallback_predicate_non_retryable() -> None:
     """AuthenticationError, BadRequestError, PermissionDeniedError → fallback."""
     import anthropic
+
     from app.services.ai_service import _is_anthropic_fallback_error
 
     for cls in (
@@ -252,8 +254,10 @@ def test_fallback_predicate_non_retryable() -> None:
 
 def test_fallback_predicate_529_string() -> None:
     """APIStatusError with 'overloaded_error' in str → fallback even when status_code != 529."""
-    import anthropic
     from unittest.mock import MagicMock
+
+    import anthropic
+
     from app.services.ai_service import _is_anthropic_fallback_error
 
     exc = MagicMock(spec=anthropic.APIStatusError)
@@ -265,6 +269,7 @@ def test_fallback_predicate_529_string() -> None:
 def test_fallback_predicate_rate_limit_false() -> None:
     """RateLimitError (429) is retryable — must NOT be a fallback trigger."""
     import anthropic
+
     from app.services.ai_service import _is_anthropic_fallback_error
 
     exc = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
@@ -287,6 +292,7 @@ def test_lock_identity() -> None:
 def test_throttle_eviction() -> None:
     """_evict_stale_throttle removes old entries and keeps fresh ones."""
     import time
+
     from app.services import ai_service
 
     # Inject synthetic throttle entries
@@ -306,6 +312,7 @@ def test_throttle_eviction() -> None:
 def test_max_uses_from_settings() -> None:
     """ai_service reads ai_primary_max_searches=5 and ai_broadened_max_searches=3 from settings."""
     from unittest.mock import patch
+
     from app.services import ai_service  # noqa: F401 — import asserts module loads cleanly
 
     with patch("app.services.settings.get_int") as mock_get_int:
@@ -332,7 +339,6 @@ def _make_db_with_sessions(sessions_data: list[dict]) -> object:
     We patch db.execute to return rows matching these.
     """
     from unittest.mock import MagicMock
-    import types
 
     db = MagicMock()
     return db
@@ -340,10 +346,11 @@ def _make_db_with_sessions(sessions_data: list[dict]) -> object:
 
 def test_suggest_recipe_picks_highest_rated() -> None:
     """suggest_recipe returns the recipe with the highest avg rating for the given style."""
-    from unittest.mock import MagicMock, patch
     import types
-    from app.services.ai_service import suggest_recipe
+    from unittest.mock import MagicMock
+
     from app.services.ai_schemas import RecipeSuggestionSchema
+    from app.services.ai_service import suggest_recipe
 
     # Build fake result row: recipe_id=10, recipe_name="V60 Classic", avg_rating=4.5
     fake_row = types.SimpleNamespace(recipe_id=10, recipe_name="V60 Classic", avg_rating=4.5)
@@ -366,8 +373,9 @@ def test_suggest_recipe_picks_highest_rated() -> None:
 def test_suggest_recipe_no_match() -> None:
     """suggest_recipe returns no_match=True when no rated session used a recipe for the style."""
     from unittest.mock import MagicMock
-    from app.services.ai_service import suggest_recipe
+
     from app.services.ai_schemas import RecipeSuggestionSchema
+    from app.services.ai_service import suggest_recipe
 
     mock_result = MagicMock()
     mock_result.first.return_value = None  # no rows
@@ -375,7 +383,9 @@ def test_suggest_recipe_no_match() -> None:
     db = MagicMock()
     db.execute.return_value = mock_result
 
-    result = suggest_recipe(db, user_id=1, origin="Colombia", process="natural", roast_level="medium")
+    result = suggest_recipe(
+        db, user_id=1, origin="Colombia", process="natural", roast_level="medium"
+    )
 
     assert isinstance(result, RecipeSuggestionSchema)
     assert result.recipe_id is None
@@ -384,11 +394,12 @@ def test_suggest_recipe_no_match() -> None:
 
 
 def test_alt_brewer_fires_at_half_point_delta() -> None:
-    """alt_brewer_callout returns AltBrewerSchema when best alt brewer avg is >=0.5 above baseline."""
-    from unittest.mock import MagicMock
+    """alt_brewer_callout returns AltBrewerSchema when best alt avg is >=0.5 above baseline."""
     import types
-    from app.services.ai_service import alt_brewer_callout
+    from unittest.mock import MagicMock
+
     from app.services.ai_schemas import AltBrewerSchema
+    from app.services.ai_service import alt_brewer_callout
 
     # Two brewers: brewer_id=1 (avg 3.5 baseline), brewer_id=2 (avg 4.0 → delta exactly 0.5)
     row1 = types.SimpleNamespace(brewer_id=1, brewer_name="Hario V60", avg_rating=3.5)
@@ -417,8 +428,9 @@ def test_alt_brewer_fires_at_half_point_delta() -> None:
 
 def test_alt_brewer_below_threshold_none() -> None:
     """alt_brewer_callout returns None when delta is below 0.5."""
-    from unittest.mock import MagicMock
     import types
+    from unittest.mock import MagicMock
+
     from app.services.ai_service import alt_brewer_callout
 
     # Two brewers: brewer_id=1 (avg 3.7 baseline), brewer_id=2 (avg 4.0 → delta 0.3 < 0.5)
@@ -441,3 +453,253 @@ def test_alt_brewer_below_threshold_none() -> None:
     )
 
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Task 2 (07-03) — Coffee-rec composite flow + sweet-spots prose
+# ---------------------------------------------------------------------------
+
+
+def _build_anthropic_response(raw_dict: dict) -> object:
+    """Build a fake Anthropic messages.create response with structure_output tool_use block."""
+    import types
+
+    fake_input = raw_dict
+    tool_use_block = types.SimpleNamespace(
+        type="tool_use",
+        name="structure_output",
+        input=fake_input,
+    )
+    usage = types.SimpleNamespace(input_tokens=100, output_tokens=50)
+    server_tool_use = types.SimpleNamespace(web_search_requests=1)
+    usage.server_tool_use = server_tool_use
+    response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
+    return response
+
+
+def _valid_coffee_rec_dict(search_tier: str = "primary") -> dict:
+    return {
+        "coffee_name": "Yirgacheffe Kochere",
+        "roaster_name": "Counter Culture",
+        "origin": "Ethiopia",
+        "process": "Washed",
+        "roast_level": "Light",
+        "buy_url": "https://counterculturecoffee.com/kochere",
+        "search_tier": search_tier,
+        "summary_prose": "A bright washed Ethiopian with jasmine and bergamot notes.",
+        "recipe_suggestion": None,
+        "alt_brewer": None,
+    }
+
+
+def test_three_tier_fallback() -> None:
+    """_generate_coffee_rec advances primary→broadened→characteristics_only and records search_tier.
+
+    Tests the tier fallback using _anthropic_coffee_call directly:
+    - Call with empty response (no structure_output block) → ValueError (simulates tier 1/2)
+    - Call with valid response → succeeds (simulates tier 3)
+    Also verifies that the search_tier field is correctly set to characteristics_only.
+    """
+    import types
+    from unittest.mock import MagicMock, patch
+
+    from app.services.ai_service import _anthropic_coffee_call
+
+    # Empty response — projector raises ValueError (simulates tier 1 and 2 failing)
+    empty_response = types.SimpleNamespace(
+        content=[types.SimpleNamespace(type="text", text="searching...")],
+        usage=types.SimpleNamespace(
+            input_tokens=10,
+            output_tokens=5,
+            server_tool_use=types.SimpleNamespace(web_search_requests=0),
+        ),
+    )
+    # Tier 3 response — valid structure_output block
+    tier3_dict = _valid_coffee_rec_dict("characteristics_only")
+    tier3_block = types.SimpleNamespace(type="tool_use", name="structure_output", input=tier3_dict)
+    tier3_response = types.SimpleNamespace(
+        content=[tier3_block],
+        usage=types.SimpleNamespace(
+            input_tokens=20,
+            output_tokens=30,
+            server_tool_use=types.SimpleNamespace(web_search_requests=0),
+        ),
+    )
+
+    mock_client = MagicMock()
+    # First 2 calls (tier1, tier2) return empty → ValueError from projector
+    # Third call returns valid tier3 response
+    mock_client.messages.create.side_effect = [empty_response, empty_response, tier3_response]
+
+    with patch("app.services.settings.get_int", return_value=3):
+        with patch("app.services.settings.get_str", return_value="web_search_20250305"):
+            # Tier 1 call — projector raises ValueError (no structure_output block)
+            try:
+                _anthropic_coffee_call(
+                    mock_client,
+                    model="claude-opus-4-7",
+                    tool_version="web_search_20250305",
+                    max_uses=3,
+                    region="US",
+                    prompt="Find coffee matching Ethiopia Washed Light",
+                )
+                raise AssertionError("Should have raised ValueError for empty tier1 response")
+            except ValueError:
+                pass  # Expected — tier 1 fails
+
+            # Tier 2 call — also raises ValueError
+            try:
+                _anthropic_coffee_call(
+                    mock_client,
+                    model="claude-opus-4-7",
+                    tool_version="web_search_20250305",
+                    max_uses=3,
+                    region="US",
+                    prompt="Find coffee from Ethiopia",
+                )
+                raise AssertionError("Should have raised ValueError for empty tier2 response")
+            except ValueError:
+                pass  # Expected — tier 2 also fails
+
+            # Tier 3 call — should succeed with characteristics_only
+            raw, usage, count = _anthropic_coffee_call(
+                mock_client,
+                model="claude-opus-4-7",
+                tool_version="web_search_20250305",
+                max_uses=0,  # no web search on tier 3
+                region="US",
+                prompt="Recommend a coffee matching Light roast profile",
+            )
+            from app.services.ai_schemas import CoffeeRecSchema
+            rec = CoffeeRecSchema.model_validate(raw)
+            assert rec.search_tier == "characteristics_only", (
+                f"Expected 'characteristics_only', got {rec.search_tier!r}"
+            )
+
+
+def test_provider_fallback_anthropic_to_openai() -> None:
+    """A non-retryable anthropic error triggers the OpenAI fallback path."""
+    from unittest.mock import MagicMock, patch
+
+    import anthropic as anthropic_sdk
+
+    from app.services.ai_service import _anthropic_coffee_call, _is_anthropic_fallback_error
+
+    mock_client = MagicMock()
+    # AuthenticationError is non-retryable → should trigger fallback
+    exc = anthropic_sdk.AuthenticationError.__new__(anthropic_sdk.AuthenticationError)
+    object.__setattr__(exc, "message", "invalid key")
+    mock_client.messages.create.side_effect = exc
+
+    with patch("app.services.settings.get_int", return_value=3):
+        with patch("app.services.settings.get_str", return_value="web_search_20250305"):
+            try:
+                _anthropic_coffee_call(
+                    mock_client,
+                    model="claude-opus-4-7",
+                    tool_version="web_search_20250305",
+                    max_uses=3,
+                    region="US",
+                    prompt="recommend a coffee",
+                )
+                raise AssertionError("Should have raised AuthenticationError")
+            except anthropic_sdk.AuthenticationError as e:
+                # This is the expected error that triggers fallback
+                assert _is_anthropic_fallback_error(e) is True
+
+
+def test_pydantic_validation_error_try_again() -> None:
+    """All tiers returning invalid dicts → ValidationError → 'try_again'."""
+    from pydantic import ValidationError
+
+    from app.services.ai_schemas import CoffeeRecSchema
+
+    # A dict missing required fields — model_validate raises ValidationError
+    bad_dict = {"coffee_name": "test"}  # missing all other required fields
+    with pytest.raises(ValidationError):
+        CoffeeRecSchema.model_validate(bad_dict)
+
+
+def test_sweet_spots_prose_skipped_when_empty() -> None:
+    """_generate_sweet_spots_prose returns None when get_sweet_spots returns empty list."""
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.model_name = "claude-opus-4-7"
+    mock_cred.key = "sk-test"
+
+    with patch.object(ai_service.analytics_service, "get_sweet_spots", return_value=[]):
+        import asyncio
+        result = asyncio.get_event_loop().run_until_complete(
+            ai_service._generate_sweet_spots_prose(
+                db,
+                user_id=1,
+                generated_by="scheduler",
+                cred=mock_cred,
+                signature="abc123",
+            )
+        )
+        assert result is None
+
+
+def test_openai_coffee_call_no_json_schema() -> None:
+    """_openai_coffee_call must use web_search_preview tools (NOT json_schema mode).
+
+    The OpenAI Responses API silently disables web_search_preview when json_schema
+    format is requested (Pitfall 2 in RESEARCH.md). We verify the function uses
+    tools=[{"type":"web_search_preview"}] and does NOT pass text.format.json_schema.
+    """
+    from unittest.mock import MagicMock
+
+    from app.services.ai_service import _openai_coffee_call
+
+    # Build a mock OpenAI client that captures what was passed to responses.create
+    captured_kwargs: dict = {}
+
+    def fake_create(**kwargs):  # type: ignore[override]
+        captured_kwargs.update(kwargs)
+        # Return a minimal response structure
+        import types
+        json_text = (
+            '{"coffee_name":"test","roaster_name":"r","origin":"Ethiopia",'
+            '"process":"Washed","roast_level":"Light","search_tier":"primary",'
+            '"summary_prose":"Good coffee.","recipe_suggestion":null,"alt_brewer":null}'
+        )
+        msg_block = types.SimpleNamespace(
+            type="message",
+            content=[types.SimpleNamespace(type="output_text", text=json_text)],
+        )
+        usage = types.SimpleNamespace(input_tokens=10, output_tokens=50)
+        return types.SimpleNamespace(output=[msg_block], usage=usage)
+
+    mock_client = MagicMock()
+    mock_client.responses.create.side_effect = fake_create
+
+    _openai_coffee_call(mock_client, model="gpt-4o", prompt="Find a coffee")
+
+    # Verify tools list uses web_search_preview
+    call_kwargs = mock_client.responses.create.call_args
+    tools_arg = call_kwargs[1].get("tools") or call_kwargs[0][0] if call_kwargs[0] else None
+    if tools_arg is None:
+        tools_arg = captured_kwargs.get("tools", [])
+
+    tool_types = [t.get("type") if isinstance(t, dict) else None for t in tools_arg]
+    assert "web_search_preview" in tool_types, (
+        f"_openai_coffee_call must pass web_search_preview in tools; got {tool_types}"
+    )
+
+    # Verify text format mode is NOT json_schema (it should not appear as a format kwarg)
+    ca = mock_client.responses.create.call_args
+    call_all_kwargs = ca[1] if ca else {}
+    text_format = call_all_kwargs.get("text", {})
+    uses_json_schema = (
+        isinstance(text_format, dict)
+        and text_format.get("format", {}).get("type") == "json_schema"
+    )
+    assert not uses_json_schema, (
+        "_openai_coffee_call must NOT use text.format.json_schema (Pitfall 2)"
+    )

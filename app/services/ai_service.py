@@ -470,6 +470,535 @@ def alt_brewer_callout(
 
 
 # ---------------------------------------------------------------------------
+# Anthropic coffee-rec LLM caller (AI-03 / Pattern 2)
+# ---------------------------------------------------------------------------
+
+
+def _anthropic_coffee_call(
+    client: anthropic.Anthropic,
+    *,
+    model: str,
+    tool_version: str,
+    max_uses: int,
+    region: str,
+    prompt: str,
+) -> tuple[dict[str, Any], Any, int]:
+    """Call Anthropic with web_search + structure_output tools.
+
+    Builds the two-tool list per 07-PATTERNS lines 155-173:
+    - web_search server tool (type=tool_version, name="web_search", max_uses, user_location)
+    - structure_output client tool with CoffeeRecSchema.model_json_schema() as input_schema
+
+    Returns (raw_dict, usage, web_search_count).
+    Raises ValueError if the projector finds no structure_output block.
+    Raises any Anthropic SDK exception for the caller to handle (fallback predicate).
+    """
+    tools: list[dict[str, Any]] = [
+        {
+            "type": tool_version,
+            "name": "web_search",
+            "max_uses": max_uses,
+            "user_location": {
+                "type": "approximate",
+                "country": region,
+            },
+        },
+        {
+            "name": "structure_output",
+            "description": "Return the structured coffee recommendation",
+            "input_schema": CoffeeRecSchema.model_json_schema(),
+        },
+    ]
+    response = client.messages.create(
+        model=model,
+        max_tokens=2048,
+        system=SYSTEM_PROMPT_VOICE,
+        messages=[{"role": "user", "content": prompt}],
+        tools=tools,  # type: ignore[arg-type]
+    )
+    raw = _project_tool_use_input(response.content, "structure_output")
+    web_search_count: int = getattr(
+        getattr(response.usage, "server_tool_use", None), "web_search_requests", 0
+    )
+    return raw, response.usage, web_search_count
+
+
+# ---------------------------------------------------------------------------
+# OpenAI coffee-rec fallback caller (Pattern 3 — prompt-based JSON)
+# ---------------------------------------------------------------------------
+
+
+def _openai_coffee_call(
+    client: openai.OpenAI,
+    *,
+    model: str,
+    prompt: str,
+) -> tuple[dict[str, Any], Any, int]:
+    """Call OpenAI Responses API with web_search_preview (NOT json_schema — Pitfall 2).
+
+    Uses prompt-based JSON instruction rather than text.format.json_schema,
+    because json_schema silently disables web_search_preview on the OpenAI
+    Responses API (RESEARCH.md Pitfall 2).
+
+    Returns (raw_dict, usage, web_search_count).
+    Raises json.JSONDecodeError or pydantic.ValidationError on bad output.
+    """
+    schema_hint = json.dumps(CoffeeRecSchema.model_json_schema(), separators=(",", ":"))
+    full_prompt = (
+        f"{prompt}\n\n"
+        f"Respond with a JSON object matching this schema exactly:\n{schema_hint}"
+    )
+    response = client.responses.create(
+        model=model,
+        input=[{"role": "user", "content": full_prompt}],
+        tools=[{"type": "web_search_preview"}],  # type: ignore[list-item]
+    )
+    # Extract text output from the response
+    text_out = ""
+    for item in response.output:
+        if item.type == "message":
+            for c in item.content:
+                if c.type == "output_text":
+                    text_out = c.text
+                    break
+    raw = json.loads(text_out)
+    web_search_count: int = 0  # OpenAI Responses API does not expose search count
+    return raw, response.usage, web_search_count
+
+
+# ---------------------------------------------------------------------------
+# Sweet-spots prose sub-flow (HOME-06, AI-10)
+# ---------------------------------------------------------------------------
+
+
+async def _generate_sweet_spots_prose(
+    db: Session,
+    *,
+    user_id: int,
+    generated_by: str,
+    cred: credentials_service.ProviderCredential,
+    signature: str,
+) -> AIRecommendation | None:
+    """Generate and persist sweet-spots prose for the user.
+
+    Reads analytics.get_sweet_spots; returns None when empty (no data to
+    summarise). Otherwise makes one small LLM call (no web_search) returning
+    SweetSpotsProseSchema, then writes a SEPARATE row with
+    recommendation_type="sweet_spots" in the same regeneration flow (AI-10).
+
+    The LLM call is synchronous (no web search needed); the async wrapper
+    keeps the function signature consistent with the awaited call site.
+    """
+    sweet_spots = analytics_service.get_sweet_spots(db, user_id)
+    if not sweet_spots:
+        return None
+
+    # Build a compact summary of the sweet-spot combos for the prompt
+    combos = "\n".join(
+        f"- {r.origin} {r.process} via {r.brewer_name} / {r.recipe_name}: "
+        f"avg {float(r.avg_rating):.2f} ({r.session_count} sessions)"
+        for r in sweet_spots
+    )
+    prompt = (
+        f"Here are this user's top brew sweet spots:\n{combos}\n\n"
+        "Write 3-5 sentences identifying the key patterns — grind, ratio, temperature, "
+        "or timing — with specific numbers where the data supports it. "
+        "This will display on the home page as actionable guidance."
+    )
+
+    start_ts = time.monotonic()
+    tool_version = settings_service.get_str("ai_tool_version_anthropic")
+
+    if cred.provider == "anthropic":
+        client = _build_anthropic_client(cred)
+        # No web_search for sweet spots — characteristics-only small call
+        response = client.messages.create(
+            model=cred.model_name,
+            max_tokens=512,
+            system=SYSTEM_PROMPT_VOICE,
+            messages=[{"role": "user", "content": prompt}],
+            tools=[
+                {
+                    "name": "structure_output",
+                    "description": "Return the sweet spots prose",
+                    "input_schema": SweetSpotsProseSchema.model_json_schema(),
+                }
+            ],  # type: ignore[arg-type]
+        )
+        raw = _project_tool_use_input(response.content, "structure_output")
+        usage = response.usage
+        web_search_count = 0
+    else:
+        # OpenAI path
+        oai_client = _build_openai_client(cred)
+        schema_hint = json.dumps(SweetSpotsProseSchema.model_json_schema(), separators=(",", ":"))
+        full_prompt = (
+            f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
+        )
+        response = oai_client.responses.create(
+            model=cred.model_name,
+            input=[{"role": "user", "content": full_prompt}],
+        )
+        text_out = ""
+        for item in response.output:
+            if item.type == "message":
+                for c in item.content:
+                    if c.type == "output_text":
+                        text_out = c.text
+                        break
+        raw = json.loads(text_out)
+        usage = response.usage
+        web_search_count = 0
+        tool_version = settings_service.get_str("ai_tool_version_openai")
+
+    from pydantic import ValidationError as PydanticValidationError
+    try:
+        SweetSpotsProseSchema.model_validate(raw)
+    except PydanticValidationError:
+        return None  # Skip on validation failure — not worth a "try_again" for prose
+
+    duration_ms = int((time.monotonic() - start_ts) * 1000)
+    return _write_recommendation_row(
+        db,
+        user_id=user_id,
+        rec_type="sweet_spots",
+        input_signature=signature,
+        response_json=raw,
+        cred=cred,
+        tool_version=tool_version,
+        usage=usage,
+        web_search_count=web_search_count,
+        duration_ms=duration_ms,
+        generated_by=generated_by,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Coffee-rec composite three-tier driver (AI-03)
+# ---------------------------------------------------------------------------
+
+
+def _build_coffee_rec_prompt(
+    profile: dict[str, Any],
+    sweet_spots: list[Any],
+    *,
+    origin: str | None = None,
+    process: str | None = None,
+    roast_level: str | None = None,
+    tier: str = "primary",
+) -> str:
+    """Build the search prompt for the given tier.
+
+    - primary: uses top origin + process + roast_level from profile
+    - broadened: uses top origin only (relaxed constraints)
+    - characteristics_only: uses overall preference profile without session history
+    """
+    # Extract top preferences
+    top_origin = origin or (profile.get("origin", [{}])[0].label if profile.get("origin") else "")
+    top_process = process or (
+        profile.get("process", [{}])[0].label if profile.get("process") else ""
+    )
+    top_roast = roast_level or (
+        profile.get("roast_level", [{}])[0].label if profile.get("roast_level") else ""
+    )
+
+    if sweet_spots:
+        sweet_text = "; ".join(
+            f"{r.origin} {r.process} via {r.brewer_name} (avg {float(r.avg_rating):.1f})"
+            for r in sweet_spots[:2]
+        )
+        grounding = f"Their best brews: {sweet_text}."
+    else:
+        grounding = ""
+
+    if tier == "primary":
+        style = f"{top_roast} {top_process} {top_origin}".strip()
+        return (
+            f"Find a specialty coffee to buy next for a pour-over enthusiast. "
+            f"Their preferred style: {style}. {grounding} "
+            f"Find a currently available, purchasable bag from a reputable specialty roaster. "
+            f"Provide the buy URL for the specific product page."
+        )
+    elif tier == "broadened":
+        return (
+            f"Find a specialty coffee to buy next for a pour-over enthusiast. "
+            f"Preferred origin: {top_origin}. {grounding} "
+            f"Broaden to any process or roast level from this origin. "
+            f"Find a currently available, purchasable bag. Provide the buy URL."
+        )
+    else:  # characteristics_only
+        style = f"{top_roast} roast, {top_origin} origin".strip(", ")
+        return (
+            f"Recommend a specialty coffee for a pour-over enthusiast who enjoys {style}. "
+            f"{grounding} "
+            f"No web search needed — use your knowledge of well-regarded specialty roasters. "
+            f"Set buy_url to null and search_tier to 'characteristics_only'."
+        )
+
+
+async def _generate_coffee_rec(
+    db: Session,
+    *,
+    user_id: int,
+    generated_by: str,
+    signature: str,
+) -> tuple[str, AIRecommendation | None]:
+    """Drive the three-tier coffee-rec flow with Anthropic→OpenAI provider fallback.
+
+    Returns (status, row) where status is one of:
+    "generated" | "try_again" | "not_configured"
+
+    Three tiers (AI-03):
+    1. primary (origin+process+roast_level, max_uses=ai_primary_max_searches)
+    2. broadened (origin only, max_uses=ai_broadened_max_searches)
+    3. characteristics_only (no web_search, no buy_url)
+
+    Provider order: Anthropic first; _is_anthropic_fallback_error → OpenAI.
+    All tiers failing Pydantic validation → write error row, return "try_again".
+    """
+    from pydantic import ValidationError as PydanticValidationError
+
+    # Read credentials — try anthropic first, fall back to openai
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    if anthropic_cred is None and openai_cred is None:
+        return "not_configured", None
+
+    # Gather grounding data (sync reads before the async LLM call — Pitfall 5)
+    profile = analytics_service.get_preference_profile(db, user_id)
+    sweet_spots = analytics_service.get_sweet_spots(db, user_id)
+
+    primary_max = settings_service.get_int("ai_primary_max_searches")
+    broadened_max = settings_service.get_int("ai_broadened_max_searches")
+    region = settings_service.get_str("recommendation_region")
+    tool_version_anthropic = settings_service.get_str("ai_tool_version_anthropic")
+    tool_version_openai = settings_service.get_str("ai_tool_version_openai")
+
+    tiers = [
+        ("primary", primary_max),
+        ("broadened", broadened_max),
+        ("characteristics_only", 0),  # no web search on tier 3
+    ]
+
+    cred = anthropic_cred or openai_cred  # active credential for structlog / write
+    if cred is None:  # guarded by the not_configured check above
+        return "not_configured", None
+
+    start_ts = time.monotonic()
+    last_error: Exception | None = None
+
+    for tier_name, max_uses in tiers:
+        prompt = _build_coffee_rec_prompt(
+            profile,
+            sweet_spots,
+            tier=tier_name,
+        )
+
+        raw: dict[str, Any] | None = None
+        usage: Any = None
+        web_search_count = 0
+        used_cred = cred
+        used_tool_version = tool_version_anthropic
+
+        # Try Anthropic if available
+        if anthropic_cred is not None:
+            anthropic_client = _build_anthropic_client(anthropic_cred)
+            try:
+                if tier_name == "characteristics_only":
+                    # No web search on tier 3 — use a simple message
+                    response = anthropic_client.messages.create(
+                        model=anthropic_cred.model_name,
+                        max_tokens=2048,
+                        system=SYSTEM_PROMPT_VOICE,
+                        messages=[{"role": "user", "content": prompt}],
+                        tools=[
+                            {
+                                "name": "structure_output",
+                                "description": "Return the structured coffee recommendation",
+                                "input_schema": CoffeeRecSchema.model_json_schema(),
+                            }
+                        ],  # type: ignore[arg-type]
+                    )
+                else:
+                    response = anthropic_client.messages.create(
+                        model=anthropic_cred.model_name,
+                        max_tokens=2048,
+                        system=SYSTEM_PROMPT_VOICE,
+                        messages=[{"role": "user", "content": prompt}],
+                        tools=[  # type: ignore[arg-type]
+                            {
+                                "type": tool_version_anthropic,
+                                "name": "web_search",
+                                "max_uses": max_uses,
+                                "user_location": {
+                                    "type": "approximate",
+                                    "country": region,
+                                },
+                            },
+                            {
+                                "name": "structure_output",
+                                "description": "Return the structured coffee recommendation",
+                                "input_schema": CoffeeRecSchema.model_json_schema(),
+                            },
+                        ],
+                    )
+                raw = _project_tool_use_input(response.content, "structure_output")
+                usage = response.usage
+                web_search_count = getattr(
+                    getattr(response.usage, "server_tool_use", None),
+                    "web_search_requests",
+                    0,
+                )
+                used_cred = anthropic_cred
+            except (ValueError, PydanticValidationError) as e:
+                # Projector found no tool_use or schema mismatch — advance tier
+                last_error = e
+                log.warning(
+                    AI_TIER_FALLBACK,
+                    user_id=user_id,
+                    from_tier=tier_name,
+                    to_tier="next",
+                    reason=type(e).__name__,
+                )
+                continue
+            except BaseException as e:
+                if _is_anthropic_fallback_error(e):
+                    log.warning(
+                        AI_FALLBACK_TRIGGERED,
+                        user_id=user_id,
+                        rec_type="coffee",
+                        from_provider="anthropic",
+                        reason=type(e).__name__,
+                    )
+                    # Fall through to OpenAI
+                    if openai_cred is not None:
+                        pass  # handled below
+                    else:
+                        last_error = e
+                        continue
+                else:
+                    raise
+
+        # OpenAI fallback (or primary if no anthropic cred)
+        if raw is None and openai_cred is not None:
+            openai_client = _build_openai_client(openai_cred)
+            try:
+                raw, usage, web_search_count = _openai_coffee_call(
+                    openai_client,
+                    model=openai_cred.model_name,
+                    prompt=prompt,
+                )
+                used_cred = openai_cred
+                used_tool_version = tool_version_openai
+            except (json.JSONDecodeError, PydanticValidationError, Exception) as e:
+                last_error = e
+                log.warning(
+                    AI_TIER_FALLBACK,
+                    user_id=user_id,
+                    from_tier=tier_name,
+                    to_tier="next",
+                    reason=f"openai_{type(e).__name__}",
+                )
+                continue
+
+        if raw is None:
+            continue
+
+        # Validate the raw dict
+        try:
+            rec_schema = CoffeeRecSchema.model_validate(raw)
+        except PydanticValidationError as e:
+            last_error = e
+            log.warning(
+                AI_TIER_FALLBACK,
+                user_id=user_id,
+                from_tier=tier_name,
+                to_tier="next",
+                reason="pydantic_error",
+            )
+            continue
+
+        # Set the tier on the validated schema
+        # (force-set since the LLM may not have set it correctly for broadened/tier3)
+        rec_schema = rec_schema.model_copy(update={"search_tier": tier_name})
+
+        # Attach recipe_suggestion and alt_brewer (SQL sub-flows — no LLM)
+        recipe_sug = suggest_recipe(
+            db,
+            user_id=user_id,
+            origin=rec_schema.origin,
+            process=rec_schema.process,
+            roast_level=rec_schema.roast_level,
+        )
+        alt_brewer = alt_brewer_callout(
+            db,
+            user_id=user_id,
+            origin=rec_schema.origin,
+            process=rec_schema.process,
+            roast_level=rec_schema.roast_level,
+        )
+        rec_schema = rec_schema.model_copy(
+            update={
+                "recipe_suggestion": recipe_sug,
+                "alt_brewer": alt_brewer,
+            }
+        )
+
+        duration_ms = int((time.monotonic() - start_ts) * 1000)
+        rec_row = _write_recommendation_row(
+            db,
+            user_id=user_id,
+            rec_type="coffee",
+            input_signature=signature,
+            response_json=rec_schema.model_dump(),
+            cred=used_cred,
+            tool_version=used_tool_version,
+            usage=usage,
+            web_search_count=web_search_count,
+            duration_ms=duration_ms,
+            generated_by=generated_by,
+            url_verified=None,  # deferred to 07-05 background verify task
+        )
+        log.info(
+            AI_GENERATION_SUCCESS,
+            user_id=user_id,
+            rec_type="coffee",
+            provider=used_cred.provider,
+            model=used_cred.model_name,
+            tier=tier_name,
+            tokens_input=getattr(usage, "input_tokens", 0),
+            tokens_output=getattr(usage, "output_tokens", 0),
+            duration_ms=duration_ms,
+        )
+        return "generated", rec_row
+
+    # All tiers failed validation
+    duration_ms = int((time.monotonic() - start_ts) * 1000)
+    log.error(
+        AI_GENERATION_ERROR,
+        user_id=user_id,
+        rec_type="coffee",
+        error_class=type(last_error).__name__ if last_error else "unknown",
+        error_status="pydantic_error",
+    )
+    _write_recommendation_row(
+        db,
+        user_id=user_id,
+        rec_type="coffee",
+        input_signature=signature,
+        response_json={},
+        cred=cred,
+        tool_version=tool_version_anthropic,
+        usage=None,
+        web_search_count=0,
+        duration_ms=duration_ms,
+        generated_by=generated_by,
+        error_status="pydantic_error",
+    )
+    return "try_again", None
+
+
+# ---------------------------------------------------------------------------
 # Telemetry write helper (AI-02)
 # ---------------------------------------------------------------------------
 
