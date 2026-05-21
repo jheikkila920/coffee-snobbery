@@ -1054,3 +1054,155 @@ def _write_recommendation_row(
     db.add(rec_row)
     db.commit()
     return rec_row
+
+
+# ---------------------------------------------------------------------------
+# Read helpers (AI-15, SCHED-02)
+# ---------------------------------------------------------------------------
+
+
+def get_latest_recommendation(
+    db: Session,
+    *,
+    user_id: int,
+    rec_type: str,
+) -> AIRecommendation | None:
+    """Return the newest successful row for (user_id, rec_type), or None.
+
+    Filters out error rows (error_status IS NULL) so callers always
+    receive a valid recommendation or None. User-scoped (IDOR: always
+    filters by user_id == user_id first).
+    """
+    return db.execute(
+        select(AIRecommendation)
+        .where(
+            AIRecommendation.user_id == user_id,
+            AIRecommendation.recommendation_type == rec_type,
+            AIRecommendation.error_status.is_(None),
+        )
+        .order_by(AIRecommendation.generated_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def is_stale(db: Session, *, user_id: int) -> bool:
+    """Return True when the current signature differs from the stored coffee row's.
+
+    Implements AI-15: the router/poll uses this to show the "stale badge"
+    when the user has logged new rated sessions since the last generation.
+    """
+    current_sig = analytics_service.compute_input_signature(db, user_id)
+    row = get_latest_recommendation(db, user_id=user_id, rec_type="coffee")
+    if row is None:
+        return False  # no row → not stale (not yet generated)
+    return current_sig != row.input_signature
+
+
+def in_flight(user_id: int, rec_type: str = "coffee") -> bool:
+    """Return True when an active regeneration run holds the in-memory lock.
+
+    The router/poll endpoint calls this to decide whether to show the
+    in-flight spinner vs. the complete hero card.
+    """
+    return _get_lock(user_id, rec_type).locked()
+
+
+# ---------------------------------------------------------------------------
+# regenerate() — SCHED-02 entry point (Phase 8 calls this directly)
+# ---------------------------------------------------------------------------
+
+
+async def regenerate(
+    user_id: int,
+    generated_by: str,
+    *,
+    db: Session,
+    force: bool = False,
+) -> str:
+    """Generate (or skip) the user's cached nightly bundle (D-06).
+
+    Returns one of:
+    - ``"generated"``      — new coffee + sweet_spots rows written
+    - ``"skipped"``        — unchanged signature (force=False) or cold-start gate closed
+    - ``"locked"``         — concurrent run in progress (in-memory or advisory lock)
+    - ``"try_again"``      — all tiers failed Pydantic validation
+    - ``"not_configured"`` — no provider credential enabled
+    - ``"error"``          — unexpected exception; error row written
+
+    SCHED-02 contract (frozen signature): Phase 8 calls:
+        ``regenerate(uid, "scheduler", db=db)``
+
+    DB / async interaction (Pitfall 5 / Open Question 2):
+    Sync DB reads are done BEFORE the awaited LLM call, and sync DB writes
+    are done AFTER it returns. We never hold a sync Session open across an
+    ``await`` on the event loop — the pre-read/post-write bracketing approach
+    keeps the event loop unblocked during the potentially multi-second LLM
+    network call.
+    """
+    log.info(AI_GENERATION_START, user_id=user_id, rec_type="coffee", generated_by=generated_by)
+
+    # (1) Cold-start gate — no AI for users below the session/note threshold (AI-11)
+    gate = analytics_service.get_cold_start_counts(db, user_id)
+    if not gate["gate_open"]:
+        log.info(AI_REGEN_SKIPPED, user_id=user_id, rec_type="coffee", reason="cold_start")
+        return "skipped"
+
+    # (2) In-memory lock — process-local guard for single uvicorn worker (AI-13)
+    lock = _get_lock(user_id, "coffee")
+    if lock.locked():
+        return "locked"
+
+    async with lock:
+        # (3) Advisory lock — Postgres cross-process backstop (AI-13)
+        if not _try_advisory_lock(db, user_id, "coffee"):
+            return "locked"
+
+        # (4) Signature check (sync DB read before the LLM await — Pitfall 5)
+        current_sig = analytics_service.compute_input_signature(db, user_id)
+        stored_row = get_latest_recommendation(db, user_id=user_id, rec_type="coffee")
+        stored_sig = stored_row.input_signature if stored_row else None
+
+        if stored_sig == current_sig and not force:
+            log.info(
+                AI_REGEN_SKIPPED,
+                user_id=user_id,
+                rec_type="coffee",
+                reason="sig_unchanged",
+            )
+            return "skipped"
+
+        try:
+            # (5) Coffee-rec flow (contains the awaited LLM call)
+            status, _coffee_row = await _generate_coffee_rec(
+                db,
+                user_id=user_id,
+                generated_by=generated_by,
+                signature=current_sig,
+            )
+            if status in ("try_again", "not_configured"):
+                return status
+
+            # (6) Sweet-spots prose (written in same regeneration flow, AI-10)
+            await _generate_sweet_spots_prose(
+                db,
+                user_id=user_id,
+                generated_by=generated_by,
+                cred=(
+                    credentials_service.get_provider_credential(db, "anthropic")
+                    or credentials_service.get_provider_credential(db, "openai")
+                ),
+                signature=current_sig,
+            )
+
+            log.info(AI_GENERATION_SUCCESS, user_id=user_id, rec_type="coffee")
+            return "generated"
+
+        except Exception as exc:
+            log.error(
+                AI_GENERATION_ERROR,
+                user_id=user_id,
+                rec_type="coffee",
+                error_class=type(exc).__name__,
+                error_status="unexpected_error",
+            )
+            return "error"

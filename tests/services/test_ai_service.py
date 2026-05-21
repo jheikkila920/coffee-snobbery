@@ -703,3 +703,165 @@ def test_openai_coffee_call_no_json_schema() -> None:
     assert not uses_json_schema, (
         "_openai_coffee_call must NOT use text.format.json_schema (Pitfall 2)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 3 (07-03) — regenerate() entry point + read helpers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sig_skip() -> None:
+    """Unchanged signature with force=False returns 'skipped', no generation called."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    # Simulate cold-start gate open
+    gate_open = {"gate_open": True, "sessions": 5, "distinct_notes": 10}
+    # Existing coffee row with the same signature
+    existing_row = MagicMock()
+    existing_row.input_signature = "same-sig-abc123"
+
+    with (
+        patch.object(ai_service.analytics_service, "get_cold_start_counts", return_value=gate_open),
+        patch.object(
+            ai_service.analytics_service, "compute_input_signature", return_value="same-sig-abc123"
+        ),
+        patch.object(ai_service, "get_latest_recommendation", return_value=existing_row),
+        patch.object(ai_service, "_try_advisory_lock", return_value=True),
+        patch.object(ai_service, "_generate_coffee_rec", new_callable=AsyncMock) as mock_gen,
+    ):
+        result = await ai_service.regenerate(1, "scheduler", db=db)
+
+    assert result == "skipped"
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_force_regenerates() -> None:
+    """force=True bypasses signature check and calls _generate_coffee_rec."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    gate_open = {"gate_open": True, "sessions": 5, "distinct_notes": 10}
+    existing_row = MagicMock()
+    existing_row.input_signature = "same-sig-abc123"
+    generated_row = MagicMock(recommendation_type="coffee")
+    mock_cred = MagicMock()
+
+    with (
+        patch.object(ai_service.analytics_service, "get_cold_start_counts", return_value=gate_open),
+        patch.object(
+            ai_service.analytics_service, "compute_input_signature", return_value="same-sig-abc123"
+        ),
+        patch.object(ai_service, "get_latest_recommendation", return_value=existing_row),
+        patch.object(ai_service, "_try_advisory_lock", return_value=True),
+        patch.object(
+            ai_service, "_generate_coffee_rec", new_callable=AsyncMock,
+            return_value=("generated", generated_row),
+        ),
+        patch.object(
+            ai_service, "_generate_sweet_spots_prose", new_callable=AsyncMock, return_value=None
+        ),
+        patch.object(
+            ai_service.credentials_service, "get_provider_credential", return_value=mock_cred
+        ),
+    ):
+        result = await ai_service.regenerate(1, "scheduler", db=db, force=True)
+
+    assert result == "generated"
+
+
+@pytest.mark.asyncio
+async def test_not_configured() -> None:
+    """No provider credentials → 'not_configured'."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    gate_open = {"gate_open": True, "sessions": 5, "distinct_notes": 10}
+
+    with (
+        patch.object(ai_service.analytics_service, "get_cold_start_counts", return_value=gate_open),
+        patch.object(
+            ai_service.analytics_service, "compute_input_signature", return_value="new-sig-xyz"
+        ),
+        patch.object(ai_service, "get_latest_recommendation", return_value=None),
+        patch.object(ai_service, "_try_advisory_lock", return_value=True),
+        patch.object(
+            ai_service, "_generate_coffee_rec", new_callable=AsyncMock,
+            return_value=("not_configured", None),
+        ),
+    ):
+        result = await ai_service.regenerate(1, "scheduler", db=db)
+
+    assert result == "not_configured"
+
+
+@pytest.mark.asyncio
+async def test_advisory_lock_concurrent() -> None:
+    """Advisory lock unavailable (returns False) → regenerate returns 'locked'."""
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    gate_open = {"gate_open": True, "sessions": 5, "distinct_notes": 10}
+
+    with (
+        patch.object(ai_service.analytics_service, "get_cold_start_counts", return_value=gate_open),
+        patch.object(ai_service, "_try_advisory_lock", return_value=False),
+    ):
+        result = await ai_service.regenerate(1, "scheduler", db=db)
+
+    assert result == "locked"
+
+
+@pytest.mark.asyncio
+async def test_cold_start_skips() -> None:
+    """Cold-start gate closed → regenerate returns 'skipped' without any LLM call."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    gate_closed = {"gate_open": False, "sessions": 1, "distinct_notes": 2}
+
+    with (
+        patch.object(
+            ai_service.analytics_service, "get_cold_start_counts", return_value=gate_closed
+        ),
+        patch.object(ai_service, "_generate_coffee_rec", new_callable=AsyncMock) as mock_gen,
+    ):
+        result = await ai_service.regenerate(1, "scheduler", db=db)
+
+    assert result == "skipped"
+    mock_gen.assert_not_called()
+
+
+def test_is_stale_true_when_sig_changed() -> None:
+    """is_stale returns True when the current signature differs from the stored row's signature."""
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    stored_row = MagicMock()
+    stored_row.input_signature = "old-signature-abc"
+
+    with (
+        patch.object(ai_service, "get_latest_recommendation", return_value=stored_row),
+        patch.object(
+            ai_service.analytics_service,
+            "compute_input_signature",
+            return_value="new-signature-xyz",
+        ),
+    ):
+        result = ai_service.is_stale(db, user_id=1)
+
+    assert result is True
