@@ -100,6 +100,9 @@ None. This plan delivers infrastructure helpers with no UI surface and no data p
 
 No new network endpoints, auth paths, file access patterns, or schema changes beyond those defined in the plan's threat model. All four threat register items (T-07-01 through T-07-04) are implemented and verified by tests.
 
-## Self-Check
+## Self-Check: PASSED
 
-Will run after SUMMARY commit.
+All created files found on disk. All commits verified in git log:
+- cdca20f: feat(07-01): per-flow Pydantic schemas + ai.* event taxonomy
+- d9dc68b: feat(07-01): citation projector + SSRF-hardened URL verifier + advisory key
+- bb95d9c: docs(07-01): complete AI service foundation plan
