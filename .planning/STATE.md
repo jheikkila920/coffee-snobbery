@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Completed 05-06-PLAN.md (sessions list + CSV import/export UI — human-verified); Phase 5 complete (6/6)
-last_updated: "2026-05-20T17:35:31.753Z"
-last_activity: 2026-05-20
+status: executing
+stopped_at: Phase 7 context gathered
+last_updated: "2026-05-21T02:22:22.999Z"
+last_activity: 2026-05-21
 progress:
   total_phases: 13
   completed_phases: 7
-  total_plans: 49
-  completed_plans: 49
-  percent: 54
+  total_plans: 59
+  completed_plans: 55
+  percent: 93
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-16)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 05 — brew-sessions
+**Current focus:** Phase 07 — ai-services
 
 ## Current Position
 
-Phase: 6
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-20
+Phase: 07 (ai-services) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-05-21
 
-Progress: [██████████] 100%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 44
+- Total plans completed: 47
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -50,6 +50,7 @@ Progress: [██████████] 100%
 | 03 | 6 | - | - |
 | 04 | 11 | - | - |
 | 05 | 6 | - | - |
+| 06 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -62,6 +63,7 @@ Progress: [██████████] 100%
 | Phase 05 P04 | 14 | 3 tasks | 5 files |
 | Phase 05 P05 | 3 rounds | 3 tasks | 9 files |
 | Phase 05 P06 | 2 rounds | 3 tasks | 10 files |
+| Phase 07-ai-services P03 | 90 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -107,9 +109,8 @@ Recent decisions from PROJECT.md Key Decisions table:
 
 ### Blockers/Concerns
 
-Three plan-phase research flags carried forward, plus one high-value defect from Phase 5:
+Three plan-phase research flags carried forward:
 
-- **TEST-ISOLATION DEFECT (high value, fix next):** `tests/conftest.py` uses `os.environ.setdefault("POSTGRES_DB", "test")`, but the app container already sets `POSTGRES_DB=snobbery`, so `setdefault` is a no-op and the suite runs against the **live app DB** — its `TRUNCATE users CASCADE` fixture wipes the admin + `brew_sessions` on every in-container test run. Do NOT run pytest in-container until fixed. Being addressed as the immediate next task.
 - Phase 1: prototype Alpine CSP build to confirm `'unsafe-eval'` can be avoided
 - Phase 7: confirm citation-block projection and decide polling-vs-SSE
 - Phase 10: prototype Postgres FTS vs `pg_trgm` and pick one
@@ -120,6 +121,8 @@ Three plan-phase research flags carried forward, plus one high-value defect from
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260519-ql9 | Codex review bucket-A fixes (duplicate-name 500→inline error, stale Makefile smoke head, CSRF docstring) | 2026-05-20 | e37cdf3, e9184c2, 9678787 | [260519-ql9-codex-bucket-a-fixes](./quick/260519-ql9-codex-bucket-a-fixes/) |
+| 260520-ite | Harden Phase 5 audit findings: W-01 CSV upload Content-Length pre-check, W-02 widen Jinja safety test to all templates | 2026-05-20 | e4f1cf5, ccf98f3 | [260520-ite-harden-phase-5-security-audit-findings-w](./quick/260520-ite-harden-phase-5-security-audit-findings-w/) |
+| 260520-qov | Brighten brew-rating stars from dark espresso to amber-400 (home cards + sessions list) | 2026-05-20 | 5c96ec8 | [260520-qov-brighten-rating-stars-amber](./quick/260520-qov-brighten-rating-stars-amber/) |
 
 ## Deferred Items
 
@@ -129,7 +132,7 @@ Three plan-phase research flags carried forward, plus one high-value defect from
 
 ## Session Continuity
 
-Last session: 2026-05-20T17:34:50.151Z
-Stopped at: Completed 05-06-PLAN.md (sessions list + CSV import/export UI — human-verified). Phase 5 complete (6/6).
+Last session: 2026-05-21T02:22:22.974Z
+Stopped at: Phase 7 context gathered
 Resume file: None
-Next: Fix the conftest POSTGRES_DB test-isolation defect (see Blockers), then Phase 6 (Analytics / home page) planning.
+Next: Phase 6 (Analytics / home page) planning. (Test-isolation defect resolved by b791edf — conftest now forces a `<db>_test` database; verified 2026-05-20 during Phase 5 validation.)

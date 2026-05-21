@@ -20,7 +20,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 4 | Shared Catalog | 9 | 2 |
 | 5 | Brew Sessions | 13 | 4 |
 | 6 | Analytics (Home Page) | 8 | 5 |
-| 7 | AI Services | 18 | 3, 6 |
+| 7 | 3/7 | In Progress|  |
 | 8 | Scheduler + Backups | 4 | 7 |
 | 9 | Admin | 6 | 3, 8 |
 | 10 | Global Search | 4 | 4, 5 |
@@ -220,14 +220,14 @@ Plans:
   3. A manual refresh while another run is in flight returns 429 with an HX-Retarget to a "please wait" message (5-minute per-user throttle); a manual refresh that completes a search returns a fresh recommendation card via the HTMX polling pattern (no SSE in v1; deferred to v1.1).
   4. Recipe suggestion picks from the user's existing `recipes` (never invents) ranked by historical avg rating for matching origin + process + roast level; if no recipe matches, the suggestion text says so and links to the recipe builder. Alternative-brewer callout fires only when historical data shows â‰¥0.5 rating delta on a different brewer for the recommended style.
   5. With no provider enabled in admin, the home page AI section renders a graceful "AI not configured" state. With at least one provider enabled but a Pydantic validation failure on the response, the user sees a "Try again" UI â€” not garbled JSON. Paste-and-rank is a separate on-demand route that never caches and never schedules.
-**Plans:** 7 plans
+**Plans:** 3/7 plans executed
 Plans:
 **Wave 1**
-- [ ] 07-01-PLAN.md — AI-service foundation: per-flow Pydantic schemas, citation projector, SSRF-hardened URL verifier, lock/throttle state, telemetry writer, provider client builders + fallback predicate, ai.* events, Wave 0 tests (AI-01, AI-04, AI-05, AI-17, AI-18)
-- [ ] 07-02-PLAN.md — Wishlist service (add/list/purchase/remove) user-scoped + IDOR tests (AI-13)
+- [x] 07-01-PLAN.md — AI-service foundation: per-flow Pydantic schemas, citation projector, SSRF-hardened URL verifier, lock/throttle state, telemetry writer, provider client builders + fallback predicate, ai.* events, Wave 0 tests (AI-01, AI-04, AI-05, AI-17, AI-18)
+- [x] 07-02-PLAN.md — Wishlist service (add/list/purchase/remove) user-scoped + IDOR tests (AI-13)
 
 **Wave 2** *(blocked on 07-01)*
-- [ ] 07-03-PLAN.md — Coffee-rec composite + regenerate() entry point: 3-tier search, provider fallback, recipe-suggestion + alt-brewer SQL, sweet-spots prose, signature skip, in-memory + advisory lock (AI-01, AI-03, AI-06, AI-07, AI-10, AI-12, AI-13, AI-16, HOME-06)
+- [x] 07-03-PLAN.md — Coffee-rec composite + regenerate() entry point: 3-tier search, provider fallback, recipe-suggestion + alt-brewer SQL, sweet-spots prose, signature skip, in-memory + advisory lock (AI-01, AI-03, AI-06, AI-07, AI-10, AI-12, AI-13, AI-16, HOME-06)
 
 **Wave 3** *(blocked on 07-03 — shared ai_service.py)*
 - [ ] 07-04-PLAN.md — Equipment rec (profile-only, on-demand) + paste-and-rank (text+URL, SSRF-hardened extraction, top-3) (AI-08, AI-09)
