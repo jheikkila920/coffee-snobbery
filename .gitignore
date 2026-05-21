@@ -1,6 +1,9 @@
 # Secrets — never commit (CLAUDE.md "Things to never do silently").
 .env
 
+# GSD config holds plaintext API keys (brave/firecrawl/exa) — never commit.
+.planning/config.json
+
 # Python build / cache
 __pycache__/
 *.pyc
