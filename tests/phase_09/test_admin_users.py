@@ -8,14 +8,12 @@ Test design notes
 -----------------
 - All fixtures self-seed real rows via conftest.py; no pytest.skip on
   missing seed data (project history: skip-masked green).
-- CSRF: state-changing requests include the X-CSRF-Token field in the
-  form body so the CSRFFormFieldShim hoists it into the header. When
-  testing that CSRF is *required*, the field is omitted.
-- Admin count isolation: fixtures that care about last-admin guards
-  (single_admin, two_admins) use dedicated seeded users; the
-  seeded_admin_user fixture may create additional admin rows when
-  fresh_db cascades between tests, so the last-admin tests use the
-  ``single_admin`` fixture which owns the count.
+- CSRF: follows the established Phase 4/5 pattern. The client is wired
+  with both session_id and csrftoken cookies + X-CSRF-Token header via
+  _prime_csrf before any POST. The no-CSRF test uses a fresh client.
+- The double-submit-cookie pattern requires BOTH the csrftoken cookie AND
+  the X-CSRF-Token header to match. We set them on the client instance
+  (not per-request) following test_brew_router.py convention.
 """
 
 from __future__ import annotations
@@ -31,11 +29,21 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def _csrf_cookies(client: Any, admin_session: dict[str, str]) -> str:
-    """Do a GET /admin/users to get the csrftoken cookie, return its value."""
-    resp = client.get("/admin/users", cookies=admin_session, follow_redirects=False)
-    # The csrftoken cookie is set by the middleware on every response.
-    return resp.cookies.get("csrftoken", "")
+def _prime_csrf(client: Any, signed_cookie: str) -> str:
+    """Wire session_id + csrftoken onto the client; return the CSRF token.
+
+    Sets both cookies and the X-CSRF-Token header on the client instance
+    so they are sent automatically on all subsequent requests.
+    Follows the established Phase 4/5 pattern (test_brew_router._prime_csrf).
+    """
+    client.cookies.set("session_id", signed_cookie)
+    client.cookies.delete("csrftoken")
+    resp = client.get("/admin/users")
+    token = resp.cookies.get("csrftoken") or client.cookies.get("csrftoken", "")
+    if token:
+        client.cookies.set("csrftoken", token)
+        client.headers["X-CSRF-Token"] = token
+    return token
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +61,8 @@ class TestListUsers:
         seeded_admin_user: dict[str, Any],
     ) -> None:
         """GET /admin/users returns 200 and contains the seeded admin username."""
-        resp = client.get("/admin/users", cookies=admin_session)
+        _prime_csrf(client, admin_session["session_id"])
+        resp = client.get("/admin/users")
         assert resp.status_code == 200, (
             f"Expected 200 on GET /admin/users, got {resp.status_code}"
         )
@@ -68,7 +77,8 @@ class TestListUsers:
         regular_session: dict[str, str],
     ) -> None:
         """GET /admin/users returns 403 for a non-admin session."""
-        resp = client.get("/admin/users", cookies=regular_session)
+        client.cookies.set("session_id", regular_session["session_id"])
+        resp = client.get("/admin/users")
         assert resp.status_code == 403, (
             f"Expected 403 for non-admin on /admin/users, got {resp.status_code}"
         )
@@ -83,26 +93,20 @@ class TestCreateUserValidation:
         admin_session: dict[str, str],
     ) -> None:
         """POST /admin/users with an 11-char password returns 200 (error fragment) — no new user."""
-        csrf_token = _csrf_cookies(client, admin_session)
-
-        # Count users before
-        list_resp = client.get("/admin/users", cookies=admin_session)
-        assert list_resp.status_code == 200
+        _prime_csrf(client, admin_session["session_id"])
 
         resp = client.post(
             "/admin/users",
             data={
                 "username": f"newuser-{uuid.uuid4().hex[:6]}",
-                "password": "tooshort123",  # 11 chars
-                "X-CSRF-Token": csrf_token,
+                "password": "tooshort123",  # 11 chars — fails 12-char floor
             },
-            cookies=admin_session,
         )
         # Validation failure: re-renders form at HTTP 200
         assert resp.status_code == 200, (
             f"Expected 200 (form re-render) for short password, got {resp.status_code}"
         )
-        # Should contain an error indication (password error message)
+        # Should contain an error indication
         body_lower = resp.text.lower()
         assert "password" in body_lower or "error" in body_lower or "least" in body_lower, (
             "Expected an error message in the form re-render for short password"
@@ -123,7 +127,7 @@ class TestCreateUser:
         admin_session: dict[str, str],
     ) -> None:
         """POST /admin/users with valid data creates a user with argon2id hash."""
-        csrf_token = _csrf_cookies(client, admin_session)
+        _prime_csrf(client, admin_session["session_id"])
         username = f"newuser-{uuid.uuid4().hex[:6]}"
 
         resp = client.post(
@@ -131,9 +135,7 @@ class TestCreateUser:
             data={
                 "username": username,
                 "password": "validpassword12",  # 15 chars — passes floor
-                "X-CSRF-Token": csrf_token,
             },
-            cookies=admin_session,
         )
         assert resp.status_code == 200, (
             f"Expected 200 (row fragment) on user create, got {resp.status_code}"
@@ -171,14 +173,10 @@ class TestDeleteUserGuards:
         user_with_brews: dict[str, Any],
     ) -> None:
         """D-15: Hard-delete of user with brew_sessions is blocked (409 or error fragment)."""
-        csrf_token = _csrf_cookies(client, admin_session)
+        _prime_csrf(client, admin_session["session_id"])
         target_id = user_with_brews["user_id"]
 
-        resp = client.post(
-            f"/admin/users/{target_id}/delete",
-            data={"X-CSRF-Token": csrf_token},
-            cookies=admin_session,
-        )
+        resp = client.post(f"/admin/users/{target_id}/delete")
         # Must be 4xx (conflict) or a 200 error fragment — NOT a deletion
         assert resp.status_code in (409, 200), (
             f"Expected 409 or 200 error fragment for D-15 block, got {resp.status_code}"
@@ -202,14 +200,10 @@ class TestDeleteUserGuards:
         user_no_brews: dict[str, Any],
     ) -> None:
         """D-15: Hard-delete of user with no brew_sessions succeeds."""
-        csrf_token = _csrf_cookies(client, admin_session)
+        _prime_csrf(client, admin_session["session_id"])
         target_id = user_no_brews["user_id"]
 
-        resp = client.post(
-            f"/admin/users/{target_id}/delete",
-            data={"X-CSRF-Token": csrf_token},
-            cookies=admin_session,
-        )
+        resp = client.post(f"/admin/users/{target_id}/delete")
         assert resp.status_code == 200, (
             f"Expected 200 on successful delete, got {resp.status_code}"
         )
@@ -231,15 +225,10 @@ class TestDeleteUserGuards:
         single_admin: dict[str, Any],
     ) -> None:
         """D-16: Deleting the only active admin is refused (no mutation)."""
-        admin_cookies = {"session_id": single_admin["signed_cookie"]}
-        csrf_token = _csrf_cookies(client, admin_cookies)
+        _prime_csrf(client, single_admin["signed_cookie"])
         target_id = single_admin["user_id"]
 
-        resp = client.post(
-            f"/admin/users/{target_id}/delete",
-            data={"X-CSRF-Token": csrf_token},
-            cookies=admin_cookies,
-        )
+        resp = client.post(f"/admin/users/{target_id}/delete")
         # Must refuse with 4xx or error fragment
         assert resp.status_code in (400, 403, 409, 200), (
             f"Expected refusal response for last-admin delete, got {resp.status_code}"
@@ -264,18 +253,11 @@ class TestDeleteUserGuards:
         client: Any,
         two_admins: dict[str, Any],
     ) -> None:
-        """D-16: An admin demoting/deactivating themselves is refused."""
-        # admin1 tries to deactivate themselves
+        """D-16: An admin deactivating themselves is refused."""
         admin1_id = two_admins["admin1_id"]
-        admin1_cookies = {"session_id": two_admins["admin1_cookie"]}
-        csrf_token = _csrf_cookies(client, admin1_cookies)
+        _prime_csrf(client, two_admins["admin1_cookie"])
 
-        resp = client.post(
-            f"/admin/users/{admin1_id}/deactivate",
-            data={"X-CSRF-Token": csrf_token},
-            cookies=admin1_cookies,
-        )
-        # Must refuse (4xx or error fragment at 200)
+        resp = client.post(f"/admin/users/{admin1_id}/deactivate")
         # The user must NOT be deactivated
         from app.db import SessionLocal
         from app.models.user import User
@@ -286,7 +268,7 @@ class TestDeleteUserGuards:
             ).scalar_one_or_none()
         assert user is not None, "D-16: Self-deactivation should not delete the user"
         assert user.is_active is True, (
-            f"D-16: Admin was allowed to deactivate themselves — must be blocked"
+            "D-16: Admin was allowed to deactivate themselves — must be blocked"
         )
 
 
@@ -302,10 +284,10 @@ class TestToggleAdmin:
         """POST /admin/users/{id}/toggle-admin deletes all target's sessions."""
         from app.db import SessionLocal
         from app.models.session import Session as SessionModel
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
 
         target_id = user_with_sessions["user_id"]
-        csrf_token = _csrf_cookies(client, admin_session)
+        _prime_csrf(client, admin_session["session_id"])
 
         # Verify there are sessions before toggle
         with SessionLocal() as db:
@@ -316,11 +298,7 @@ class TestToggleAdmin:
             ).scalar_one()
         assert pre_count >= 1, f"Expected >=1 session before toggle, got {pre_count}"
 
-        resp = client.post(
-            f"/admin/users/{target_id}/toggle-admin",
-            data={"X-CSRF-Token": csrf_token},
-            cookies=admin_session,
-        )
+        resp = client.post(f"/admin/users/{target_id}/toggle-admin")
         assert resp.status_code == 200, (
             f"Expected 200 on toggle-admin, got {resp.status_code}"
         )
@@ -338,7 +316,7 @@ class TestToggleAdmin:
 
 
 class TestDeactivateRequiresCsrf:
-    """ADMIN-01: CSRF enforcement on deactivate/reactivate."""
+    """ADMIN-01: CSRF enforcement on deactivate."""
 
     def test_deactivate_requires_csrf(
         self,
@@ -351,23 +329,19 @@ class TestDeactivateRequiresCsrf:
         """
         target_id = user_no_brews["user_id"]
 
-        # 1. Without CSRF token — expect 403
+        # 1. Set session_id but NOT csrftoken — expect 403
+        client.cookies.set("session_id", admin_session["session_id"])
         resp_no_csrf = client.post(
             f"/admin/users/{target_id}/deactivate",
-            data={},  # no X-CSRF-Token field
-            cookies=admin_session,
+            data={},  # no X-CSRF-Token field, no header
         )
         assert resp_no_csrf.status_code == 403, (
             f"Expected 403 without CSRF token, got {resp_no_csrf.status_code}"
         )
 
-        # 2. With valid CSRF token — expect 200 and sessions deleted
-        csrf_token = _csrf_cookies(client, admin_session)
-        resp_with_csrf = client.post(
-            f"/admin/users/{target_id}/deactivate",
-            data={"X-CSRF-Token": csrf_token},
-            cookies=admin_session,
-        )
+        # 2. Prime CSRF and deactivate — expect 200 and sessions deleted
+        _prime_csrf(client, admin_session["session_id"])
+        resp_with_csrf = client.post(f"/admin/users/{target_id}/deactivate")
         assert resp_with_csrf.status_code == 200, (
             f"Expected 200 with valid CSRF on deactivate, got {resp_with_csrf.status_code}"
         )
@@ -375,7 +349,7 @@ class TestDeactivateRequiresCsrf:
         # Sessions for target must be deleted
         from app.db import SessionLocal
         from app.models.session import Session as SessionModel
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         with SessionLocal() as db:
             count = db.execute(
                 select(func.count()).select_from(SessionModel).where(

@@ -1,0 +1,18 @@
+{% extends "admin_base.html" %}
+{% block admin_page_title %}Users{% endblock %}
+{% block admin_content %}
+  <header class="flex items-center justify-between mb-6">
+    <h2 class="text-xl font-semibold text-espresso-900 dark:text-cream-100">Users</h2>
+    <button type="button"
+            hx-get="/admin/users/new"
+            hx-target="#admin-user-form-mount"
+            hx-swap="innerHTML"
+            class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800 dark:bg-espresso-600 dark:hover:bg-espresso-500">
+      Add user
+    </button>
+  </header>
+  <div id="admin-user-form-mount" class="mb-4"></div>
+  <div id="admin-user-list" class="space-y-3">
+    {% include "fragments/admin_user_list.html" %}
+  </div>
+{% endblock %}

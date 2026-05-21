@@ -1,0 +1,8 @@
+{# admin_error.html — inline error message fragment for admin guard failures.
+   Rendered when D-15/D-16 guards block an operation.
+   The containing element (data-row or form mount) shows this in place of
+   the normal row/form so the user sees the refusal reason.
+#}
+<div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:border-red-700 dark:text-red-300">
+  {{ error }}
+</div>

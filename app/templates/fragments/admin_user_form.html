@@ -1,0 +1,101 @@
+{# admin_user_form.html — create/edit user form.
+   Two modes:
+     mode="create" -> POST /admin/users, target #admin-user-form-mount
+     mode="edit"   -> POST /admin/users/{id}, target closest [data-row]
+
+   CSRF: mandatory hidden X-CSRF-Token field; CSRFFormFieldShim hoists it
+   into the X-CSRF-Token header before CSRFMiddleware validates.
+
+   Password hash is NEVER rendered (T-09-08). The password field is
+   optional in edit mode (leave blank to keep current password).
+
+   All inputs use text-base (>=16px) to prevent iOS zoom (MOB-06).
+#}
+{% set is_edit = mode == "edit" %}
+{% if is_edit %}
+  {% set form_action = "/admin/users/" ~ target_id %}
+  {% set form_target = "closest [data-row]" %}
+  {% set form_swap = "outerHTML" %}
+{% else %}
+  {% set form_action = "/admin/users" %}
+  {% set form_target = "#admin-user-form-mount" %}
+  {% set form_swap = "innerHTML" %}
+{% endif %}
+<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <form hx-post="{{ form_action }}"
+        hx-target="{{ form_target }}"
+        hx-swap="{{ form_swap }}"
+        class="flex flex-col gap-4">
+    {# CSRF: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold text-espresso-800 dark:text-cream-200">Username</span>
+      <input name="username"
+             required
+             minlength="3"
+             maxlength="32"
+             autocomplete="username"
+             value="{{ values.get('username', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('username') %} border-red-300{% else %} border-espresso-200{% endif %} dark:bg-espresso-800 dark:border-espresso-700 dark:text-cream-100">
+      {% if errors.get('username') %}
+        <p class="text-sm text-red-700 mt-1 dark:text-red-400">{{ errors['username'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold text-espresso-800 dark:text-cream-200">Email (optional)</span>
+      <input name="email"
+             type="email"
+             inputmode="email"
+             autocomplete="email"
+             value="{{ values.get('email', '') }}"
+             class="rounded border px-2 py-2 text-base{% if errors.get('email') %} border-red-300{% else %} border-espresso-200{% endif %} dark:bg-espresso-800 dark:border-espresso-700 dark:text-cream-100">
+      {% if errors.get('email') %}
+        <p class="text-sm text-red-700 mt-1 dark:text-red-400">{{ errors['email'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold text-espresso-800 dark:text-cream-200">
+        Password{% if is_edit %} (leave blank to keep current){% endif %}
+      </span>
+      <input name="password"
+             type="password"
+             {% if not is_edit %}required{% endif %}
+             minlength="12"
+             autocomplete="new-password"
+             class="rounded border px-2 py-2 text-base{% if errors.get('password') %} border-red-300{% else %} border-espresso-200{% endif %} dark:bg-espresso-800 dark:border-espresso-700 dark:text-cream-100">
+      {% if errors.get('password') %}
+        <p class="text-sm text-red-700 mt-1 dark:text-red-400">{{ errors['password'] }}</p>
+      {% endif %}
+    </label>
+
+    <label class="flex items-center gap-2">
+      <input name="is_admin"
+             type="checkbox"
+             value="true"
+             {% if values.get('is_admin') %}checked{% endif %}
+             class="h-4 w-4 rounded border-espresso-300 dark:border-espresso-700">
+      <span class="text-sm font-semibold text-espresso-800 dark:text-cream-200">Admin</span>
+    </label>
+
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700 dark:text-red-400">{{ errors['_form'] }}</p>
+    {% endif %}
+
+    <div class="flex gap-3 mt-2">
+      <button type="button"
+              hx-get="/admin/users"
+              hx-target="#admin-user-form-mount"
+              hx-swap="innerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-800">
+        Cancel
+      </button>
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800 dark:bg-espresso-600 dark:hover:bg-espresso-500">
+        Save
+      </button>
+    </div>
+  </form>
+</div>

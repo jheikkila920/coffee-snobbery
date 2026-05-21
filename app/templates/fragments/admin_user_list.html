@@ -1,0 +1,8 @@
+{# admin_user_list.html — iterates user rows.
+   Included by pages/admin_users.html and returned as a fragment on HTMX requests.
+#}
+{% for user in users %}
+  {% include "fragments/admin_user_row.html" %}
+{% else %}
+  <p class="text-sm text-espresso-500 dark:text-cream-400">No users found.</p>
+{% endfor %}
