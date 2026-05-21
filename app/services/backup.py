@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
+from sqlalchemy.engine import make_url
 
 from app.config import settings
 from app.events import (
@@ -103,21 +104,25 @@ class BackupResult:
 
 
 def _parse_db_url(url: str) -> dict[str, str]:
-    """Parse ``postgresql+psycopg://user:pass@host:port/db`` into components.
+    """Parse a SQLAlchemy ``DATABASE_URL`` into pg_dump connection components.
 
-    Raises ``ValueError`` on an unparseable URL so the caller can surface a
-    clear error rather than passing a half-constructed arg list to pg_dump
-    (V5 input-validation, T-08-04).
+    Uses ``sqlalchemy.engine.make_url`` so that percent-encoded characters,
+    reserved chars in passwords (``@``, ``:``, etc.), optional ports, and
+    query-string suffixes are all handled correctly (CR-01).
+
+    Raises ``ValueError`` when host or database is missing (required by
+    pg_dump), or ``sqlalchemy.exc.ArgumentError`` on a completely malformed
+    URL (V5 input-validation, T-08-04).
     """
-    m = re.match(r"postgresql\+psycopg://([^:]+):([^@]+)@([^:/]+):?(\d+)?/(.+)", url)
-    if not m:
-        raise ValueError(f"Cannot parse DATABASE_URL for pg_dump: {url!r}")
+    u = make_url(url)  # raises ArgumentError on truly malformed input
+    if not u.host or not u.database:
+        raise ValueError(f"DATABASE_URL missing host/database for pg_dump: {url!r}")
     return {
-        "user": m.group(1),
-        "password": m.group(2),
-        "host": m.group(3),
-        "port": m.group(4) or "5432",
-        "dbname": m.group(5),
+        "user": u.username or "",
+        "password": u.password or "",  # already percent-decoded by make_url
+        "host": u.host,
+        "port": str(u.port or 5432),
+        "dbname": u.database,
     }
 
 
