@@ -865,3 +865,391 @@ def test_is_stale_true_when_sig_changed() -> None:
         result = ai_service.is_stale(db, user_id=1)
 
     assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Task 1 (07-04) — Equipment recommendation flow (profile-only, no web search)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_equipment_rec_not_configured() -> None:
+    """No provider credentials → ('not_configured', None)."""
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+
+    with (
+        patch.object(
+            ai_service.credentials_service, "get_provider_credential", return_value=None
+        ),
+    ):
+        status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
+
+    assert status == "not_configured"
+    assert row is None
+
+
+@pytest.mark.asyncio
+async def test_equipment_rec_no_web_search_tool() -> None:
+    """Anthropic call for equipment rec must NOT include any web_search-type tool (profile-only)."""
+    import types
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+    from app.services.ai_schemas import EquipmentRecSchema
+
+    db = MagicMock()
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.model_name = "claude-opus-4-7"
+    mock_cred.key = "sk-test"
+
+    captured_tools: list = []
+
+    rec_dict = {
+        "weakest_link": "Baratza Encore grinder",
+        "recommendation": "Upgrade to a Comandante C40 for better grind consistency.",
+        "summary_prose": "Your setup is solid but your grinder is the limiting factor.",
+    }
+    tool_use_block = types.SimpleNamespace(
+        type="tool_use", name="structure_output", input=rec_dict
+    )
+    usage = types.SimpleNamespace(input_tokens=100, output_tokens=50)
+    fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
+
+    def fake_create(**kwargs):  # type: ignore[override]
+        captured_tools.extend(kwargs.get("tools", []))
+        return fake_response
+
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = fake_create
+
+    with (
+        patch.object(
+            ai_service.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(
+            ai_service.analytics_service,
+            "get_preference_profile",
+            return_value={},
+        ),
+        patch.object(
+            ai_service, "_build_anthropic_client", return_value=mock_client
+        ),
+        patch.object(ai_service, "_write_recommendation_row", return_value=MagicMock()),
+        patch("app.models.equipment.Equipment"),
+        patch("sqlalchemy.orm.Session.execute"),
+    ):
+        # Patch the DB execute to return empty equipment list
+        db.execute.return_value.scalars.return_value.all.return_value = []
+        status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
+
+    assert status == "generated"
+    # Verify no web_search-type tool was passed
+    web_search_tools = [
+        t for t in captured_tools
+        if isinstance(t, dict) and t.get("type", "").startswith("web_search")
+    ]
+    assert web_search_tools == [], (
+        f"Equipment rec must not include web_search tools; found: {web_search_tools}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_equipment_rec_no_changes() -> None:
+    """weakest_link=None is a valid 'no changes recommended' outcome."""
+    import types
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+    from app.services.ai_schemas import EquipmentRecSchema
+
+    db = MagicMock()
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.model_name = "claude-opus-4-7"
+    mock_cred.key = "sk-test"
+
+    rec_dict = {
+        "weakest_link": None,
+        "recommendation": None,
+        "summary_prose": "Your setup is well-matched — no upgrade needed right now.",
+    }
+    tool_use_block = types.SimpleNamespace(
+        type="tool_use", name="structure_output", input=rec_dict
+    )
+    usage = types.SimpleNamespace(input_tokens=80, output_tokens=40)
+    fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = fake_response
+
+    with (
+        patch.object(
+            ai_service.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
+        patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
+        patch.object(ai_service, "_write_recommendation_row", return_value=MagicMock()),
+    ):
+        db.execute.return_value.scalars.return_value.all.return_value = []
+        status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
+
+    assert status == "generated"
+    # Validate that weakest_link=None is a valid EquipmentRecSchema
+    schema = EquipmentRecSchema.model_validate(rec_dict)
+    assert schema.weakest_link is None
+
+
+@pytest.mark.asyncio
+async def test_equipment_rec_weakest_link() -> None:
+    """generate_equipment_rec returns 'generated' with a weakest_link when one is identified."""
+    import types
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+
+    db = MagicMock()
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.model_name = "claude-opus-4-7"
+    mock_cred.key = "sk-test"
+
+    rec_dict = {
+        "weakest_link": "Baratza Encore grinder",
+        "recommendation": "Upgrade to a Comandante C40.",
+        "summary_prose": "Your grinder is the bottleneck for a cleaner cup.",
+    }
+    tool_use_block = types.SimpleNamespace(
+        type="tool_use", name="structure_output", input=rec_dict
+    )
+    usage = types.SimpleNamespace(input_tokens=90, output_tokens=45)
+    fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = fake_response
+
+    mock_row = MagicMock()
+    mock_row.response_json = rec_dict
+
+    with (
+        patch.object(
+            ai_service.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
+        patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
+        patch.object(ai_service, "_write_recommendation_row", return_value=mock_row),
+    ):
+        db.execute.return_value.scalars.return_value.all.return_value = []
+        status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
+
+    assert status == "generated"
+    assert row is not None
+    assert row.response_json["weakest_link"] == "Baratza Encore grinder"
+
+
+# ---------------------------------------------------------------------------
+# Task 2 (07-04) — Paste-and-rank flow (text + URL input, SSRF-hardened)
+# ---------------------------------------------------------------------------
+
+
+def test_paste_rank_url_detection() -> None:
+    """_split_inputs separates https:// URLs from freeform text blocks."""
+    from app.services.ai_service import _split_inputs
+
+    raw = (
+        "https://counterculturecoffee.com/yirgacheffe\n"
+        "Ethiopia Washed Natural\n"
+        "https://bluebottlecoffee.com/store/giant-steps\n"
+        "A great fruity coffee from Colombia\n"
+    )
+    urls, texts = _split_inputs(raw)
+
+    assert "https://counterculturecoffee.com/yirgacheffe" in urls
+    assert "https://bluebottlecoffee.com/store/giant-steps" in urls
+    assert len(urls) == 2
+    # Text blocks should contain the non-URL lines
+    combined = "\n".join(texts)
+    assert "Ethiopia Washed Natural" in combined
+    assert "A great fruity coffee from Colombia" in combined
+
+
+@pytest.mark.asyncio
+async def test_paste_rank_fetch_https_only() -> None:
+    """_fetch_page_text rejects http:// URL without making any network call."""
+    from app.services.ai_service import _fetch_page_text
+
+    # No respx mock — any network call would raise ConnectError
+    result = await _fetch_page_text("http://example.com/coffee")
+    assert result == ""
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_paste_rank_fetch_no_cross_host_redirect() -> None:
+    """_fetch_page_text returns empty string when server issues a 3xx redirect."""
+    from app.services.ai_service import _fetch_page_text
+
+    url = "https://shop.example.com/coffee"
+    respx.get(url).mock(
+        return_value=httpx.Response(
+            302,
+            headers={"Location": "https://other-host.com/landing"},
+        )
+    )
+    result = await _fetch_page_text(url)
+    # follow_redirects=False → 302 is not followed; should return empty
+    assert result == ""
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_paste_rank_fetch_extracts_text() -> None:
+    """_fetch_page_text extracts text from p/h1/h2 tags in valid HTML."""
+    from app.services.ai_service import _fetch_page_text
+
+    url = "https://roaster.example.com/yirgacheffe"
+    html = (
+        "<html><body>"
+        "<h1>Yirgacheffe Kochere</h1>"
+        "<h2>Ethiopia Natural</h2>"
+        "<p>Bright berry notes with jasmine finish.</p>"
+        "<script>ignored()</script>"
+        "</body></html>"
+    )
+    respx.get(url).mock(return_value=httpx.Response(200, text=html))
+    result = await _fetch_page_text(url)
+
+    assert "Yirgacheffe Kochere" in result
+    assert "Ethiopia Natural" in result
+    assert "Bright berry notes" in result
+    # Script content should be ignored
+    assert "ignored()" not in result
+
+
+@pytest.mark.asyncio
+async def test_paste_rank_top3() -> None:
+    """rank_pasted_coffees returns at most 3 ranked items (PasteRankSchema enforces <=3)."""
+    import types
+    from unittest.mock import MagicMock, patch
+
+    from app.services import ai_service
+    from app.services.ai_schemas import PasteRankSchema
+
+    db = MagicMock()
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.model_name = "claude-opus-4-7"
+    mock_cred.key = "sk-test"
+
+    rank_dict = {
+        "ranked": [
+            {"rank": 1, "name": "Yirgacheffe", "reasoning": "Best match for your taste."},
+            {"rank": 2, "name": "Colombia Huila", "reasoning": "Solid second choice."},
+            {"rank": 3, "name": "Kenya AA", "reasoning": "Bright but less aligned."},
+        ],
+        "summary_prose": "Reach for the Yirgacheffe today — it aligns best with your log.",
+    }
+    tool_use_block = types.SimpleNamespace(
+        type="tool_use", name="structure_output", input=rank_dict
+    )
+    usage = types.SimpleNamespace(input_tokens=120, output_tokens=60)
+    fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = fake_response
+
+    mock_row = MagicMock()
+
+    with (
+        patch.object(
+            ai_service.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
+        patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
+        patch.object(ai_service, "_write_recommendation_row", return_value=mock_row),
+    ):
+        status, result = await ai_service.rank_pasted_coffees(
+            1, "user", db=db,
+            raw_input="Yirgacheffe\nColombia Huila\nKenya AA"
+        )
+
+    assert status == "generated"
+    assert result is not None
+    # Validate the schema enforces <= 3
+    schema = PasteRankSchema.model_validate(rank_dict)
+    assert len(schema.ranked) <= 3
+
+
+@pytest.mark.asyncio
+async def test_paste_rank_never_cached() -> None:
+    """rank_pasted_coffees writes rec_type='paste_rank' and regenerate() never calls it."""
+    import types
+    from unittest.mock import MagicMock, call, patch
+
+    from app.services import ai_service
+    from app.services.ai_service import regenerate
+
+    db = MagicMock()
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.model_name = "claude-opus-4-7"
+    mock_cred.key = "sk-test"
+
+    rank_dict = {
+        "ranked": [{"rank": 1, "name": "Test Coffee", "reasoning": "Best pick."}],
+        "summary_prose": "Grab the Test Coffee today.",
+    }
+    tool_use_block = types.SimpleNamespace(
+        type="tool_use", name="structure_output", input=rank_dict
+    )
+    usage = types.SimpleNamespace(input_tokens=80, output_tokens=40)
+    fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = fake_response
+
+    written_rec_types: list[str] = []
+
+    def capture_write(db, *, rec_type, **kwargs):  # type: ignore[override]
+        written_rec_types.append(rec_type)
+        return MagicMock()
+
+    with (
+        patch.object(
+            ai_service.credentials_service,
+            "get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
+        patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
+        patch.object(ai_service, "_write_recommendation_row", side_effect=capture_write),
+    ):
+        await ai_service.rank_pasted_coffees(
+            1, "user", db=db, raw_input="Test Coffee description"
+        )
+
+    assert "paste_rank" in written_rec_types, (
+        f"rank_pasted_coffees must write rec_type='paste_rank'; got {written_rec_types}"
+    )
+
+    # Verify regenerate() does not call rank_pasted_coffees
+    import inspect
+    regen_source = inspect.getsource(regenerate)
+    assert "rank_pasted_coffees" not in regen_source, (
+        "regenerate() must not call rank_pasted_coffees (never cached/scheduled)"
+    )
+    assert "generate_equipment_rec" not in regen_source, (
+        "regenerate() must not call generate_equipment_rec (on-demand only)"
+    )
