@@ -32,9 +32,10 @@ def test_idempotent_job_registration() -> None:
     from app.services.scheduler import build_scheduler, register_jobs
 
     sched = build_scheduler()
-    # Override to in-memory job store so no live DB needed
+    # Override to in-memory job store so no live DB needed for this unit test.
+    # Replace BEFORE sched.start() so APScheduler's own start() initializes
+    # the MemoryJobStore (not SQLAlchemyJobStore, which would need a DB).
     sched._jobstores = {"default": MemoryJobStore()}
-    sched._jobstores["default"].start(sched, "default")
     sched.start()
     try:
         register_jobs(sched)
