@@ -275,7 +275,7 @@ Plans:
 **Plans:** 6 plans
 Plans:
 **Wave 1**
-- [ ] 09-01-PLAN.md — Foundation: admin router sub-package + admin_base.html section nav + /admin hub + home admin link (D-03) + new admin.* events + Wave 0 self-seeding fixtures + require_admin/CSRF security suite
+- [x] 09-01-PLAN.md — Foundation: admin router sub-package + admin_base.html section nav + /admin hub + home admin link (D-03) + new admin.* events + Wave 0 self-seeding fixtures + require_admin/CSRF security suite
 
 **Wave 2** *(all blocked on 09-01; mutually parallel — disjoint files)*
 - [ ] 09-02-PLAN.md — User CRUD (ADMIN-01): list/create/reset-password/toggle-admin/deactivate/delete with D-15 block-and-deactivate + D-16 last-admin/self-lockout guards + async session invalidation

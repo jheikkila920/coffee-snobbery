@@ -124,12 +124,12 @@
 
 ### Admin (ADMIN)
 
-- [ ] **ADMIN-01**: User management: list, create, edit (reset password, toggle admin, deactivate), delete
-- [ ] **ADMIN-02**: API credentials per provider (Anthropic, OpenAI): set/update encrypted key, select model per provider, enable/disable toggle; keys masked after save (last-4 only)
-- [ ] **ADMIN-03**: `app_settings` editor: one row per setting, input control selected by `value_type` (string → text, integer → number, boolean → checkbox, json → textarea); description shown as helper text; save persists immediately
-- [ ] **ADMIN-04**: Backups page: list of retained nightly backups with size + timestamp, download button per backup, manual "Run backup now" button, manual `pg_dump` + photos tarball download
-- [ ] **ADMIN-05**: System info panel: app version, DB server version, photo storage usage, backup storage usage, active session count, last backup status + timestamp
-- [ ] **ADMIN-06**: API health panel: last AI run timestamp per recommendation type, last success/error status per provider, last 5 error messages per provider; surfaces silent failures (model deprecation, quota, key revoke)
+- [x] **ADMIN-01**: User management: list, create, edit (reset password, toggle admin, deactivate), delete
+- [x] **ADMIN-02**: API credentials per provider (Anthropic, OpenAI): set/update encrypted key, select model per provider, enable/disable toggle; keys masked after save (last-4 only)
+- [x] **ADMIN-03**: `app_settings` editor: one row per setting, input control selected by `value_type` (string → text, integer → number, boolean → checkbox, json → textarea); description shown as helper text; save persists immediately
+- [x] **ADMIN-04**: Backups page: list of retained nightly backups with size + timestamp, download button per backup, manual "Run backup now" button, manual `pg_dump` + photos tarball download
+- [x] **ADMIN-05**: System info panel: app version, DB server version, photo storage usage, backup storage usage, active session count, last backup status + timestamp
+- [x] **ADMIN-06**: API health panel: last AI run timestamp per recommendation type, last success/error status per provider, last 5 error messages per provider; surfaces silent failures (model deprecation, quota, key revoke)
 
 ### Mobile-First + PWA (MOB)
 
@@ -287,12 +287,12 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | SEARCH-02 | Phase 10 — Global Search | Pending |
 | SEARCH-03 | Phase 10 — Global Search | Pending |
 | SEARCH-04 | Phase 10 — Global Search | Pending |
-| ADMIN-01 | Phase 9 — Admin | Pending |
-| ADMIN-02 | Phase 9 — Admin | Pending |
-| ADMIN-03 | Phase 9 — Admin | Pending |
-| ADMIN-04 | Phase 9 — Admin | Pending |
-| ADMIN-05 | Phase 9 — Admin | Pending |
-| ADMIN-06 | Phase 9 — Admin | Pending |
+| ADMIN-01 | Phase 9 — Admin | Complete |
+| ADMIN-02 | Phase 9 — Admin | Complete |
+| ADMIN-03 | Phase 9 — Admin | Complete |
+| ADMIN-04 | Phase 9 — Admin | Complete |
+| ADMIN-05 | Phase 9 — Admin | Complete |
+| ADMIN-06 | Phase 9 — Admin | Complete |
 | MOB-01 | Phase 11 — PWA + Mobile Polish | Pending |
 | MOB-02 | Phase 11 — PWA + Mobile Polish | Pending |
 | MOB-03 | Phase 11 — PWA + Mobile Polish | Pending |
