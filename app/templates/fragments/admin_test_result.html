@@ -1,0 +1,33 @@
+{# admin_test_result.html — Test connection result fragment (ADMIN-02 / D-12).
+   Rendered by Plan 06 POST /admin/system/test-connection/{provider}.
+   Context: provider (str), status ("ok" | "error"), reason (str | None)
+   SEC-6: no key material is ever referenced here. The fragment renders
+   status + reason only. Autoescaped (Jinja global setting — no |safe filter used).
+   Hosted in: #test-result-{provider} div inside admin_credential_row.html.
+#}
+{% if status == "ok" %}
+  <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-sm font-medium
+               bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+    Connected
+  </span>
+{% elif reason == "invalid_key" %}
+  <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-sm font-medium
+               bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+    Invalid key
+  </span>
+{% elif reason == "network" %}
+  <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-sm font-medium
+               bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+    Network error
+  </span>
+{% elif reason == "not_configured" %}
+  <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-sm font-medium
+               bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+    Not configured
+  </span>
+{% else %}
+  <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-sm font-medium
+               bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+    Unknown error{% if reason %}: {{ reason }}{% endif %}
+  </span>
+{% endif %}
