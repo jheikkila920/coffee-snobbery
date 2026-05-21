@@ -531,3 +531,132 @@ def monkeypatched_app_encryption_key(
 
     importlib.reload(enc_mod)
     return fernet_key_str
+
+
+# --------------------------------------------------------------------------- #
+# Phase 8 fixtures (Plan 08-01)                                               #
+# --------------------------------------------------------------------------- #
+#
+# Two reusable fixtures consumed by tests/test_scheduler.py (Plans 08-02/03)
+# and tests/test_backup.py (Plan 08-02).
+#
+# Both are wrapped in try/except ImportError so the conftest stays collectable
+# before Plans 08-02/03 land their symbols. The Wave 0 contract is unchanged:
+# "every test file is collectable, even if most tests are skipped."
+
+
+@pytest.fixture
+def sync_db() -> Iterator[Any]:
+    """Yield a sync ``Session`` from ``app.db.SessionLocal``.
+
+    Mirrors the ``fresh_db`` skip pattern: if Postgres is unreachable the
+    test is skipped rather than erroring. Tests that need to seed users /
+    recommendations and read back ``app_settings`` rows use this fixture.
+
+    T-08-01 interlock: the existing ``_postgres_reachable()`` + ``"test" in
+    db_name`` guard in ``fresh_db`` applies here too — the fixture only
+    yields a session against a ``*test*`` database, never the live app DB.
+    """
+    try:
+        from app.db import SessionLocal
+    except ImportError:
+        pytest.skip("app.db.SessionLocal not importable (Phase 0 dependency)")
+        return  # pragma: no cover
+
+    if not _postgres_reachable():
+        pytest.skip("Postgres not reachable")
+        return  # pragma: no cover
+
+    # Safety interlock: refuse to yield a session against the live DB.
+    try:
+        from urllib.parse import urlparse as _urlparse
+
+        from app.config import settings as _settings
+
+        _active_db = _urlparse(
+            _settings.DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
+        ).path.lstrip("/")
+    except Exception:
+        _active_db = ""
+    if "test" not in _active_db.lower():
+        pytest.skip("sync_db refuses to connect to a non-test database (T-08-01)")
+        return  # pragma: no cover
+
+    with SessionLocal() as session:
+        yield session
+
+
+@pytest.fixture
+def mock_regenerate(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Return a factory that patches ``app.services.ai_service.regenerate``.
+
+    Usage in tests::
+
+        async def test_something(mock_regenerate):
+            patch = mock_regenerate("generated")  # all users return "generated"
+            # or: mock_regenerate({"1": "generated", "2": "skipped"})
+
+        # After ``await patch(user_id, ...)`` returns, assert force=False.
+
+    The AI refresh job (Plan 08-03) calls the async ``regenerate()``. The mock
+    is an ``AsyncMock`` so it is awaitable. The factory enforces that
+    ``force=False`` is asserted on every call — this is the highest-risk
+    behavior per 08-VALIDATION.md §"Highest-Risk Behaviors to Validate" #4:
+    the scheduler must NEVER call ``regenerate()`` with ``force=True``, which
+    would bypass the signature cost-control.
+    """
+    try:
+        from unittest.mock import AsyncMock
+
+        import app.services.ai_service as _ai_mod
+    except ImportError:
+        pytest.skip("app.services.ai_service not importable (Phase 7 dependency)")
+        return  # pragma: no cover
+
+    def _factory(status_or_map: Any) -> AsyncMock:
+        """Create and apply an AsyncMock for ``ai_service.regenerate``.
+
+        Args:
+            status_or_map: A single status string (all users get the same
+                return value) or a dict mapping ``str(user_id)`` → status.
+        """
+        if isinstance(status_or_map, dict):
+            status_map = status_or_map
+
+            async def _side_effect(
+                user_id: int,
+                generated_by: str,
+                *,
+                db: Any,
+                force: bool = False,
+            ) -> str:
+                # Highest-risk assertion: force must be False in the scheduler path.
+                assert force is False, (
+                    f"regenerate called with force=True for user_id={user_id}; "
+                    "the scheduler must NEVER bypass the signature cost-control"
+                )
+                return status_map.get(str(user_id), "skipped")
+
+            mock = AsyncMock(side_effect=_side_effect)
+        else:
+            fixed_status = status_or_map
+
+            async def _side_effect_fixed(  # type: ignore[misc]
+                user_id: int,
+                generated_by: str,
+                *,
+                db: Any,
+                force: bool = False,
+            ) -> str:
+                assert force is False, (
+                    f"regenerate called with force=True for user_id={user_id}; "
+                    "the scheduler must NEVER bypass the signature cost-control"
+                )
+                return fixed_status
+
+            mock = AsyncMock(side_effect=_side_effect_fixed)
+
+        monkeypatch.setattr(_ai_mod, "regenerate", mock)
+        return mock
+
+    return _factory
