@@ -200,9 +200,14 @@ Plans:
   4. Cold-start path: a user with `<3 sessions OR <5 distinct observed flavor notes` sees a friendly empty state with a progress meter ("Log 2 more brews and add 3 more flavor notes to unlock recommendations") instead of a degraded analytics view.
 **Plans:** 3 plans
 Plans:
-- [ ] 06-01-PLAN.md â€” analytics.py service: 8 derivations + cold-start counts + compute_input_signature + seeded-DB unit tests + 1000-session <50ms perf check (HOME-01,02,03,04,05,07,08)
-- [ ] 06-02-PLAN.md â€” home.py shell route + cold-start gate + recent-brews + unrated-coffees + main.py wiring + router smoke tests (HOME-07, HOME-08, HOME-09)
-- [ ] 06-03-PLAN.md â€” five aggregate-card lazy fragment endpoints + card templates + sparse/all-unrated hints + fragment smoke tests (HOME-01,02,03,04,05, HOME-09)
+**Wave 1**
+- [x] 06-01-PLAN.md â€” analytics.py service: 8 derivations + cold-start counts + compute_input_signature + seeded-DB unit tests + 1000-session <50ms perf check (HOME-01,02,03,04,05,07,08)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 06-02-PLAN.md â€” home.py shell route + cold-start gate + recent-brews + unrated-coffees + main.py wiring + router smoke tests (HOME-07, HOME-08, HOME-09)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 06-03-PLAN.md â€” five aggregate-card lazy fragment endpoints + card templates + sparse/all-unrated hints + fragment smoke tests (HOME-01,02,03,04,05, HOME-09)
 **Notes:** Carries HX-5 (staggered lazy-load to avoid thundering-herd on the connection pool), SH-2 (connection-pool sizing â€” `pool_size=10, max_overflow=5`), COST-4 (signature must NOT include shared `equipment_count` / `recipe_count`), AI-7 (cold-start gate at `min_sessions=3 AND min_flavor_notes=5`). HOME-06 (AI prose under sweet spots) is owned by Phase 7 because it requires the AI service. Sweet-spots SQL is a UNION of GROUP BYs with HAVING (no Python loops).
 
 ### Phase 7: AI Services
@@ -215,7 +220,26 @@ Plans:
   3. A manual refresh while another run is in flight returns 429 with an HX-Retarget to a "please wait" message (5-minute per-user throttle); a manual refresh that completes a search returns a fresh recommendation card via the HTMX polling pattern (no SSE in v1; deferred to v1.1).
   4. Recipe suggestion picks from the user's existing `recipes` (never invents) ranked by historical avg rating for matching origin + process + roast level; if no recipe matches, the suggestion text says so and links to the recipe builder. Alternative-brewer callout fires only when historical data shows â‰¥0.5 rating delta on a different brewer for the recommended style.
   5. With no provider enabled in admin, the home page AI section renders a graceful "AI not configured" state. With at least one provider enabled but a Pydantic validation failure on the response, the user sees a "Try again" UI â€” not garbled JSON. Paste-and-rank is a separate on-demand route that never caches and never schedules.
-**Plans:** TBD
+**Plans:** 7 plans
+Plans:
+**Wave 1**
+- [ ] 07-01-PLAN.md — AI-service foundation: per-flow Pydantic schemas, citation projector, SSRF-hardened URL verifier, lock/throttle state, telemetry writer, provider client builders + fallback predicate, ai.* events, Wave 0 tests (AI-01, AI-04, AI-05, AI-17, AI-18)
+- [ ] 07-02-PLAN.md — Wishlist service (add/list/purchase/remove) user-scoped + IDOR tests (AI-13)
+
+**Wave 2** *(blocked on 07-01)*
+- [ ] 07-03-PLAN.md — Coffee-rec composite + regenerate() entry point: 3-tier search, provider fallback, recipe-suggestion + alt-brewer SQL, sweet-spots prose, signature skip, in-memory + advisory lock (AI-01, AI-03, AI-06, AI-07, AI-10, AI-12, AI-13, AI-16, HOME-06)
+
+**Wave 3** *(blocked on 07-03 — shared ai_service.py)*
+- [ ] 07-04-PLAN.md — Equipment rec (profile-only, on-demand) + paste-and-rank (text+URL, SSRF-hardened extraction, top-3) (AI-08, AI-09)
+
+**Wave 4** *(blocked on 07-03, 07-04, 07-02)*
+- [ ] 07-05-PLAN.md — AI router: manual refresh (throttle + in-flight 429 + HX-Retarget), background URL verify, equipment/paste-rank/wishlist routes (CSRF + IDOR), main.py registration (AI-05, AI-09, AI-13, AI-14, AI-16)
+
+**Wave 5** *(blocked on 07-05)*
+- [ ] 07-06-PLAN.md — Home integration: top-hero AI card endpoint + 5 state fragments + HOME-06 sweet-spots prose append + 375px human-verify (AI-04, AI-05, AI-10, AI-11, AI-14, AI-15, AI-16, HOME-06)
+
+**Wave 6** *(blocked on 07-05, 07-06)*
+- [ ] 07-07-PLAN.md — Paste-rank page + wishlist page + on-demand equipment button + home links + 375px human-verify (AI-08, AI-09, HOME-06)
 **Notes:** Carries the top-1 pitfall AI-1 (token cost from web search), AI-2 (URL verification via ranged GET + body-contains-name + 5s timeout + no cross-host redirects), AI-3 (citation-block projector before Pydantic), AI-4 (fallback only on non-retryable), AI-5 (tool version in `app_settings`, not hardcoded), AI-6 (Postgres advisory lock backstop alongside in-memory lock), COST-2 (5-minute throttle on manual refresh), COST-4 (signature uses content hash of *user's own* sessions only), COST-5 (`max_uses=5/3`). **Plan-phase research flags:** confirm Anthropic structured-output via tool_use returns citations as a separate content block (verify projector strips them correctly); decide polling-vs-SSE for response delivery (SUMMARY recommends polling for v1).
 
 ### Phase 8: Scheduler + Backups
@@ -295,7 +319,7 @@ Phases execute in numeric order: 0 â†’ 1 â†’ 2 â†’ 3 â†’ 4 �
 | 4. Shared Catalog | 0/TBD | Not started | - |
 | 5. Brew Sessions | 6/6 | Complete | 2026-05-20 |
 | 6. Analytics (Home Page) | 0/TBD | Not started | - |
-| 7. AI Services | 0/TBD | Not started | - |
+| 7. AI Services | 0/7 | Ready to execute | - |
 | 8. Scheduler + Backups | 0/TBD | Not started | - |
 | 9. Admin | 0/TBD | Not started | - |
 | 10. Global Search | 0/TBD | Not started | - |
