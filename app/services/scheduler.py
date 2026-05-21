@@ -282,6 +282,15 @@ def run_nightly_ai_refresh() -> None:
 
     # Step 2: per-user regenerate — one fresh session per user.
     for uid in eligible_user_ids:
+        # NOTE (WR-07): This session exists solely to provide a Session object
+        # to regenerate(). It does NOT define the transaction boundary.
+        # regenerate() owns its own commit (inside _write_recommendation_row)
+        # and acquires pg_try_advisory_xact_lock internally. The advisory lock
+        # is released when regenerate() commits -- before this with-block exits.
+        # The implicit rollback on __exit__ is therefore a no-op on the generate
+        # path (nothing uncommitted remains). Longer-term, the lock-released-
+        # by-commit interaction inside regenerate() should be reviewed against
+        # Phase 7 (out of Phase 8 scope).
         with SessionLocal() as db:
             try:
                 # Bridge sync job body → async regenerate (08-RESEARCH Pattern 3,
