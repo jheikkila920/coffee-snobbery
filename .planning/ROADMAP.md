@@ -233,7 +233,7 @@ Plans:
 - [x] 07-04-PLAN.md — Equipment rec (profile-only, on-demand) + paste-and-rank (text+URL, SSRF-hardened extraction, top-3) (AI-08, AI-09)
 
 **Wave 4** *(blocked on 07-03, 07-04, 07-02)*
-- [ ] 07-05-PLAN.md — AI router: manual refresh (throttle + in-flight 429 + HX-Retarget), background URL verify, equipment/paste-rank/wishlist routes (CSRF + IDOR), main.py registration (AI-05, AI-09, AI-13, AI-14, AI-16)
+- [x] 07-05-PLAN.md — AI router: manual refresh (throttle + in-flight 429 + HX-Retarget), background URL verify, equipment/paste-rank/wishlist routes (CSRF + IDOR), main.py registration (AI-05, AI-09, AI-13, AI-14, AI-16)
 
 **Wave 5** *(blocked on 07-05)*
 - [ ] 07-06-PLAN.md — Home integration: top-hero AI card endpoint + 5 state fragments + HOME-06 sweet-spots prose append + 375px human-verify (AI-04, AI-05, AI-10, AI-11, AI-14, AI-15, AI-16, HOME-06)
