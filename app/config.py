@@ -17,6 +17,7 @@ between this class and that file (FOUND-09).
 
 from __future__ import annotations
 
+import os
 from typing import Literal
 
 from pydantic import Field
@@ -66,3 +67,16 @@ class Settings(BaseSettings):
 settings = Settings()  # type: ignore[call-arg]
 # ``settings`` is the canonical singleton. Importers do
 # ``from app.config import settings`` — never instantiate Settings() elsewhere.
+
+
+def subprocess_env(**overrides: str) -> dict[str, str]:
+    """Parent process environment plus ``overrides``, for ``subprocess`` calls.
+
+    Centralizes the one legitimate ``os.environ`` read outside of ``Settings``:
+    a child process (e.g. ``pg_dump`` in the Phase 8 backup job) needs the
+    inherited environment (PATH, locale) merged with call-specific secrets like
+    ``PGPASSWORD``. Keeping it here preserves the FOUND-10 invariant that
+    ``os.environ`` is referenced only in this module
+    (``tests/test_no_direct_env.py``).
+    """
+    return {**os.environ, **overrides}

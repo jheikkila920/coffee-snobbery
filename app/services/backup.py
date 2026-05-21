@@ -25,7 +25,6 @@ Threat mitigations enforced here:
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tarfile
@@ -38,7 +37,7 @@ from typing import TYPE_CHECKING
 import structlog
 from sqlalchemy.engine import make_url
 
-from app.config import settings
+from app.config import settings, subprocess_env
 from app.events import (
     BACKUP_ARTIFACT_ERROR,
     BACKUP_ARTIFACT_OK,
@@ -143,7 +142,7 @@ def _run_pg_dump(dest_path: str) -> None:
     Raises ``RuntimeError`` (with stderr) on a non-zero pg_dump exit code.
     """
     conn = _parse_db_url(settings.DATABASE_URL)
-    env = {**os.environ, "PGPASSWORD": conn["password"]}
+    env = subprocess_env(PGPASSWORD=conn["password"])
     result = subprocess.run(  # noqa: S603
         [  # noqa: S607 — pg_dump is a version-matched known binary (Phase 0, SH-5)
             "pg_dump",
