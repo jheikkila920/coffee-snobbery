@@ -232,6 +232,28 @@ class TestBackupDownload:
         assert resp.status_code == 404
 
 
+# ---------------------------------------------------------------------------
+# CSRF helper — follows Phase 4/5/9 pattern (test_admin_users._prime_csrf)
+# ---------------------------------------------------------------------------
+
+
+def _prime_csrf(client: Any, signed_cookie: str) -> str:
+    """Wire session_id + csrftoken onto the client; return the CSRF token.
+
+    The double-submit-cookie pattern requires BOTH the csrftoken cookie AND
+    the X-CSRF-Token header to match. Sets them on the client instance so
+    they are sent automatically on subsequent requests.
+    """
+    client.cookies.set("session_id", signed_cookie)
+    client.cookies.delete("csrftoken")
+    resp = client.get("/admin/backups")
+    token = resp.cookies.get("csrftoken") or client.cookies.get("csrftoken", "")
+    if token:
+        client.cookies.set("csrftoken", token)
+        client.headers["X-CSRF-Token"] = token
+    return token
+
+
 class TestRunBackupNow:
     """ADMIN-04: POST /admin/backups/run — D-07 sync def threadpool."""
 
@@ -298,17 +320,32 @@ class TestRunBackupNow:
             timestamp="2026-05-21T02:00:00Z",
         )
 
-        # Monkeypatch the module-level reference used in the handler
+        # Monkeypatch the module-level reference used in the handler.
+        # The handler does `from app.services.backup import run_backup` inside
+        # the function body, which means it gets the attribute from the module
+        # namespace at call time. We patch the module attribute directly.
         monkeypatch.setattr(
             "app.services.backup.run_backup",
             lambda *args, **kwargs: fake_result,
         )
 
-        resp = client.post(
-            "/admin/backups/run",
-            data={"X-CSRF-Token": client.cookies.get("csrftoken", "dummy")},
-            cookies=admin_session,
-        )
+        # Monkeypatch the backup dir so list_backup_files works (no real /app/data/backups
+        # in the test container).
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        monkeypatch.setattr(backup_mod, "_BACKUP_DIR", Path(tmp.name))
+
+        try:
+            # Prime CSRF: GET /admin/backups first to obtain the csrftoken cookie,
+            # then set it on the client (double-submit-cookie pattern).
+            token = _prime_csrf(client, admin_session["session_id"])
+
+            resp = client.post(
+                "/admin/backups/run",
+                data={"X-CSRF-Token": token or "test-csrf"},
+            )
+        finally:
+            tmp.cleanup()
 
         assert resp.status_code == 200
         body = resp.text

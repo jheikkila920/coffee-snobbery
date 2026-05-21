@@ -1,0 +1,32 @@
+{% extends "admin_base.html" %}
+{% block admin_page_title %}Backups{% endblock %}
+{% block admin_content %}
+  <header class="flex items-center justify-between mb-6">
+    <h2 class="text-xl font-semibold text-espresso-900 dark:text-cream-100">Backups</h2>
+  </header>
+
+  {# Run backup now — POST to /admin/backups/run; result swaps #backup-result-mount;
+     hx-swap-oob in the result fragment refreshes #admin-backup-list. #}
+  <div class="mb-6">
+    <form hx-post="/admin/backups/run"
+          hx-target="#backup-result-mount"
+          hx-swap="innerHTML"
+          hx-indicator="#run-backup-spinner">
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+      <button type="submit"
+              class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:bg-espresso-600 dark:hover:bg-espresso-700">
+        Run backup now
+      </button>
+      <span id="run-backup-spinner"
+            class="htmx-indicator ml-2 text-sm text-espresso-500">Running&hellip;</span>
+    </form>
+  </div>
+
+  {# Result mount — empty on initial load; filled by HTMX after run. #}
+  <div id="backup-result-mount" class="mb-6"></div>
+
+  {# Backup file list — also refreshed via hx-swap-oob from the result fragment. #}
+  <div id="admin-backup-list">
+    {% include "fragments/admin_backup_list.html" %}
+  </div>
+{% endblock %}
