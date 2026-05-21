@@ -1,8 +1,32 @@
-{% extends "base.html" %}
-{% block page_title %}Admin{% endblock %}
-{% block content %}
-  <main class="mx-auto max-w-prose px-6 py-12">
-    <h1 class="text-2xl font-semibold">Admin</h1>
-    <p>Admin (stub) — wiring lands in Phase 9.</p>
-  </main>
+{% extends "admin_base.html" %}
+{% block admin_page_title %}Overview{% endblock %}
+{% block admin_content %}
+  {# Admin hub — card grid linking to the five sub-sections (D-01) #}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <a href="/admin/users"
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-6 hover:border-espresso-400 dark:bg-espresso-900 dark:border-espresso-800 dark:hover:border-espresso-600">
+      <h2 class="text-lg font-semibold mb-1">Users</h2>
+      <p class="text-sm text-espresso-600 dark:text-cream-400">Manage household users, passwords, and admin privileges.</p>
+    </a>
+    <a href="/admin/credentials"
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-6 hover:border-espresso-400 dark:bg-espresso-900 dark:border-espresso-800 dark:hover:border-espresso-600">
+      <h2 class="text-lg font-semibold mb-1">Credentials</h2>
+      <p class="text-sm text-espresso-600 dark:text-cream-400">Set AI provider API keys and select models.</p>
+    </a>
+    <a href="/admin/settings"
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-6 hover:border-espresso-400 dark:bg-espresso-900 dark:border-espresso-800 dark:hover:border-espresso-600">
+      <h2 class="text-lg font-semibold mb-1">Settings</h2>
+      <p class="text-sm text-espresso-600 dark:text-cream-400">View and edit application settings.</p>
+    </a>
+    <a href="/admin/backups"
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-6 hover:border-espresso-400 dark:bg-espresso-900 dark:border-espresso-800 dark:hover:border-espresso-600">
+      <h2 class="text-lg font-semibold mb-1">Backups</h2>
+      <p class="text-sm text-espresso-600 dark:text-cream-400">List, download, or trigger database and photo backups.</p>
+    </a>
+    <a href="/admin/system"
+       class="rounded-lg border border-espresso-200 bg-cream-100 p-6 hover:border-espresso-400 dark:bg-espresso-900 dark:border-espresso-800 dark:hover:border-espresso-600">
+      <h2 class="text-lg font-semibold mb-1">System</h2>
+      <p class="text-sm text-espresso-600 dark:text-cream-400">App version, database info, storage, and API health.</p>
+    </a>
+  </div>
 {% endblock %}

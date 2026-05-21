@@ -1,0 +1,36 @@
+{# admin_base.html — shared admin layout.
+   Extends base.html; adds persistent section nav (D-01/D-02, mobile-first). #}
+{% extends "base.html" %}
+{% block page_title %}Admin — {% block admin_page_title %}{% endblock %}{% endblock %}
+{% block content %}
+  <main class="mx-auto max-w-5xl px-6 py-12">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-semibold text-espresso-900 dark:text-cream-100">Admin</h1>
+    </header>
+    {# Persistent section nav — flex-wrap collapses cleanly at 375px (D-02) #}
+    <nav aria-label="Admin sections"
+         class="flex flex-wrap gap-2 mb-8 border-b border-espresso-200 pb-4 dark:border-espresso-800">
+      <a href="/admin/users"
+         class="rounded px-3 py-1 text-sm font-semibold text-espresso-700 hover:bg-espresso-100 dark:text-cream-200 dark:hover:bg-espresso-800">
+        Users
+      </a>
+      <a href="/admin/credentials"
+         class="rounded px-3 py-1 text-sm font-semibold text-espresso-700 hover:bg-espresso-100 dark:text-cream-200 dark:hover:bg-espresso-800">
+        Credentials
+      </a>
+      <a href="/admin/settings"
+         class="rounded px-3 py-1 text-sm font-semibold text-espresso-700 hover:bg-espresso-100 dark:text-cream-200 dark:hover:bg-espresso-800">
+        Settings
+      </a>
+      <a href="/admin/backups"
+         class="rounded px-3 py-1 text-sm font-semibold text-espresso-700 hover:bg-espresso-100 dark:text-cream-200 dark:hover:bg-espresso-800">
+        Backups
+      </a>
+      <a href="/admin/system"
+         class="rounded px-3 py-1 text-sm font-semibold text-espresso-700 hover:bg-espresso-100 dark:text-cream-200 dark:hover:bg-espresso-800">
+        System
+      </a>
+    </nav>
+    {% block admin_content %}{% endblock %}
+  </main>
+{% endblock %}
