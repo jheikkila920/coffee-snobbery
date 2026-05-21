@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html.parser
 import json  # noqa: F401 — used in Task 2 OpenAI fallback flow
 import time  # noqa: F401 — used in Task 2/3 for duration_ms calculation
 from typing import Any
@@ -54,8 +55,8 @@ from app.services import settings as settings_service  # noqa: F401 — used in 
 from app.services.ai_schemas import (
     AltBrewerSchema,
     CoffeeRecSchema,  # noqa: F401 — used in Task 2
-    EquipmentRecSchema,  # noqa: F401
-    PasteRankSchema,  # noqa: F401
+    EquipmentRecSchema,
+    PasteRankSchema,
     RecipeSuggestionSchema,
     SweetSpotsProseSchema,  # noqa: F401 — used in Task 2
 )
@@ -1206,3 +1207,493 @@ async def regenerate(
                 error_status="unexpected_error",
             )
             return "error"
+
+
+# ---------------------------------------------------------------------------
+# Equipment recommendation flow (AI-08, D-05 — profile-only, no web search)
+# ---------------------------------------------------------------------------
+
+
+async def generate_equipment_rec(
+    user_id: int,
+    generated_by: str,
+    *,
+    db: Session,
+) -> tuple[str, AIRecommendation | None]:
+    """Generate an on-demand equipment recommendation for *user_id*.
+
+    Profile-only: reads the user's active equipment list + preference profile
+    and makes ONE LLM call with NO web_search server tool (D-05 / AI-08).
+    The LLM may return weakest_link=None when the setup is well-matched —
+    that is a valid, common outcome.
+
+    Returns (status, row) where status is one of:
+    "generated" | "try_again" | "not_configured"
+
+    This function is NEVER called from ``regenerate()`` — it is on-demand
+    only and writes a telemetry row with rec_type="equipment".
+    """
+    from pydantic import ValidationError as PydanticValidationError
+
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    if anthropic_cred is None and openai_cred is None:
+        return "not_configured", None
+
+    # Sync reads before any awaited call (Pitfall 5)
+    equipment_rows = db.execute(
+        select(Equipment).where(Equipment.archived.is_(False))
+    ).scalars().all()
+    profile = analytics_service.get_preference_profile(db, user_id)
+
+    # Build equipment summary for the prompt
+    if equipment_rows:
+        equip_lines = "\n".join(
+            f"- {e.type}: {e.brand} {e.model}" for e in equipment_rows
+        )
+    else:
+        equip_lines = "(no equipment logged yet)"
+
+    # Build preference summary
+    top_origins = [r.label for r in profile.get("origin", [])[:3]]
+    top_processes = [r.label for r in profile.get("process", [])[:3]]
+    top_roasts = [r.label for r in profile.get("roast_level", [])[:2]]
+    pref_text = (
+        f"Preferred origins: {', '.join(top_origins) or 'varied'}. "
+        f"Preferred processes: {', '.join(top_processes) or 'varied'}. "
+        f"Preferred roast levels: {', '.join(top_roasts) or 'varied'}."
+    )
+
+    prompt = (
+        f"Assess the following pour-over brewing setup and identify the weakest link, "
+        f"if any.\n\nEquipment:\n{equip_lines}\n\n"
+        f"User taste profile: {pref_text}\n\n"
+        f"If the setup is well-matched and no upgrade would meaningfully improve the cup, "
+        f"set weakest_link and recommendation to null. "
+        f"Only recommend an upgrade when it would make a concrete, noticeable difference."
+    )
+
+    cred = anthropic_cred or openai_cred
+    if cred is None:
+        return "not_configured", None
+
+    start_ts = time.monotonic()
+    tool_version = settings_service.get_str("ai_tool_version_anthropic")
+    raw: dict[str, Any] | None = None
+    usage: Any = None
+
+    # Anthropic path (no web_search tool — profile-only, AI-08/D-05)
+    if anthropic_cred is not None:
+        client = _build_anthropic_client(anthropic_cred)
+        try:
+            response = client.messages.create(
+                model=anthropic_cred.model_name,
+                max_tokens=512,
+                system=SYSTEM_PROMPT_VOICE,
+                messages=[{"role": "user", "content": prompt}],
+                tools=[  # type: ignore[arg-type]
+                    {
+                        "name": "structure_output",
+                        "description": "Return the equipment recommendation",
+                        "input_schema": EquipmentRecSchema.model_json_schema(),
+                    }
+                ],
+            )
+            raw = _project_tool_use_input(response.content, "structure_output")
+            usage = response.usage
+            cred = anthropic_cred
+        except BaseException as e:
+            if _is_anthropic_fallback_error(e):
+                log.warning(
+                    AI_FALLBACK_TRIGGERED,
+                    user_id=user_id,
+                    rec_type="equipment",
+                    from_provider="anthropic",
+                    reason=type(e).__name__,
+                )
+                raw = None  # fall through to OpenAI
+            else:
+                raise
+
+    # OpenAI fallback (prompt-based JSON, no tools needed)
+    if raw is None and openai_cred is not None:
+        oai_client = _build_openai_client(openai_cred)
+        schema_hint = json.dumps(EquipmentRecSchema.model_json_schema(), separators=(",", ":"))
+        full_prompt = (
+            f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
+        )
+        try:
+            response = oai_client.responses.create(
+                model=openai_cred.model_name,
+                input=[{"role": "user", "content": full_prompt}],
+            )
+            text_out = ""
+            for item in response.output:
+                if item.type == "message":
+                    for c in item.content:
+                        if c.type == "output_text":
+                            text_out = c.text
+                            break
+            raw = json.loads(text_out)
+            usage = response.usage
+            cred = openai_cred
+            tool_version = settings_service.get_str("ai_tool_version_openai")
+        except Exception as e:
+            log.error(
+                AI_GENERATION_ERROR,
+                user_id=user_id,
+                rec_type="equipment",
+                error_class=type(e).__name__,
+                error_status="provider_error",
+            )
+
+    if raw is None:
+        return "try_again", None
+
+    # Validate via EquipmentRecSchema (T-07-02)
+    try:
+        EquipmentRecSchema.model_validate(raw)
+    except PydanticValidationError as e:
+        log.error(
+            AI_GENERATION_ERROR,
+            user_id=user_id,
+            rec_type="equipment",
+            error_class=type(e).__name__,
+            error_status="pydantic_error",
+        )
+        _write_recommendation_row(
+            db,
+            user_id=user_id,
+            rec_type="equipment",
+            input_signature="",
+            response_json={},
+            cred=cred,
+            tool_version=tool_version,
+            usage=usage,
+            web_search_count=0,
+            duration_ms=int((time.monotonic() - start_ts) * 1000),
+            generated_by=generated_by,
+            error_status="pydantic_error",
+        )
+        return "try_again", None
+
+    duration_ms = int((time.monotonic() - start_ts) * 1000)
+    rec_row = _write_recommendation_row(
+        db,
+        user_id=user_id,
+        rec_type="equipment",
+        input_signature="",  # no signature gate for on-demand flows
+        response_json=raw,
+        cred=cred,
+        tool_version=tool_version,
+        usage=usage,
+        web_search_count=0,  # never any web search (AI-08/D-05)
+        duration_ms=duration_ms,
+        generated_by=generated_by,
+    )
+    log.info(
+        AI_GENERATION_SUCCESS,
+        user_id=user_id,
+        rec_type="equipment",
+        provider=cred.provider,
+        model=cred.model_name,
+        duration_ms=duration_ms,
+    )
+    return "generated", rec_row
+
+
+# ---------------------------------------------------------------------------
+# Paste-and-rank helpers (AI-09, D-07/D-08)
+# ---------------------------------------------------------------------------
+
+
+class _TextExtractor(html.parser.HTMLParser):
+    """Collect text content inside p, h1, h2 tags.
+
+    Ignores script/style blocks and all other elements. Tolerates truncated
+    HTML (assumption A5 — html.parser handles parse errors gracefully).
+    """
+
+    _COLLECT_TAGS = frozenset({"p", "h1", "h2"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._collecting = False
+        self.chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in self._COLLECT_TAGS:
+            self._collecting = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._COLLECT_TAGS:
+            self._collecting = False
+
+    def handle_data(self, data: str) -> None:
+        if self._collecting:
+            stripped = data.strip()
+            if stripped:
+                self.chunks.append(stripped)
+
+    def error(self, message: str) -> None:
+        # Tolerate parse errors on truncated HTML (assumption A5)
+        pass
+
+
+def _split_inputs(raw: str) -> tuple[list[str], list[str]]:
+    """Split a paste-rank textarea into URL lines and freeform text blocks.
+
+    Lines that start with 'http://' or 'https://' are detected as URLs.
+    All other non-empty lines accumulate into the text blocks list (D-08).
+    """
+    urls: list[str] = []
+    texts: list[str] = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("http://") or stripped.startswith("https://"):
+            urls.append(stripped)
+        else:
+            texts.append(stripped)
+    return urls, texts
+
+
+async def _fetch_page_text(url: str) -> str:
+    """Fetch a URL and extract paragraph/heading text for paste-rank grounding.
+
+    SSRF mitigations (T-07-09, mirrors _verify_buy_url):
+    - **Scheme allowlist**: rejects any non-https URL before making a network
+      call (http://, file://, ftp://, etc. all return empty string).
+    - **No cross-host redirects**: ``follow_redirects=False`` so a 302 to an
+      internal metadata endpoint is never followed.
+    - **Body cap**: ``Range: bytes=0-131071`` (128 KB) bounds the download.
+    - **Timeout**: ``httpx.Timeout(5.0)`` hard-kills the request after 5 s.
+
+    Returns extracted text (p/h1/h2 content via stdlib html.parser), capped
+    to approximately 8000 tokens (~32 000 chars). Returns empty string on any
+    failure mode (bad scheme, bad status, timeout, network error).
+    """
+    # Scheme allowlist — no network call for non-https (T-07-09 SSRF)
+    if not url.startswith("https://"):
+        return ""
+
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=False,  # SSRF: block cross-host redirects
+            timeout=httpx.Timeout(5.0),  # SSRF: hard 5s timeout
+        ) as client:
+            r = await client.get(
+                url,
+                headers={
+                    "Range": "bytes=0-131071",  # SSRF: 128KB body cap
+                    "User-Agent": VERIFY_UA,
+                },
+            )
+
+        if r.status_code not in (200, 206):
+            return ""
+
+        parser = _TextExtractor()
+        try:
+            parser.feed(r.text)
+        except Exception:  # noqa: S110 — tolerate truncated HTML parse errors (assumption A5)
+            pass
+
+        extracted = " ".join(parser.chunks)
+        # Cap at ~32 000 chars ≈ 8 000 tokens to stay well inside context limits
+        return extracted[:32_000]
+
+    except (httpx.TimeoutException, httpx.RequestError):
+        return ""
+
+
+async def rank_pasted_coffees(
+    user_id: int,
+    generated_by: str,
+    *,
+    db: Session,
+    raw_input: str,
+) -> tuple[str, PasteRankSchema | None]:
+    """Rank pasted coffee descriptions or URLs by predicted enjoyment (AI-09, D-07/D-08).
+
+    Accepts freeform text AND/OR https:// URLs in *raw_input*. URLs are
+    fetched via the SSRF-hardened ranged-GET machinery (_fetch_page_text)
+    before being fed to the model alongside any pasted text. Failed fetches
+    are silently skipped — the model still ranks the text entries.
+
+    Returns at most 3 ranked items (PasteRankSchema.ranked max_length=3),
+    each with one-sentence reasoning grounded in the user's taste profile.
+
+    This function is NEVER called from ``regenerate()`` and is never
+    cached or signature-gated. A telemetry row with rec_type="paste_rank"
+    is always written (D-07 / AI-09).
+    """
+    from pydantic import ValidationError as PydanticValidationError
+
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    if anthropic_cred is None and openai_cred is None:
+        return "not_configured", None
+
+    # Sync reads before any awaited calls (Pitfall 5)
+    profile = analytics_service.get_preference_profile(db, user_id)
+
+    # Split input into URLs and text blocks (D-08)
+    urls, text_blocks = _split_inputs(raw_input)
+
+    # Fetch URL content (SSRF-hardened; failed fetches silently omitted)
+    url_texts: list[str] = []
+    for url in urls:
+        fetched = await _fetch_page_text(url)
+        if fetched:
+            url_texts.append(f"[From {url}]: {fetched[:4000]}")  # cap per URL
+
+    # Combine all input text for the model
+    all_text_parts = text_blocks + url_texts
+    combined_input = "\n\n".join(all_text_parts) if all_text_parts else raw_input
+
+    # Build preference summary
+    top_origins = [r.label for r in profile.get("origin", [])[:3]]
+    top_processes = [r.label for r in profile.get("process", [])[:3]]
+    pref_text = (
+        f"Preferred origins: {', '.join(top_origins) or 'varied'}. "
+        f"Preferred processes: {', '.join(top_processes) or 'varied'}."
+    )
+
+    prompt = (
+        f"Rank these coffees by predicted enjoyment for a pour-over enthusiast.\n\n"
+        f"User taste profile: {pref_text}\n\n"
+        f"Coffees to rank:\n{combined_input}\n\n"
+        f"Return up to 3 ranked coffees. For each, give one sentence of reasoning "
+        f"grounded in the user's actual taste profile. "
+        f"Best match goes first. Fewer than 3 is fine if fewer are provided."
+    )
+
+    cred = anthropic_cred or openai_cred
+    if cred is None:
+        return "not_configured", None
+
+    start_ts = time.monotonic()
+    tool_version = settings_service.get_str("ai_tool_version_anthropic")
+    raw: dict[str, Any] | None = None
+    usage: Any = None
+
+    # Anthropic path (no web_search — user-supplied URLs already fetched above)
+    if anthropic_cred is not None:
+        client = _build_anthropic_client(anthropic_cred)
+        try:
+            response = client.messages.create(
+                model=anthropic_cred.model_name,
+                max_tokens=1024,
+                system=SYSTEM_PROMPT_VOICE,
+                messages=[{"role": "user", "content": prompt}],
+                tools=[  # type: ignore[arg-type]
+                    {
+                        "name": "structure_output",
+                        "description": "Return the ranked coffee list",
+                        "input_schema": PasteRankSchema.model_json_schema(),
+                    }
+                ],
+            )
+            raw = _project_tool_use_input(response.content, "structure_output")
+            usage = response.usage
+            cred = anthropic_cred
+        except BaseException as e:
+            if _is_anthropic_fallback_error(e):
+                log.warning(
+                    AI_FALLBACK_TRIGGERED,
+                    user_id=user_id,
+                    rec_type="paste_rank",
+                    from_provider="anthropic",
+                    reason=type(e).__name__,
+                )
+                raw = None  # fall through to OpenAI
+            else:
+                raise
+
+    # OpenAI fallback (prompt-based JSON)
+    if raw is None and openai_cred is not None:
+        oai_client = _build_openai_client(openai_cred)
+        schema_hint = json.dumps(PasteRankSchema.model_json_schema(), separators=(",", ":"))
+        full_prompt = (
+            f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
+        )
+        try:
+            response = oai_client.responses.create(
+                model=openai_cred.model_name,
+                input=[{"role": "user", "content": full_prompt}],
+            )
+            text_out = ""
+            for item in response.output:
+                if item.type == "message":
+                    for c in item.content:
+                        if c.type == "output_text":
+                            text_out = c.text
+                            break
+            raw = json.loads(text_out)
+            usage = response.usage
+            cred = openai_cred
+            tool_version = settings_service.get_str("ai_tool_version_openai")
+        except Exception as e:
+            log.error(
+                AI_GENERATION_ERROR,
+                user_id=user_id,
+                rec_type="paste_rank",
+                error_class=type(e).__name__,
+                error_status="provider_error",
+            )
+
+    if raw is None:
+        return "try_again", None
+
+    # Validate via PasteRankSchema (T-07-02)
+    try:
+        PasteRankSchema.model_validate(raw)
+    except PydanticValidationError as e:
+        log.error(
+            AI_GENERATION_ERROR,
+            user_id=user_id,
+            rec_type="paste_rank",
+            error_class=type(e).__name__,
+            error_status="pydantic_error",
+        )
+        _write_recommendation_row(
+            db,
+            user_id=user_id,
+            rec_type="paste_rank",
+            input_signature="",
+            response_json={},
+            cred=cred,
+            tool_version=tool_version,
+            usage=usage,
+            web_search_count=0,
+            duration_ms=int((time.monotonic() - start_ts) * 1000),
+            generated_by=generated_by,
+            error_status="pydantic_error",
+        )
+        return "try_again", None
+
+    duration_ms = int((time.monotonic() - start_ts) * 1000)
+    _write_recommendation_row(
+        db,
+        user_id=user_id,
+        rec_type="paste_rank",
+        input_signature="",  # not signature-gated (D-07/AI-09)
+        response_json=raw,
+        cred=cred,
+        tool_version=tool_version,
+        usage=usage,
+        web_search_count=0,
+        duration_ms=duration_ms,
+        generated_by=generated_by,
+    )
+    log.info(
+        AI_GENERATION_SUCCESS,
+        user_id=user_id,
+        rec_type="paste_rank",
+        provider=cred.provider,
+        model=cred.model_name,
+        duration_ms=duration_ms,
+    )
+    return "generated", PasteRankSchema.model_validate(raw)

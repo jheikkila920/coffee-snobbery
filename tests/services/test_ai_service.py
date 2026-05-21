@@ -899,7 +899,6 @@ async def test_equipment_rec_no_web_search_tool() -> None:
     from unittest.mock import MagicMock, patch
 
     from app.services import ai_service
-    from app.services.ai_schemas import EquipmentRecSchema
 
     db = MagicMock()
     mock_cred = MagicMock()
@@ -942,8 +941,7 @@ async def test_equipment_rec_no_web_search_tool() -> None:
             ai_service, "_build_anthropic_client", return_value=mock_client
         ),
         patch.object(ai_service, "_write_recommendation_row", return_value=MagicMock()),
-        patch("app.models.equipment.Equipment"),
-        patch("sqlalchemy.orm.Session.execute"),
+        patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
         # Patch the DB execute to return empty equipment list
         db.execute.return_value.scalars.return_value.all.return_value = []
@@ -998,6 +996,7 @@ async def test_equipment_rec_no_changes() -> None:
         patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
         patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
         patch.object(ai_service, "_write_recommendation_row", return_value=MagicMock()),
+        patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
         db.execute.return_value.scalars.return_value.all.return_value = []
         status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
@@ -1048,6 +1047,7 @@ async def test_equipment_rec_weakest_link() -> None:
         patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
         patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
         patch.object(ai_service, "_write_recommendation_row", return_value=mock_row),
+        patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
         db.execute.return_value.scalars.return_value.all.return_value = []
         status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
@@ -1179,6 +1179,7 @@ async def test_paste_rank_top3() -> None:
         patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
         patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
         patch.object(ai_service, "_write_recommendation_row", return_value=mock_row),
+        patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
         status, result = await ai_service.rank_pasted_coffees(
             1, "user", db=db,
@@ -1196,7 +1197,7 @@ async def test_paste_rank_top3() -> None:
 async def test_paste_rank_never_cached() -> None:
     """rank_pasted_coffees writes rec_type='paste_rank' and regenerate() never calls it."""
     import types
-    from unittest.mock import MagicMock, call, patch
+    from unittest.mock import MagicMock, patch
 
     from app.services import ai_service
     from app.services.ai_service import regenerate
@@ -1235,6 +1236,7 @@ async def test_paste_rank_never_cached() -> None:
         patch.object(ai_service.analytics_service, "get_preference_profile", return_value={}),
         patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
         patch.object(ai_service, "_write_recommendation_row", side_effect=capture_write),
+        patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
         await ai_service.rank_pasted_coffees(
             1, "user", db=db, raw_input="Test Coffee description"
