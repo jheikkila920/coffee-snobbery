@@ -105,6 +105,15 @@ COPY --from=tailwind-builder --chown=app:app /build/app/static/css/tailwind.*.cs
 
 RUN chmod +x entrypoint.sh
 
+# Create the data mountpoints app-owned BEFORE `USER app`. Named volumes seed
+# their ownership from the image dir on first mount, so this makes a fresh
+# `coffee_snobbery_photos` / `coffee_snobbery_backups` volume writable by the
+# non-root app user. Existing root-owned volumes need a one-time
+# `docker compose run --rm -u root coffee-snobbery chown -R app:app /app/data`
+# (or volume recreation). SCHED-04 backups and Phase 4 photo uploads both
+# write here.
+RUN mkdir -p /app/data/photos /app/data/backups && chown -R app:app /app/data
+
 USER app
 EXPOSE 8000
 
