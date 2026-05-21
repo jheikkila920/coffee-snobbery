@@ -142,6 +142,7 @@ Three plan-phase research flags carried forward:
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Deploy (infra) | G-01: VPS volumes are root-owned — next deploy needs a one-time `docker compose run --rm -u root coffee-snobbery chown -R app:app /app/data` (or recreate empty volumes) so the app user can write backups + photos. Dockerfile now creates app-owned mountpoints for fresh volumes; existing VPS volumes predate the fix. | open | 2026-05-21 (Phase 08) |
+| Test infra | T-INFRA-1 (pre-existing, NOT Phase 9): the full `pytest tests/` suite has cross-module isolation gaps surfaced when run as one batch (the project normally runs per-phase isolated). (a) Root `fresh_db` autouse wipes only users+sessions, never coffees/brew_sessions, so a 2nd full-suite run trips phase_04 `DELETE FROM coffees` (RESTRICT FK). (b) `test_setup_concurrent_race` passes in isolation but fails in full-suite — likely the Phase 3 app_settings in-memory cache (`setup_completed`) not being invalidated between tests. Fix = teardown that TRUNCATEs catalog tables + clears the settings cache in root conftest. Touches shared test infra + auth path — defer to a dedicated test-hygiene task. | open | 2026-05-21 (Phase 09 regression gate) |
 
 ## Session Continuity
 
