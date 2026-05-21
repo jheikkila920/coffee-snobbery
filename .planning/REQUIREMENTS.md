@@ -96,8 +96,8 @@
 - [ ] **AI-05**: URL verification background task: ranged GET (not HEAD — many specialty roasters block HEAD), realistic User-Agent, body-contains-roaster-or-coffee-name check, no cross-host redirects, 5s timeout; UI initially shows "verifying..." and updates when the check completes; unverified URLs render as plain text with a "couldn't verify" note
 - [x] **AI-06**: Recipe suggestion picks from this user's existing `recipes` rows ranked by historical avg rating for similar bean profiles (matching origin + process + roast level); never invents new recipes; if no recipe matches the bean style, suggestion text says so and links to the recipe builder
 - [x] **AI-07**: Alternative-brewer callout populated when historical data for the user shows a ≥0.5 rating delta on a different brewer for the recommended bean style
-- [ ] **AI-08**: Equipment recommendation flow (profile-only, no web search): identifies weakest link or explicitly says "no changes recommended"
-- [ ] **AI-09**: Paste-and-rank flow: on-demand only, never cached, never scheduled; top 3 with one-sentence reasoning each grounded in the user's log
+- [x] **AI-08**: Equipment recommendation flow (profile-only, no web search): identifies weakest link or explicitly says "no changes recommended"
+- [x] **AI-09**: Paste-and-rank flow: on-demand only, never cached, never scheduled; top 3 with one-sentence reasoning each grounded in the user's log
 - [x] **AI-10**: Sweet-spots AI prose interpretation generated alongside the coffee recommendation, cached together, regenerated together
 - [ ] **AI-11**: Cold-start empty state when user has <3 brew sessions or <5 distinct observed flavor notes: progress meter ("Log 2 more brews and add 3 more flavor notes to unlock AI recommendations") in place of the AI section
 - [x] **AI-12**: Signature-based regeneration: input signature is a content hash of *this user's own* sessions (not shared catalog counts) so adding a coffee to the household doesn't thrash everyone's signature
@@ -268,8 +268,8 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | AI-05 | Phase 7 — AI Services | Pending |
 | AI-06 | Phase 7 — AI Services | Complete |
 | AI-07 | Phase 7 — AI Services | Complete |
-| AI-08 | Phase 7 — AI Services | Pending |
-| AI-09 | Phase 7 — AI Services | Pending |
+| AI-08 | Phase 7 — AI Services | Complete |
+| AI-09 | Phase 7 — AI Services | Complete |
 | AI-10 | Phase 7 — AI Services | Complete |
 | AI-11 | Phase 7 — AI Services | Pending |
 | AI-12 | Phase 7 — AI Services | Complete |
