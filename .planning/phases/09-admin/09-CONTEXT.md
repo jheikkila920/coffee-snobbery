@@ -148,24 +148,20 @@ ADMIN-06.
   Phase 7 home-page manual refresh. Planner confirms the existing accepted
   values.
 
-### Claude's Discretion (user did NOT select User-management safety; resolve with
-these prior-phase-grounded defaults, but SURFACE the destructive ones)
+### User-management safety (CONFIRMED by John at plan-phase 2026-05-21)
 
-- **User delete vs deactivate (DESTRUCTIVE — planner must confirm FK behavior):**
-  `brew_sessions`, `ai_recommendations`, and `wishlist_entries` reference
-  `users`. Default posture: **deactivate (soft) is the primary lifecycle
-  control**; hard **delete is guarded** behind an explicit confirmation that
-  names what is lost, and the planner MUST confirm the FK `ondelete` semantics
-  before implementing (cascade = loses that user's brew history; restrict/block
-  if the user has sessions = safer). Do not silently ship a cascading hard
-  delete. Recommended default: block hard-delete when the user has brew
-  sessions, steer the admin to deactivate instead; allow delete only for
-  empty/never-used accounts. Confirm with John at plan-phase if cascade is
-  desired.
-- **Last-admin / self-lockout protection:** refuse to delete, deactivate, or
-  demote (`is_admin` -> false) the last remaining active admin; refuse to let an
-  admin delete/deactivate their own account in a way that locks themselves out.
-  Enforce server-side.
+- **D-15: Block-and-deactivate, no cascading hard-delete.** Deactivate (soft) is
+  the primary user lifecycle control. Hard-delete is BLOCKED when the target user
+  has any `brew_sessions`; it is allowed only for empty/never-used accounts. Brew
+  history is preserved — never silently cascade-delete a user's data. The planner
+  still confirms the FK `ondelete` semantics via research, but the product posture
+  is fixed: do NOT ship a cascading hard-delete.
+- **D-16: Last-admin / self-lockout protection (locked).** Refuse, server-side,
+  to delete, deactivate, or demote (`is_admin` -> false) the last remaining
+  active admin; refuse to let an admin lock themselves out via their own account.
+
+### Claude's Discretion (resolve with these prior-phase-grounded defaults)
+
 - **`is_admin` toggle session regeneration:** honor ROADMAP success #1 — toggling
   privilege regenerates/invalidates the target user's session(s) so the new
   privilege takes effect immediately and a stale cookie can't retain old
