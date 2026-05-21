@@ -1,10 +1,11 @@
 ---
 phase: 8
 slug: scheduler-backups
-status: planned
+status: validated
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-05-21
+validated: 2026-05-21
 ---
 
 # Phase 8 — Validation Strategy
@@ -41,15 +42,15 @@ created: 2026-05-21
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 08-03-T1 | 08-03 | 2 | SCHED-01 | — | Exactly 2 jobs registered after N restarts (no dupes) | unit | `pytest tests/test_scheduler.py::test_idempotent_job_registration -x` | ✅ 08-01 | ⬜ pending |
-| 08-03-T1 | 08-03 | 2 | SCHED-01 | — | Scheduler starts/stops cleanly in lifespan | integration | `pytest tests/test_scheduler.py::test_lifespan_scheduler_lifecycle -x` | ✅ 08-01 | ⬜ pending |
-| 08-03-T2 | 08-03 | 2 | SCHED-02 | T-08 (access control) | Eligibility filter = is_active AND >=3 sessions | unit | `pytest tests/test_scheduler.py::test_eligibility_filter -x` | ✅ 08-01 | ⬜ pending |
-| 08-03-T2 | 08-03 | 2 | SCHED-02 | — | `regenerate()` called with `force=False`; statuses tallied | unit | `pytest tests/test_scheduler.py::test_ai_run_summary_tally -x` | ✅ 08-01 | ⬜ pending |
-| 08-03-T2 | 08-03 | 2 | SCHED-03 | — | Token aggregation sums this-run rows only; web-search split correct | unit | `pytest tests/test_scheduler.py::test_token_aggregation -x` | ✅ 08-01 | ⬜ pending |
-| 08-03-T2 | 08-03 | 2 | SCHED-03 | — | `last_ai_run_status` written as JSON string to `app_settings` | unit | `pytest tests/test_scheduler.py::test_status_row_write -x` | ✅ 08-01 | ⬜ pending |
-| 08-02-T1 | 08-02 | 2 | SCHED-04 | — | Filename-based retention prune deletes the correct files | unit | `pytest tests/test_backup.py::test_retention_prune -x` | ✅ 08-01 | ⬜ pending |
-| 08-02-T2 | 08-02 | 2 | SCHED-04 | — | Partial failure keeps the good artifact + flags overall error | unit | `pytest tests/test_backup.py::test_partial_failure_keeps_good -x` | ✅ 08-01 | ⬜ pending |
-| 08-02-T2 | 08-02 | 2 | SCHED-04 | T-08 (info disclosure) | `last_backup_status` written as JSON string to `app_settings` | unit | `pytest tests/test_backup.py::test_backup_status_row_write -x` | ✅ 08-01 | ⬜ pending |
+| 08-03-T1 | 08-03 | 2 | SCHED-01 | — | Exactly 2 jobs registered after N restarts (no dupes) | unit | `pytest tests/test_scheduler.py::test_idempotent_job_registration -x` | ✅ 08-01 | ✅ green |
+| 08-03-T1 | 08-03 | 2 | SCHED-01 | — | Scheduler starts/stops cleanly in lifespan | integration | `pytest tests/test_scheduler.py::test_lifespan_scheduler_lifecycle -x` | ✅ 08-01 | ✅ green |
+| 08-03-T2 | 08-03 | 2 | SCHED-02 | T-08 (access control) | Eligibility filter = is_active AND >=3 sessions | unit | `pytest tests/test_scheduler.py::test_eligibility_filter -x` | ✅ 08-01 | ✅ green |
+| 08-03-T2 | 08-03 | 2 | SCHED-02 | — | `regenerate()` called with `force=False`; statuses tallied | unit | `pytest tests/test_scheduler.py::test_ai_run_summary_tally -x` | ✅ 08-01 | ✅ green |
+| 08-03-T2 | 08-03 | 2 | SCHED-03 | — | Token aggregation sums this-run rows only; web-search split correct | unit | `pytest tests/test_scheduler.py::test_token_aggregation -x` | ✅ 08-01 | ✅ green |
+| 08-03-T2 | 08-03 | 2 | SCHED-03 | — | `last_ai_run_status` written as JSON string to `app_settings` | unit | `pytest tests/test_scheduler.py::test_status_row_write -x` | ✅ 08-01 | ✅ green |
+| 08-02-T1 | 08-02 | 2 | SCHED-04 | — | Filename-based retention prune deletes the correct files | unit | `pytest tests/test_backup.py::test_retention_prune -x` | ✅ 08-01 | ✅ green |
+| 08-02-T2 | 08-02 | 2 | SCHED-04 | — | Partial failure keeps the good artifact + flags overall error | unit | `pytest tests/test_backup.py::test_partial_failure_keeps_good -x` | ✅ 08-01 | ✅ green |
+| 08-02-T2 | 08-02 | 2 | SCHED-04 | T-08 (info disclosure) | `last_backup_status` written as JSON string to `app_settings` | unit | `pytest tests/test_backup.py::test_backup_status_row_write -x` | ✅ 08-01 | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -60,7 +61,7 @@ created: 2026-05-21
 - [x] `tests/test_scheduler.py` — covers SCHED-01, SCHED-02, SCHED-03 (idempotent registration, eligibility filter, summary tally, token aggregation, status-row write) [stubs: Plan 08-01]
 - [x] `tests/test_backup.py` — covers SCHED-04 unit cases (retention prune, partial-failure, status-row write) [stubs: Plan 08-01]
 - [x] `tests/conftest.py` — shared fixtures (sync_db session, mock_regenerate) [Plan 08-01]
-- [ ] pytest install into the running container: `docker compose exec coffee-snobbery pip install --user pytest pytest-asyncio` (CLAUDE.md)
+- [x] pytest install into the running container: `docker compose exec coffee-snobbery pip install --user pytest pytest-asyncio` (CLAUDE.md) — verified pytest 9.0.3 present
 
 ---
 
@@ -73,6 +74,24 @@ created: 2026-05-21
 
 ---
 
+## Validation Audit 2026-05-21
+
+Audited the planned map against the running stack. All 9 mapped tests executed in-container (`tests/test_scheduler.py`, `tests/test_backup.py`); 7 were green, 2 silently SKIPPED (pass-by-skip) because the test DB had no `coffee` rows — leaving SCHED-02 (eligibility) and SCHED-03 (token aggregation) unverified despite the plan's "all green" claim.
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 2 |
+| Resolved | 2 |
+| Escalated | 0 |
+
+**Fixes (test-only, no impl changes):**
+- `test_eligibility_filter` (SCHED-02) — now self-seeds a `Coffee(name=...)` row instead of skipping when none exists.
+- `test_token_aggregation` (SCHED-03) — removed the spurious coffee-lookup skip guard (AIRecommendation has no coffee FK) and backdated `run_start` by 1s so the `func.now()` server-default rows fall inside the `>= run_start` window.
+
+Final result: **9 passed, 0 skipped** (`docker compose exec -T coffee-snobbery python -m pytest tests/test_scheduler.py tests/test_backup.py`).
+
+---
+
 ## Validation Sign-Off
 
 - [x] All tasks have `<automated>` verify or Wave 0 dependencies
@@ -82,4 +101,4 @@ created: 2026-05-21
 - [x] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** planned 2026-05-21 (plans 08-01..08-03)
+**Approval:** validated 2026-05-21 — 9/9 automated tests green, 0 skipped (plans 08-01..08-03)
