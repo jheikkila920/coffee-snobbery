@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block page_title %}Rank these coffees{% endblock %}
+{% block content %}
+  {# D-07/D-08: Paste-and-rank page. Single textarea accepts free text OR URLs
+     (one per line). Results injected via HTMX or rendered inline on full-page POST.
+     CSP-clean — no |safe on AI output. CSRF hidden field on form. Mobile-first. #}
+  <main class="mx-auto max-w-3xl px-6 py-12">
+    <header class="mb-6">
+      <h1 class="text-2xl font-semibold">Rank these for me</h1>
+      <p class="text-sm text-espresso-600 dark:text-cream-300 mt-1">
+        Paste coffee descriptions, names, or roaster URLs below. I'll rank them
+        by how well they match your taste profile.
+      </p>
+    </header>
+
+    <form method="post"
+          action="/ai/paste-rank"
+          hx-post="/ai/paste-rank"
+          hx-target="#paste-rank-results"
+          hx-swap="innerHTML">
+      <input type="hidden"
+             name="X-CSRF-Token"
+             value="{{ request.cookies.get('csrftoken', '') }}">
+      <label for="input_text" class="block text-sm font-semibold mb-1">
+        Coffee descriptions or URLs (one per line)
+      </label>
+      <textarea id="input_text"
+                name="input_text"
+                rows="8"
+                class="w-full rounded border border-espresso-200 dark:border-espresso-700 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-espresso-400"
+                placeholder="Paste names, tasting notes, or https:// URLs to roaster pages here..."></textarea>
+      <button type="submit"
+              class="mt-3 rounded bg-espresso-700 px-5 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+        Rank
+      </button>
+    </form>
+
+    {# Results region — swapped by HTMX on POST, or inlined on non-HTMX full-page render #}
+    <div id="paste-rank-results" class="mt-8">
+      {% if results is not none %}
+        {% include "fragments/ai/paste_rank_results.html" %}
+      {% endif %}
+    </div>
+  </main>
+{% endblock %}

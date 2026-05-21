@@ -1,0 +1,45 @@
+{# Paste-rank results fragment (AI-09).
+   Context:
+     status  — "generated" | "not_configured" | "try_again" | None
+     results — PasteRankSchema | None
+   CSP-clean: no |safe on any AI prose or coffee names. #}
+
+{% if status == "not_configured" %}
+  <p class="text-sm text-amber-600 dark:text-amber-400">
+    AI provider not configured. Contact your admin.
+  </p>
+
+{% elif status == "generated" and results is not none %}
+  {# Summary prose — plain text, never |safe #}
+  {% if results.summary_prose %}
+    <p class="text-sm text-espresso-700 dark:text-cream-300 mb-4">
+      {{ results.summary_prose }}
+    </p>
+  {% endif %}
+
+  {# Ranked list — up to 3 items (AI-09) #}
+  {% if results.ranked %}
+    <ol class="space-y-3 list-none">
+      {% for item in results.ranked %}
+        <li class="rounded-lg border border-espresso-200 dark:border-espresso-700 bg-cream-100 dark:bg-espresso-900 p-3">
+          <span class="font-semibold text-espresso-800 dark:text-cream-100">
+            {{ item.rank }}. {{ item.name }}
+          </span>
+          <p class="text-sm text-espresso-600 dark:text-cream-300 mt-1">
+            {{ item.reasoning }}
+          </p>
+        </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p class="text-sm text-espresso-600 dark:text-cream-300">
+      No coffees to rank. Try pasting some descriptions or URLs.
+    </p>
+  {% endif %}
+
+{% elif status is not none %}
+  {# try_again / error / unexpected state #}
+  <p class="text-sm text-espresso-500 dark:text-cream-400">
+    Could not rank coffees right now. Try again in a moment.
+  </p>
+{% endif %}

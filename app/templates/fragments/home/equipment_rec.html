@@ -1,0 +1,43 @@
+{# Equipment recommendation result fragment (AI-08 / D-05).
+   Context:
+     status — "generated" | "not_configured" | other
+     rec    — EquipmentRecSchema | None
+   Rendered into #equipment-rec-result on home page click.
+   CSP-clean: no |safe on any AI prose. #}
+
+{% if status == "not_configured" %}
+  <p class="text-sm text-amber-600 dark:text-amber-400">
+    AI provider not configured. Contact your admin.
+  </p>
+
+{% elif status == "generated" and rec is not none %}
+  {# Summary prose — plain text, never |safe #}
+  <p class="text-sm text-espresso-700 dark:text-cream-300">
+    {{ rec.summary_prose }}
+  </p>
+
+  {% if rec.weakest_link %}
+    {# Weakest link + upgrade recommendation #}
+    <div class="mt-3 rounded border border-espresso-200 dark:border-espresso-700 bg-cream-50 dark:bg-espresso-900 p-3">
+      <p class="text-sm font-semibold text-espresso-800 dark:text-cream-100">
+        Consider upgrading: {{ rec.weakest_link }}
+      </p>
+      {% if rec.recommendation %}
+        <p class="text-sm text-espresso-600 dark:text-cream-300 mt-1">
+          {{ rec.recommendation }}
+        </p>
+      {% endif %}
+    </div>
+  {% else %}
+    {# No changes recommended (D-05 "no changes recommended" path) #}
+    <p class="text-sm text-espresso-500 dark:text-cream-400 mt-2">
+      Your setup looks well-matched to your brewing style. No changes recommended.
+    </p>
+  {% endif %}
+
+{% else %}
+  {# Error / unexpected state #}
+  <p class="text-sm text-espresso-500 dark:text-cream-400">
+    Could not generate equipment recommendation right now. Try again later.
+  </p>
+{% endif %}

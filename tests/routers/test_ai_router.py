@@ -428,3 +428,149 @@ def test_ai_routes_registered(app: Any) -> None:
     assert "/ai/wishlist/add" in route_paths, (
         f"/ai/wishlist/add not found in route table. Routes: {sorted(route_paths)}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Task 1 (07-07): paste-rank page + results fragment + equipment fragment      #
+# --------------------------------------------------------------------------- #
+
+
+def test_paste_rank_page_renders(
+    app: Any, seeded_regular_user: dict[str, Any]
+) -> None:
+    """GET /ai/paste-rank returns 200 with the textarea for authenticated users."""
+    _require_ai_router()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/ai/paste-rank")
+
+    assert resp.status_code == 200, (
+        f"Expected 200 for GET /ai/paste-rank, got {resp.status_code}: {resp.text[:200]}"
+    )
+    assert 'name="input_text"' in resp.text, (
+        "paste-rank page must contain a textarea with name='input_text'"
+    )
+
+
+def test_paste_rank_submit_returns_results(
+    app: Any, seeded_regular_user: dict[str, Any]
+) -> None:
+    """POST /ai/paste-rank (HTMX) returns a 3-item results fragment."""
+    _require_ai_router()
+
+    from app.services.ai_schemas import PasteRankSchema, RankedCoffeeItem
+
+    mock_result = PasteRankSchema(
+        ranked=[
+            RankedCoffeeItem(rank=1, name="Ethiopia Yirgacheffe", reasoning="Bright and fruity."),
+            RankedCoffeeItem(rank=2, name="Colombia Huila", reasoning="Balanced and chocolatey."),
+            RankedCoffeeItem(rank=3, name="Kenya AA", reasoning="Complex with berry notes."),
+        ],
+        summary_prose="Ranked by predicted match to your taste profile.",
+    )
+
+    with patch("app.routers.ai.ai_service") as mock_ai:
+        mock_ai.rank_pasted_coffees = AsyncMock(return_value=("generated", mock_result))
+
+        client = _authed_client(app, seeded_regular_user["signed_cookie"])
+        resp = client.post(
+            "/ai/paste-rank",
+            data={"input_text": "Ethiopia Yirgacheffe\nColombia Huila\nKenya AA"},
+            headers={"HX-Request": "true"},
+        )
+
+    assert resp.status_code == 200, (
+        f"Expected 200, got {resp.status_code}: {resp.text[:300]}"
+    )
+    # All 3 coffee names must appear in the results fragment
+    assert "Ethiopia Yirgacheffe" in resp.text, "Expected first ranked coffee in fragment"
+    assert "Colombia Huila" in resp.text, "Expected second ranked coffee in fragment"
+    assert "Kenya AA" in resp.text, "Expected third ranked coffee in fragment"
+
+
+def test_equipment_button_returns_fragment(
+    app: Any, seeded_regular_user: dict[str, Any]
+) -> None:
+    """POST /ai/equipment with mocked generate_equipment_rec returns the equipment_rec fragment."""
+    _require_ai_router()
+
+    from unittest.mock import MagicMock
+
+    mock_row = MagicMock()
+    mock_row.response_json = {
+        "weakest_link": "Baratza Encore grinder",
+        "recommendation": "Upgrade to a Comandante for better grind consistency.",
+        "summary_prose": "Your setup is good but the grinder is the weakest link.",
+    }
+
+    with patch("app.routers.ai.ai_service") as mock_ai:
+        mock_ai.generate_equipment_rec = AsyncMock(return_value=("generated", mock_row))
+
+        client = _authed_client(app, seeded_regular_user["signed_cookie"])
+        resp = client.post("/ai/equipment")
+
+    assert resp.status_code == 200, (
+        f"Expected 200, got {resp.status_code}: {resp.text[:300]}"
+    )
+    # Equipment result content should appear
+    assert "Baratza Encore" in resp.text or "grinder" in resp.text.lower(), (
+        f"Expected equipment result content in fragment, got: {resp.text[:300]}"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Task 2 (07-07): wishlist page + home links                                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_wishlist_page_requires_auth(app: Any) -> None:
+    """GET /ai/wishlist without a session returns 401."""
+    _require_ai_router()
+
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    resp = client.get("/ai/wishlist")
+    assert resp.status_code == 401, (
+        f"Expected 401 for unauthenticated GET /ai/wishlist, got {resp.status_code}"
+    )
+
+
+def test_wishlist_page_lists_user_entries(
+    app: Any,
+    seeded_regular_user: dict[str, Any],
+    seeded_admin_user: dict[str, Any],
+) -> None:
+    """GET /ai/wishlist shows only the authenticated user's entries (IDOR scope)."""
+    _require_ai_router()
+    _require_postgres()
+    _require_wishlist_table()
+
+    from app.db import SessionLocal
+    from app.services.wishlist import add_to_wishlist
+
+    # Create one entry for the regular user, one for admin
+    with SessionLocal() as db:
+        add_to_wishlist(
+            db,
+            by_user_id=seeded_regular_user["user"].id,
+            coffee_name="User Coffee",
+            roaster_name="User Roaster",
+            source_url=None,
+        )
+        add_to_wishlist(
+            db,
+            by_user_id=seeded_admin_user["user"].id,
+            coffee_name="Admin Coffee",
+            roaster_name="Admin Roaster",
+            source_url=None,
+        )
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/ai/wishlist")
+
+    assert resp.status_code == 200, (
+        f"Expected 200 for GET /ai/wishlist, got {resp.status_code}: {resp.text[:200]}"
+    )
+    assert "User Coffee" in resp.text, "Own entry must appear on wishlist page"
+    assert "Admin Coffee" not in resp.text, "Other user's entry must NOT appear (IDOR)"

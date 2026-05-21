@@ -1,6 +1,8 @@
-"""AI router — state-changing AI routes + wishlist CRUD (Phase 7, Plan 07-05).
+"""AI router — state-changing AI routes + wishlist CRUD (Phase 7).
 
 Routes:
+  GET  /ai/paste-rank                — dedicated paste-and-rank page (07-07)
+  GET  /ai/wishlist                  — minimal wishlist view (07-07)
   POST /ai/refresh                   — manual AI refresh (throttle + in-flight 429)
   POST /ai/equipment                 — on-demand equipment recommendation
   POST /ai/paste-rank                — paste-and-rank coffees (text/URLs)
@@ -35,6 +37,7 @@ from app.events import AI_THROTTLE_BLOCK, AI_URL_VERIFY
 from app.models.user import User
 from app.services import ai_service
 from app.services import wishlist as wishlist_service
+from app.templates_setup import templates
 
 log = structlog.get_logger(__name__)
 
@@ -42,6 +45,52 @@ log = structlog.get_logger(__name__)
 _THROTTLE_WINDOW_SECS = 300
 
 router = APIRouter(prefix="/ai")
+
+# ---------------------------------------------------------------------------
+# GET /ai/paste-rank — dedicated "Rank these for me" page (07-07, D-07/D-08)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/paste-rank", response_class=HTMLResponse)
+def get_paste_rank_page(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+) -> Response:
+    """Render the paste-and-rank page (empty form, no results).
+
+    POST /ai/paste-rank (below) populates the results area via HTMX or returns
+    the full page with results for non-HTMX clients.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/paste_rank.html",
+        context={"status": None, "results": None},
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /ai/wishlist — minimal wishlist view (07-07, D-09)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/wishlist", response_class=HTMLResponse)
+def get_wishlist_page(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Render the wishlist page for the authenticated user.
+
+    Lists entries newest-first, each with mark-purchased + remove actions.
+    Scoped exclusively to request.state.user.id (T-07-05 IDOR).
+    """
+    entries = wishlist_service.list_wishlist(db, by_user_id=user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/wishlist.html",
+        context={"entries": entries},
+    )
+
 
 # ---------------------------------------------------------------------------
 # Inline please-wait HTML (used when fragments/home/ai_rec_in_flight.html
@@ -231,39 +280,21 @@ async def post_ai_equipment(
         user_id, "manual_refresh", db=db
     )
 
-    if status == "generated":
-        # 07-06 will add the real equipment fragment; return minimal inline here
-        rec_json = _row.response_json if _row else {}
-        weakest = rec_json.get("weakest_link") or "No specific recommendation"
-        return Response(
-            content=(
-                f'<div id="ai-equipment-result" class="text-gray-700">'
-                f"{weakest}"
-                f"</div>"
-            ),
-            status_code=200,
-            media_type="text/html",
-        )
-    elif status == "not_configured":
-        return Response(
-            content=(
-                '<div id="ai-equipment-result" class="text-amber-600">'
-                "AI provider not configured."
-                "</div>"
-            ),
-            status_code=200,
-            media_type="text/html",
-        )
+    ctx: dict = {"status": status, "row": _row}
+    if _row is not None and _row.response_json:
+        from app.services.ai_schemas import EquipmentRecSchema
+
+        try:
+            ctx["rec"] = EquipmentRecSchema.model_validate(_row.response_json)
+        except Exception:  # noqa: BLE001
+            ctx["rec"] = None
     else:
-        return Response(
-            content=(
-                '<div id="ai-equipment-result" class="text-gray-500">'
-                "Could not generate equipment recommendation. Try again later."
-                "</div>"
-            ),
-            status_code=200,
-            media_type="text/html",
-        )
+        ctx["rec"] = None
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/home/equipment_rec.html",
+        context=ctx,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -291,41 +322,20 @@ async def post_ai_paste_rank(
         user_id, "manual_refresh", db=db, raw_input=input_text
     )
 
-    if status == "generated" and result is not None:
-        ranked = result.ranked_coffees or []
-        items_html = "".join(
-            f"<li class='py-1'>{item.coffee_name} — {item.summary}</li>"
-            for item in ranked[:3]
+    is_htmx = request.headers.get("HX-Request") == "true"
+    ctx: dict = {"status": status, "results": result}
+    if is_htmx:
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/ai/paste_rank_results.html",
+            context=ctx,
         )
-        return Response(
-            content=(
-                f'<div id="paste-rank-results"><ol class="list-decimal pl-5">'
-                f"{items_html}"
-                f"</ol></div>"
-            ),
-            status_code=200,
-            media_type="text/html",
-        )
-    elif status == "not_configured":
-        return Response(
-            content=(
-                '<div id="paste-rank-results" class="text-amber-600">'
-                "AI provider not configured."
-                "</div>"
-            ),
-            status_code=200,
-            media_type="text/html",
-        )
-    else:
-        return Response(
-            content=(
-                '<div id="paste-rank-results" class="text-gray-500">'
-                "Could not rank coffees right now. Try again later."
-                "</div>"
-            ),
-            status_code=200,
-            media_type="text/html",
-        )
+    # Non-HTMX: full page with results inlined
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/paste_rank.html",
+        context=ctx,
+    )
 
 
 # ---------------------------------------------------------------------------
