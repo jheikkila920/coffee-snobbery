@@ -78,6 +78,10 @@ NON_RETRYABLE = (
     anthropic.PermissionDeniedError,
 )
 
+#: Max URLs fetched per paste-and-rank call (CR-04). Each fetch is a sequential
+#: ranged GET with a 5s timeout; cap bounds worst-case event-loop blocking.
+_MAX_PASTE_RANK_URLS = 5
+
 # ---------------------------------------------------------------------------
 # Module-level concurrency state (process-local; single uvicorn worker)
 # ---------------------------------------------------------------------------
@@ -577,7 +581,7 @@ async def _generate_sweet_spots_prose(
     *,
     user_id: int,
     generated_by: str,
-    cred: credentials_service.ProviderCredential,
+    cred: credentials_service.ProviderCredential | None,
     signature: str,
 ) -> AIRecommendation | None:
     """Generate and persist sweet-spots prose for the user.
@@ -590,6 +594,12 @@ async def _generate_sweet_spots_prose(
     The LLM call is synchronous (no web search needed); the async wrapper
     keeps the function signature consistent with the awaited call site.
     """
+    # CR-02: the caller re-fetches credentials after the coffee rec; if both
+    # providers became unavailable in between, cred is None. Skip prose rather
+    # than dereferencing None (which would turn a successful rec into "error").
+    if cred is None:
+        return None
+
     sweet_spots = analytics_service.get_sweet_spots(db, user_id)
     if not sweet_spots:
         return None
@@ -1542,9 +1552,11 @@ async def rank_pasted_coffees(
     # Split input into URLs and text blocks (D-08)
     urls, text_blocks = _split_inputs(raw_input)
 
-    # Fetch URL content (SSRF-hardened; failed fetches silently omitted)
+    # Fetch URL content (SSRF-hardened; failed fetches silently omitted).
+    # CR-04: cap the number of fetches — each is a sequential ranged GET with a
+    # 5s timeout, so an unbounded list could block the event loop for minutes.
     url_texts: list[str] = []
-    for url in urls:
+    for url in urls[:_MAX_PASTE_RANK_URLS]:
         fetched = await _fetch_page_text(url)
         if fetched:
             url_texts.append(f"[From {url}]: {fetched[:4000]}")  # cap per URL

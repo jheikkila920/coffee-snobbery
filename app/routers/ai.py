@@ -360,6 +360,15 @@ async def post_wishlist_add(
     roaster_name = str(form.get("roaster_name") or "").strip() or None
     source_url = str(form.get("source_url") or "").strip() or None
 
+    # CR-05: a wishlist entry is meaningless without a name.
+    if not coffee_name:
+        raise HTTPException(status_code=422, detail="coffee_name is required")
+    # CR-01: only store https URLs. The template renders source_url as an
+    # <a href>, and Jinja autoescaping does NOT neutralise dangerous schemes
+    # (javascript:, data:). Match the https-only posture of the buy-URL verifier.
+    if source_url is not None and not source_url.startswith("https://"):
+        source_url = None
+
     wishlist_service.add_to_wishlist(
         db,
         by_user_id=user.id,

@@ -314,6 +314,56 @@ def test_wishlist_add(
     assert entries[0].user_id == seeded_regular_user["user"].id
 
 
+def test_wishlist_add_empty_name_422(
+    app: Any, seeded_regular_user: dict[str, Any]
+) -> None:
+    """POST /ai/wishlist/add with a blank coffee_name → 422 (CR-05)."""
+    _require_ai_router()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.post(
+        "/ai/wishlist/add",
+        data={"coffee_name": "   ", "source_url": "https://example.com/x"},
+    )
+
+    assert resp.status_code == 422, (
+        f"Expected 422 for blank coffee_name, got {resp.status_code}: {resp.text[:200]}"
+    )
+
+
+def test_wishlist_add_drops_non_https_url(
+    app: Any, seeded_regular_user: dict[str, Any]
+) -> None:
+    """POST /ai/wishlist/add with a javascript: source_url stores NULL (CR-01)."""
+    _require_ai_router()
+    _require_postgres()
+    _require_wishlist_table()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.post(
+        "/ai/wishlist/add",
+        data={
+            "coffee_name": "Sketchy Coffee",
+            "source_url": "javascript:alert(document.cookie)",
+        },
+    )
+
+    assert resp.status_code in (200, 204), (
+        f"Expected 200/204, got {resp.status_code}: {resp.text[:200]}"
+    )
+
+    from app.db import SessionLocal
+    from app.services.wishlist import list_wishlist
+
+    with SessionLocal() as db:
+        entries = list_wishlist(db, by_user_id=seeded_regular_user["user"].id)
+    match = [e for e in entries if e.coffee_name == "Sketchy Coffee"]
+    assert len(match) == 1
+    assert match[0].source_url is None, (
+        "non-https source_url must not be stored (CR-01 XSS guard)"
+    )
+
+
 def test_wishlist_purchase_cross_user_404(
     app: Any,
     seeded_regular_user: dict[str, Any],
