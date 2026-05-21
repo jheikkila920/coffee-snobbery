@@ -134,6 +134,26 @@ BREW_DRAFT_CLEARED = "brew.draft.cleared"
 BREW_CSV_IMPORTED = "brew.csv.imported"
 BREW_CSV_EXPORTED = "brew.csv.exported"
 
+# --- ai.* (Phase 7) -------------------------------------------------------
+# AI generation lifecycle. Field shapes the downstream JSON-log queries depend on:
+# - AI_GENERATION_START: user_id, rec_type, generated_by
+# - AI_GENERATION_SUCCESS: user_id, rec_type, provider, model, tier,
+#   tokens_input, tokens_output, duration_ms
+# - AI_GENERATION_ERROR: user_id, rec_type, error_class, error_status
+# - AI_FALLBACK_TRIGGERED: user_id, rec_type, from_provider, reason
+# - AI_TIER_FALLBACK: user_id, from_tier, to_tier, reason
+# - AI_URL_VERIFY: user_id, rec_id, verified (bool)
+# - AI_THROTTLE_BLOCK: user_id, seconds_remaining
+# - AI_REGEN_SKIPPED: user_id, rec_type, reason="sig_unchanged"
+AI_FALLBACK_TRIGGERED = "ai.fallback.triggered"
+AI_GENERATION_ERROR = "ai.generation.error"
+AI_GENERATION_START = "ai.generation.start"
+AI_GENERATION_SUCCESS = "ai.generation.success"
+AI_REGEN_SKIPPED = "ai.regen.skipped"
+AI_THROTTLE_BLOCK = "ai.throttle.block"
+AI_TIER_FALLBACK = "ai.tier.fallback"
+AI_URL_VERIFY = "ai.url.verify"
+
 
 __all__ = [
     "ADMIN_API_CREDENTIAL_SET",
@@ -142,6 +162,14 @@ __all__ = [
     "ADMIN_PASSWORD_RESET",
     "ADMIN_USER_CREATED",
     "ADMIN_USER_DELETED",
+    "AI_FALLBACK_TRIGGERED",
+    "AI_GENERATION_ERROR",
+    "AI_GENERATION_START",
+    "AI_GENERATION_SUCCESS",
+    "AI_REGEN_SKIPPED",
+    "AI_THROTTLE_BLOCK",
+    "AI_TIER_FALLBACK",
+    "AI_URL_VERIFY",
     "AUTH_LOGIN_ATTEMPT",
     "AUTH_LOGIN_FAILED",
     "AUTH_LOGIN_SUCCEEDED",
