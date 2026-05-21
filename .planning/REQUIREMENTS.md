@@ -92,21 +92,21 @@
 - [x] **AI-01**: Provider abstraction in `app/services/ai_service.py`; Anthropic default, OpenAI fallback only on non-retryable failures (`max_retries=1`); SDK web-search tool versions read from `app_settings` (not hardcoded)
 - [ ] **AI-02**: `ai_recommendations` table persists every call: `id`, `user_id`, `recommendation_type` enum, `input_signature` (indexed), `response_json`, `provider_used`, `model_used`, `tool_version`, `tokens_input`, `tokens_output`, `tokens_input_search`, `web_search_count`, `url_verified`, `duration_ms`, `generated_at`, `generated_by` enum (scheduler / manual_refresh), `error_status`
 - [x] **AI-03**: Live coffee recommendation flow uses web-search tool with three-tier fallback: primary (origin + process + roast level) → broadened (relax constraints in order: process → roast level → origin) → characteristics-only (no specific bean, no URL); response indicates which tier produced it
-- [ ] **AI-04**: Citation/tool-result blocks projected/stripped from the model's response before Pydantic validation; schema mismatch surfaces "Try again" UI in the home page card rather than rendering garbage
-- [ ] **AI-05**: URL verification background task: ranged GET (not HEAD — many specialty roasters block HEAD), realistic User-Agent, body-contains-roaster-or-coffee-name check, no cross-host redirects, 5s timeout; UI initially shows "verifying..." and updates when the check completes; unverified URLs render as plain text with a "couldn't verify" note
+- [x] **AI-04**: Citation/tool-result blocks projected/stripped from the model's response before Pydantic validation; schema mismatch surfaces "Try again" UI in the home page card rather than rendering garbage
+- [x] **AI-05**: URL verification background task: ranged GET (not HEAD — many specialty roasters block HEAD), realistic User-Agent, body-contains-roaster-or-coffee-name check, no cross-host redirects, 5s timeout; UI initially shows "verifying..." and updates when the check completes; unverified URLs render as plain text with a "couldn't verify" note
 - [x] **AI-06**: Recipe suggestion picks from this user's existing `recipes` rows ranked by historical avg rating for similar bean profiles (matching origin + process + roast level); never invents new recipes; if no recipe matches the bean style, suggestion text says so and links to the recipe builder
 - [x] **AI-07**: Alternative-brewer callout populated when historical data for the user shows a ≥0.5 rating delta on a different brewer for the recommended bean style
 - [x] **AI-08**: Equipment recommendation flow (profile-only, no web search): identifies weakest link or explicitly says "no changes recommended"
 - [x] **AI-09**: Paste-and-rank flow: on-demand only, never cached, never scheduled; top 3 with one-sentence reasoning each grounded in the user's log
 - [x] **AI-10**: Sweet-spots AI prose interpretation generated alongside the coffee recommendation, cached together, regenerated together
-- [ ] **AI-11**: Cold-start empty state when user has <3 brew sessions or <5 distinct observed flavor notes: progress meter ("Log 2 more brews and add 3 more flavor notes to unlock AI recommendations") in place of the AI section
+- [x] **AI-11**: Cold-start empty state when user has <3 brew sessions or <5 distinct observed flavor notes: progress meter ("Log 2 more brews and add 3 more flavor notes to unlock AI recommendations") in place of the AI section
 - [x] **AI-12**: Signature-based regeneration: input signature is a content hash of *this user's own* sessions (not shared catalog counts) so adding a coffee to the household doesn't thrash everyone's signature
 - [x] **AI-13**: In-memory per-`(user_id, recommendation_type)` lock plus Postgres advisory lock backstop prevents concurrent runs from scheduler and manual refresh
-- [ ] **AI-14**: Manual refresh button on home AI section; per-user throttle of one manual refresh per 5 minutes; shows spinner with "Searching the web for fresh coffees…"; recommendations swap in on completion
-- [ ] **AI-15**: Stale-indicator badge inline with each recommendation when current signature ≠ stored signature
+- [x] **AI-14**: Manual refresh button on home AI section; per-user throttle of one manual refresh per 5 minutes; shows spinner with "Searching the web for fresh coffees…"; recommendations swap in on completion
+- [x] **AI-15**: Stale-indicator badge inline with each recommendation when current signature ≠ stored signature
 - [x] **AI-16**: Graceful "AI not configured" empty state when no provider key is enabled in admin
-- [ ] **AI-17**: Web-search tool `max_uses` capped at 5 for primary search, 3 for broadened fallback; cap configurable via `app_settings`
-- [ ] **AI-18**: All AI responses validated against per-flow Pydantic schemas; every response schema includes a `summary_prose` field so output renders as structured UI + short narrative
+- [x] **AI-17**: Web-search tool `max_uses` capped at 5 for primary search, 3 for broadened fallback; cap configurable via `app_settings`
+- [x] **AI-18**: All AI responses validated against per-flow Pydantic schemas; every response schema includes a `summary_prose` field so output renders as structured UI + short narrative
 
 ### AI Run Scheduling (SCHED)
 
@@ -264,21 +264,21 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | AI-01 | Phase 7 — AI Services | Complete |
 | AI-02 | Phase 0 — Foundation | Pending |
 | AI-03 | Phase 7 — AI Services | Complete |
-| AI-04 | Phase 7 — AI Services | Pending |
-| AI-05 | Phase 7 — AI Services | Pending |
+| AI-04 | Phase 7 — AI Services | Complete |
+| AI-05 | Phase 7 — AI Services | Complete |
 | AI-06 | Phase 7 — AI Services | Complete |
 | AI-07 | Phase 7 — AI Services | Complete |
 | AI-08 | Phase 7 — AI Services | Complete |
 | AI-09 | Phase 7 — AI Services | Complete |
 | AI-10 | Phase 7 — AI Services | Complete |
-| AI-11 | Phase 7 — AI Services | Pending |
+| AI-11 | Phase 7 — AI Services | Complete |
 | AI-12 | Phase 7 — AI Services | Complete |
 | AI-13 | Phase 7 — AI Services | Complete |
-| AI-14 | Phase 7 — AI Services | Pending |
-| AI-15 | Phase 7 — AI Services | Pending |
+| AI-14 | Phase 7 — AI Services | Complete |
+| AI-15 | Phase 7 — AI Services | Complete |
 | AI-16 | Phase 7 — AI Services | Complete |
-| AI-17 | Phase 7 — AI Services | Pending |
-| AI-18 | Phase 7 — AI Services | Pending |
+| AI-17 | Phase 7 — AI Services | Complete |
+| AI-18 | Phase 7 — AI Services | Complete |
 | SCHED-01 | Phase 8 — Scheduler + Backups | Pending |
 | SCHED-02 | Phase 8 — Scheduler + Backups | Pending |
 | SCHED-03 | Phase 8 — Scheduler + Backups | Pending |
