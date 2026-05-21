@@ -1,0 +1,17 @@
+{# In-flight spinner fragment — includes hx-trigger so HTMX keeps polling (Pattern 8, AI-14).
+   When the endpoint returns the hero card (no hx-trigger), polling stops automatically.
+   CSP-clean: spinner via Tailwind animate-pulse, no inline JS, no hx-on:. #}
+
+<div id="ai-rec-hero"
+     hx-get="/home/cards/ai-recommendation"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML">
+  <div class="animate-pulse space-y-3">
+    <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+    <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+    <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-2/3"></div>
+  </div>
+  <p class="text-sm text-espresso-500 dark:text-cream-400 mt-3 italic">
+    Searching the web for fresh coffees&hellip;
+  </p>
+</div>

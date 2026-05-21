@@ -1,0 +1,11 @@
+{# "AI not configured" state — no provider credential is enabled (AI-16).
+   Renders gracefully for all users; admin sees a configure link.
+   Context: user — User (for is_admin check).
+   CSP-clean. All values autoescaped. #}
+
+<p class="text-sm text-espresso-600 dark:text-cream-300">
+  AI recommendations are not configured yet.
+  {% if user.is_admin %}
+    <a href="/admin/settings" class="underline hover:text-espresso-800 dark:hover:text-cream-100">Configure a provider</a>.
+  {% endif %}
+</p>

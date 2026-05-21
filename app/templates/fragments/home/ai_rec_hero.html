@@ -1,0 +1,106 @@
+{# AI recommendation hero card — complete state (polling stops here, no hx-trigger on root).
+   Context: rec — AIRecommendation row; prose — dict (CoffeeRecSchema fields from response_json);
+            stale — bool (AI-15); user — User.
+   CSP-clean: no |safe, no hx-on:. AI prose rendered as autoescaped plain text only.
+   T-07-13: autoescape enforces XSS safety. T-07-14: buy link only when url_verified is True. #}
+
+<div id="ai-rec-hero" class="space-y-4">
+  {# Coffee identity #}
+  <div>
+    <p class="text-base font-semibold text-espresso-900 dark:text-cream-100">{{ prose.coffee_name }}</p>
+    <p class="text-sm text-espresso-600 dark:text-cream-300">
+      {{ prose.roaster_name }}
+      {% if prose.origin %}&nbsp;&middot;&nbsp;{{ prose.origin }}{% endif %}
+      {% if prose.process %}&nbsp;&middot;&nbsp;{{ prose.process }}{% endif %}
+      {% if prose.roast_level %}&nbsp;&middot;&nbsp;{{ prose.roast_level }}{% endif %}
+    </p>
+  </div>
+
+  {# AI why-prose — plain text, autoescaped, NEVER |safe (T-07-13 / SEC-05) #}
+  {% if prose.summary_prose %}
+    <p class="text-sm text-espresso-800 dark:text-cream-200 leading-relaxed">{{ prose.summary_prose }}</p>
+  {% endif %}
+
+  {# Stale badge (AI-15) #}
+  {% if stale %}
+    <p class="text-xs text-amber-600 dark:text-amber-400">
+      New brews logged — recommendation may be outdated
+    </p>
+  {% endif %}
+
+  {# Buy link — tri-state per AI-05 + T-07-14.
+     url_verified True  → live <a> (server-verified safe URL)
+     url_verified None  → "verifying link…" (background task in progress)
+     url_verified False → plain text + "couldn't verify" (unsafe, not clickable) #}
+  {% if prose.buy_url %}
+    <div class="text-sm">
+      {% if rec.url_verified %}
+        <a href="{{ prose.buy_url }}"
+           rel="noopener noreferrer"
+           target="_blank"
+           class="inline-block rounded bg-espresso-700 px-3 py-1 text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+          Buy
+        </a>
+      {% elif rec.url_verified is none %}
+        <span class="text-espresso-400 dark:text-cream-500 italic">verifying link…</span>
+      {% else %}
+        <span class="text-espresso-500 dark:text-cream-400">
+          {{ prose.buy_url }} <span class="text-xs">(couldn't verify)</span>
+        </span>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# Recipe suggestion (AI-06) #}
+  {% if prose.recipe_suggestion %}
+    {% set rs = prose.recipe_suggestion %}
+    <div class="rounded border border-espresso-100 dark:border-espresso-700 p-3 text-sm">
+      <p class="font-medium text-espresso-800 dark:text-cream-100 mb-1">Suggested recipe</p>
+      {% if rs.no_match %}
+        <p class="text-espresso-600 dark:text-cream-300">
+          No matching recipe found.
+          <a href="/recipes" class="underline hover:text-espresso-800">Browse recipes</a>
+        </p>
+      {% else %}
+        <p class="text-espresso-700 dark:text-cream-200">
+          <span class="font-medium">{{ rs.recipe_name }}</span>
+          {% if rs.summary %}&nbsp;&mdash;&nbsp;{{ rs.summary }}{% endif %}
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# Alt-brewer callout (AI-07 — only shown when delta >= 0.5, enforced server-side) #}
+  {% if prose.alt_brewer %}
+    {% set ab = prose.alt_brewer %}
+    <div class="rounded border border-espresso-100 dark:border-espresso-700 p-3 text-sm">
+      <p class="font-medium text-espresso-800 dark:text-cream-100 mb-1">Try with {{ ab.brewer_name }}</p>
+      {% if ab.summary %}
+        <p class="text-espresso-600 dark:text-cream-300">{{ ab.summary }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# Add-to-wishlist form — CSRF hidden field (no CSRF exemption) #}
+  <form method="post" action="/ai/wishlist/add" class="mt-2">
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    <input type="hidden" name="coffee_name" value="{{ prose.coffee_name }}">
+    <input type="hidden" name="roaster_name" value="{{ prose.roaster_name }}">
+    {% if prose.buy_url and rec.url_verified %}
+      <input type="hidden" name="source_url" value="{{ prose.buy_url }}">
+    {% endif %}
+    <button type="submit"
+            class="text-sm text-espresso-600 dark:text-cream-300 underline hover:text-espresso-800 dark:hover:text-cream-100">
+      Save to wishlist
+    </button>
+  </form>
+
+  {# Manual refresh — posts to /ai/refresh; CSRF hidden field #}
+  <form method="post" action="/ai/refresh" class="mt-1">
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    <button type="submit"
+            class="text-xs text-espresso-400 dark:text-cream-500 underline hover:text-espresso-600 dark:hover:text-cream-300">
+      Refresh recommendation
+    </button>
+  </form>
+</div>

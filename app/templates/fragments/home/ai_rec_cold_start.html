@@ -1,0 +1,7 @@
+{# Cold-start state for the AI hero slot — gate not cleared yet (AI-11).
+   Reuses the Phase 6 progress-meter partial so the UX is identical to the
+   cold-start section in home.html (D-03 no-Alpine rule honored — server-computed pct).
+   Context: gate dict from analytics.get_cold_start_counts()
+   CSP-clean. All values autoescaped. #}
+
+{% include "fragments/home/_cold_start.html" %}

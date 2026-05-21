@@ -25,3 +25,12 @@
   {% set unrated_text = "Rate some brews to find your sweet spots." %}
   {% include "fragments/home/_card_sparse.html" %}
 {% endif %}
+
+{# HOME-06: AI sweet-spots prose — rendered only when a sweet_spots rec exists.
+   Prose is PLAIN TEXT — autoescaped by Jinja2, NEVER |safe (SEC-05, T-07-13).
+   Context: sweet_spots_prose — str | None (from the sweet_spots AIRecommendation row). #}
+{% if sweet_spots_prose %}
+  <div class="mt-4 pt-4 border-t border-espresso-100 dark:border-espresso-800">
+    <p class="text-sm text-espresso-700 dark:text-cream-300">{{ sweet_spots_prose }}</p>
+  </div>
+{% endif %}

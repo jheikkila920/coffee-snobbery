@@ -1,0 +1,14 @@
+{# "Try again" state — Pydantic validation failure or transient error (AI-04).
+   Shows a short message + a form that posts to /ai/refresh to trigger a retry.
+   CSP-clean: no |safe, no hx-on:. CSRF hidden field on the form. #}
+
+<p class="text-sm text-espresso-600 dark:text-cream-300 mb-3">
+  Couldn't generate a recommendation right now.
+</p>
+<form method="post" action="/ai/refresh">
+  <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+  <button type="submit"
+          class="text-sm underline text-espresso-700 dark:text-cream-300 hover:text-espresso-900 dark:hover:text-cream-100">
+    Try again
+  </button>
+</form>
