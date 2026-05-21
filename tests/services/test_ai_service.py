@@ -620,7 +620,8 @@ def test_pydantic_validation_error_try_again() -> None:
         CoffeeRecSchema.model_validate(bad_dict)
 
 
-def test_sweet_spots_prose_skipped_when_empty() -> None:
+@pytest.mark.asyncio
+async def test_sweet_spots_prose_skipped_when_empty() -> None:
     """_generate_sweet_spots_prose returns None when get_sweet_spots returns empty list."""
     from unittest.mock import MagicMock, patch
 
@@ -633,15 +634,12 @@ def test_sweet_spots_prose_skipped_when_empty() -> None:
     mock_cred.key = "sk-test"
 
     with patch.object(ai_service.analytics_service, "get_sweet_spots", return_value=[]):
-        import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
-            ai_service._generate_sweet_spots_prose(
-                db,
-                user_id=1,
-                generated_by="scheduler",
-                cred=mock_cred,
-                signature="abc123",
-            )
+        result = await ai_service._generate_sweet_spots_prose(
+            db,
+            user_id=1,
+            generated_by="scheduler",
+            cred=mock_cred,
+            signature="abc123",
         )
         assert result is None
 
