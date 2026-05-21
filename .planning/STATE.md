@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 8 context gathered
-last_updated: "2026-05-21T18:30:24.374Z"
-last_activity: 2026-05-21 -- Phase 08 planning complete
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-05-21T19:07:36.287Z"
+last_activity: 2026-05-21
 progress:
   total_phases: 13
   completed_phases: 8
   total_plans: 62
-  completed_plans: 59
-  percent: 95
+  completed_plans: 60
+  percent: 97
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-16)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 07 — ai-services
+**Current focus:** Phase 08 — scheduler-backups
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
+Phase: 08 (scheduler-backups) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-05-21 -- Phase 08 planning complete
+Last activity: 2026-05-21
 
 Progress: [██████████] 97%
 
@@ -68,6 +68,7 @@ Progress: [██████████] 97%
 | Phase 07-ai-services P04 | 45 | 2 tasks | 2 files |
 | Phase 07-ai-services P05 | 35 | 3 tasks | 3 files |
 | Phase 07-ai-services P07 | 30 | 2 tasks | 8 files |
+| Phase 08 P01 | 6 | - tasks | - files |
 
 ## Accumulated Context
 
@@ -106,6 +107,7 @@ Recent decisions from PROJECT.md Key Decisions table:
 - Phase 5 (P06): import isinstance guard uses `starlette.datastructures.UploadFile` (not `fastapi.UploadFile`) — `request.form()` returns the Starlette type; the FastAPI class is a subclass so guarding on it wrongly refused valid uploads (Rule-1 bug caught under TDD)
 - Phase 5 (P06): app-wide readable anchor color pinned in `tailwind.src.css` `@layer base` (espresso-700 light / espresso-100 dark) — Preflight strips the UA anchor color; cross-cutting fix beyond this plan's files
 - Phase 5 (P06): "Discard changes" now returns to `/brew` (sessions list), not `/` (home) — a deliberate cross-plan touch of 05-05-owned `brew-draft.js` + `brew_form.html`, now that `GET /brew` exists
+- [Phase ?]: Phase 8 Wave 0: import-guard skip over xfail for undefined symbols keeps collection clean with zero false passes
 
 ### Pending Todos
 
@@ -136,7 +138,7 @@ Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-21T17:58:33.758Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-scheduler-backups/08-CONTEXT.md
+Last session: 2026-05-21T19:07:36.265Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
 Next: Rebuild container and verify paste-rank, wishlist, equipment button at 375px mobile viewport.

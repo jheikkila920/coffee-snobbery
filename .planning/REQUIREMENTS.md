@@ -110,10 +110,10 @@
 
 ### AI Run Scheduling (SCHED)
 
-- [ ] **SCHED-01**: APScheduler `AsyncIOScheduler` started in FastAPI `lifespan`; `SQLAlchemyJobStore` so jobs survive container restart; `misfire_grace_time=3600`, `coalesce=True`, `max_instances=1`
-- [ ] **SCHED-02**: Nightly AI refresh fires at 00:00 in `APP_TIMEZONE` (default `America/Chicago`); for each active user with ≥3 brew sessions, compute current signature, regenerate only if changed
-- [ ] **SCHED-03**: Job summary logged at each run: users processed, regenerations triggered, skips, total tokens (split web-search vs non-web-search), errors
-- [ ] **SCHED-04**: Nightly backup job fires at 02:00 in `APP_TIMEZONE`: `pg_dump` SQL file + photos tarball written to `/app/data/backups`; retention controlled by `BACKUP_RETENTION_DAYS` (default 14)
+- [x] **SCHED-01**: APScheduler `AsyncIOScheduler` started in FastAPI `lifespan`; `SQLAlchemyJobStore` so jobs survive container restart; `misfire_grace_time=3600`, `coalesce=True`, `max_instances=1`
+- [x] **SCHED-02**: Nightly AI refresh fires at 00:00 in `APP_TIMEZONE` (default `America/Chicago`); for each active user with ≥3 brew sessions, compute current signature, regenerate only if changed
+- [x] **SCHED-03**: Job summary logged at each run: users processed, regenerations triggered, skips, total tokens (split web-search vs non-web-search), errors
+- [x] **SCHED-04**: Nightly backup job fires at 02:00 in `APP_TIMEZONE`: `pg_dump` SQL file + photos tarball written to `/app/data/backups`; retention controlled by `BACKUP_RETENTION_DAYS` (default 14)
 
 ### Global Search (SEARCH)
 
@@ -279,10 +279,10 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | AI-16 | Phase 7 — AI Services | Complete |
 | AI-17 | Phase 7 — AI Services | Complete |
 | AI-18 | Phase 7 — AI Services | Complete |
-| SCHED-01 | Phase 8 — Scheduler + Backups | Pending |
-| SCHED-02 | Phase 8 — Scheduler + Backups | Pending |
-| SCHED-03 | Phase 8 — Scheduler + Backups | Pending |
-| SCHED-04 | Phase 8 — Scheduler + Backups | Pending |
+| SCHED-01 | Phase 8 — Scheduler + Backups | Complete |
+| SCHED-02 | Phase 8 — Scheduler + Backups | Complete |
+| SCHED-03 | Phase 8 — Scheduler + Backups | Complete |
+| SCHED-04 | Phase 8 — Scheduler + Backups | Complete |
 | SEARCH-01 | Phase 10 — Global Search | Pending |
 | SEARCH-02 | Phase 10 — Global Search | Pending |
 | SEARCH-03 | Phase 10 — Global Search | Pending |
