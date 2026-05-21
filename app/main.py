@@ -63,7 +63,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -82,6 +82,7 @@ from app.middleware import (
 )
 from app.rate_limit import register_rate_limiter
 from app.routers import admin as admin_router
+from app.routers import ai as ai_router
 from app.routers import auth as auth_router
 from app.routers import bags as bags_router
 from app.routers import brew as brew_router
@@ -229,6 +230,7 @@ def create_app() -> FastAPI:
     app.include_router(bags_router.router)
     app.include_router(brew_router.router)
     app.include_router(home_router.router)
+    app.include_router(ai_router.router)
     app.include_router(photos_router.router)
 
     @app.get("/healthz")
