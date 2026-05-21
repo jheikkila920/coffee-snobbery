@@ -154,6 +154,41 @@ AI_THROTTLE_BLOCK = "ai.throttle.block"
 AI_TIER_FALLBACK = "ai.tier.fallback"
 AI_URL_VERIFY = "ai.url.verify"
 
+# --- scheduler.* (Phase 8) -----------------------------------------------
+# Scheduler lifecycle and job execution events. Emitted by
+# ``app.services.scheduler`` (lifespan and job body). Lifespan-emitted events
+# (SCHEDULER_STARTED / SCHEDULER_SHUTDOWN) have no request_id (no request
+# context) — same convention as the encryption.* block above.
+#
+# Field shapes:
+# - SCHEDULER_STARTED / SCHEDULER_SHUTDOWN: (no request_id)
+# - SCHEDULER_JOB_START / SCHEDULER_JOB_SUCCESS: job_id
+# - SCHEDULER_JOB_ERROR: job_id, error_class, error_msg
+# - SCHEDULER_AI_RUN_COMPLETE: users_processed, regenerations, skips, errors,
+#   tokens_input_total, tokens_output_total, tokens_input_search_total, timestamp
+SCHEDULER_AI_RUN_COMPLETE = "scheduler.ai_run.complete"
+SCHEDULER_JOB_ERROR = "scheduler.job.error"
+SCHEDULER_JOB_START = "scheduler.job.start"
+SCHEDULER_JOB_SUCCESS = "scheduler.job.success"
+SCHEDULER_SHUTDOWN = "scheduler.shutdown"
+SCHEDULER_STARTED = "scheduler.started"
+
+# --- backup.* (Phase 8) --------------------------------------------------
+# Backup lifecycle events. Emitted by ``app.services.backup``.
+#
+# Field shapes:
+# - BACKUP_STARTED: (no extra fields)
+# - BACKUP_COMPLETE: status (ok/error), db_filename, db_bytes, photos_filename,
+#   photos_bytes, duration_ms, error_msg (optional), pruned_count
+# - BACKUP_ARTIFACT_OK: artifact (db/photos), filename, bytes
+# - BACKUP_ARTIFACT_ERROR: artifact (db/photos), error_class, error_msg
+# - BACKUP_PRUNED: pruned_count, retention_days
+BACKUP_ARTIFACT_ERROR = "backup.artifact.error"
+BACKUP_ARTIFACT_OK = "backup.artifact.ok"
+BACKUP_COMPLETE = "backup.complete"
+BACKUP_PRUNED = "backup.pruned"
+BACKUP_STARTED = "backup.started"
+
 
 __all__ = [
     "ADMIN_API_CREDENTIAL_SET",
@@ -174,6 +209,11 @@ __all__ = [
     "AUTH_LOGIN_FAILED",
     "AUTH_LOGIN_SUCCEEDED",
     "AUTH_LOGOUT",
+    "BACKUP_ARTIFACT_ERROR",
+    "BACKUP_ARTIFACT_OK",
+    "BACKUP_COMPLETE",
+    "BACKUP_PRUNED",
+    "BACKUP_STARTED",
     "BREW_CSV_EXPORTED",
     "BREW_CSV_IMPORTED",
     "BREW_DRAFT_CLEARED",
@@ -208,4 +248,10 @@ __all__ = [
     "ENCRYPTION_REWRAP_COMPLETED",
     "ENCRYPTION_STARTUP_OK",
     "RATE_LIMIT_EXCEEDED",
+    "SCHEDULER_AI_RUN_COMPLETE",
+    "SCHEDULER_JOB_ERROR",
+    "SCHEDULER_JOB_START",
+    "SCHEDULER_JOB_SUCCESS",
+    "SCHEDULER_SHUTDOWN",
+    "SCHEDULER_STARTED",
 ]
