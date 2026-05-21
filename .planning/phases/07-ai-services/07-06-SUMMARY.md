@@ -63,7 +63,7 @@ requirements: [AI-04, AI-05, AI-10, AI-11, AI-14, AI-15, AI-16, HOME-06]
 |---|------|--------|-------|
 | 1 | Five home AI fragments + sweet_spots HOME-06 append | caf3218 | ai_rec_hero.html, ai_rec_in_flight.html, ai_rec_cold_start.html, ai_rec_not_configured.html, ai_rec_try_again.html, sweet_spots.html |
 | 2 | home.py AI endpoint + home.html D-01 slot + sweet_spots prose context + tests | 39fcf12 | home.py, home.html, test_home.py |
-| 3 | Human verify — home AI hero card at 375px | AWAITING | (checkpoint, not yet approved) |
+| 3 | Human verify — home AI hero card at 375px | APPROVED | verified 2026-05-21 at 375px (gate seeded open; AI "not configured" card confirmed at D-01 top position, no horizontal scroll) |
 
 ## Verification
 
@@ -94,7 +94,7 @@ requirements: [AI-04, AI-05, AI-10, AI-11, AI-14, AI-15, AI-16, HOME-06]
 | test_ai_card_not_configured passes | PASS |
 | test_ai_card_in_flight passes | PASS |
 | Full pytest tests/routers/test_home.py -q exits 0 | PASS |
-| Human-verify checkpoint at 375px | AWAITING |
+| Human-verify checkpoint at 375px | PASS (approved 2026-05-21) |
 
 ## Deviations from Plan
 
