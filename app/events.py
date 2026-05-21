@@ -55,6 +55,12 @@ ADMIN_APP_SETTING_CHANGED = "admin.app_setting_changed"
 # ``provider``, ``last_four``, ``user_id``. The raw key is NEVER logged
 # (CLAUDE.md "never log API keys"); only the denormalized ``last_four``.
 ADMIN_API_CREDENTIAL_SET = "admin.api_credential_set"  # noqa: S105 — event name, not a credential
+# Phase 9 new admin event constants (Plans 09-02..09-06)
+ADMIN_USER_UPDATED = "admin.user_updated"                # generic user edit
+ADMIN_USER_DEACTIVATED = "admin.user_deactivated"        # explicit deactivate action
+ADMIN_BACKUP_TRIGGERED = "admin.backup_triggered"        # "Run backup now" button
+ADMIN_AI_REFRESH_TRIGGERED = "admin.ai_refresh_triggered"  # manual AI refresh (both modes)
+ADMIN_PROVIDER_TEST = "admin.provider_test"              # "Test connection" probe result
 
 # --- encryption.* (Phase 3) -----------------------------------------------
 # Lifespan-emitted events have no request_id (no request context); per
@@ -191,12 +197,17 @@ BACKUP_STARTED = "backup.started"
 
 
 __all__ = [
+    "ADMIN_AI_REFRESH_TRIGGERED",
     "ADMIN_API_CREDENTIAL_SET",
     "ADMIN_APP_SETTING_CHANGED",
+    "ADMIN_BACKUP_TRIGGERED",
     "ADMIN_IS_ADMIN_TOGGLED",
     "ADMIN_PASSWORD_RESET",
+    "ADMIN_PROVIDER_TEST",
     "ADMIN_USER_CREATED",
+    "ADMIN_USER_DEACTIVATED",
     "ADMIN_USER_DELETED",
+    "ADMIN_USER_UPDATED",
     "AI_FALLBACK_TRIGGERED",
     "AI_GENERATION_ERROR",
     "AI_GENERATION_START",
