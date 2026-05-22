@@ -41,9 +41,9 @@ class Recipe(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    dose_grams: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    water_grams: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    water_temp_c: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    dose_grams: Mapped[int] = mapped_column(Integer, nullable=False)
+    water_grams: Mapped[int] = mapped_column(Integer, nullable=False)
+    water_temp_c: Mapped[int] = mapped_column(Integer, nullable=False)
     grind_setting: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     # Ordered list of step dicts: [{label, water_grams, time_seconds, ...}, ...].
     # Per-step shape is enforced by the Pydantic schema in plan 04-02, not by

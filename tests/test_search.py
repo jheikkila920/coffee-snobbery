@@ -97,17 +97,20 @@ def _seed_shared_catalog(
             recipe = Recipe(
                 name=f"V60 Pour-Over {res}",
                 grind_setting="22 clicks",
+                dose_grams=18,
+                water_grams=300,
+                water_temp_c=94,
             )
             db.add(recipe)
 
             equip = Equipment(
                 brand=f"Hario {es}",
                 model="V60-02",
-                type="dripper",
+                type="brewer",
             )
             db.add(equip)
 
-            fn = FlavorNote(name=f"Jasmine {fs}")
+            fn = FlavorNote(name=f"Jasmine {fs}", category="floral")
             db.add(fn)
 
             await db.flush()
@@ -357,13 +360,19 @@ def test_result_group_order(
             coffee = Coffee(name=f"SearchTest Coffee {suffix}", notes="", roaster_id=roaster.id)
             db.add(coffee)
 
-            recipe = Recipe(name=f"SearchTest Recipe {suffix}", grind_setting="medium")
+            recipe = Recipe(
+                name=f"SearchTest Recipe {suffix}",
+                grind_setting="medium",
+                dose_grams=18,
+                water_grams=300,
+                water_temp_c=94,
+            )
             db.add(recipe)
 
-            equip = Equipment(brand=f"SearchTest {suffix}", model="Brand", type="dripper")
+            equip = Equipment(brand=f"SearchTest {suffix}", model="Brand", type="brewer")
             db.add(equip)
 
-            fn = FlavorNote(name=f"SearchTest Note {suffix}")
+            fn = FlavorNote(name=f"SearchTest Note {suffix}", category="floral")
             db.add(fn)
 
             await db.flush()
@@ -604,9 +613,14 @@ def test_highlight_markup() -> None:
         f"Match 'thio' not wrapped in <strong class='font-semibold'> in: {result_str!r}"
     )
 
-    # Surrounding text "Et" and "opia" must still appear
-    assert "Et" in result_str, f"Prefix 'Et' missing from highlight output: {result_str!r}"
-    assert "opia" in result_str, f"Suffix 'opia' missing from highlight output: {result_str!r}"
+    # Per D-06: "thio" matches at index 1 of "Ethiopia", so the prefix is "E"
+    # (split from "thio" by the <strong> tag) and the suffix is "pia".
+    assert result_str.startswith("E<strong"), (
+        f"Prefix 'E' missing/misplaced in highlight output: {result_str!r}"
+    )
+    assert result_str.endswith("</strong>pia"), (
+        f"Suffix 'pia' missing from highlight output: {result_str!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -690,7 +704,7 @@ def test_archived_scope(
             db.add(Equipment(
                 brand=f"{arc_prefix} ArchivedBrand",
                 model="ArchivedModel",
-                type="dripper",
+                type="brewer",
                 archived=True,
             ))
 
@@ -701,11 +715,18 @@ def test_archived_scope(
             db.add(Recipe(
                 name=f"{arc_prefix} ArchivedRecipe",
                 grind_setting="medium",
+                dose_grams=18,
+                water_grams=300,
+                water_temp_c=94,
                 archived=True,
             ))
 
             # Archived flavor note — must NOT appear
-            db.add(FlavorNote(name=f"{arc_prefix} ArchivedFlavor", archived=True))
+            db.add(FlavorNote(
+                name=f"{arc_prefix} ArchivedFlavor",
+                category="floral",
+                archived=True,
+            ))
 
             await db.commit()
 
