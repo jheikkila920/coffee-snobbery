@@ -1,8 +1,11 @@
 """Phase 9 — Admin System/Health page tests (ADMIN-05 / ADMIN-06 / D-12).
 
 Covers:
-- test_system_info: GET /admin/system renders version, DB version, storage,
+- test_system_info: GET /admin renders version, DB version, storage,
   session count, last-backup status (ADMIN-05, D-09).
+  (/admin/system 301-redirects to /admin; page moved in Phase 9 gap closure.)
+- test_system_page_redirect: GET /admin/system (follow_redirects=False) returns
+  301 with Location: /admin.
 - test_health_panel_raw_db: page renders last_ai_run_status after set_setting
   pops the cache key — proves raw DB read, not get_str (ADMIN-06, Pitfall 2).
 - test_health_panel_errors: per-provider last error + last 5 errors render;
@@ -27,11 +30,10 @@ import json
 import uuid
 from decimal import Decimal
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import pytest
-import respx
 import httpx
+import respx
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,10 +41,14 @@ import httpx
 
 
 def _prime_csrf(client: Any, signed_cookie: str) -> str:
-    """Wire session_id + csrftoken onto the client; return the CSRF token."""
+    """Wire session_id + csrftoken onto the client; return the CSRF token.
+
+    GETs /admin (the System page) to receive the CSRF cookie.
+    /admin/system 301-redirects to /admin since the Phase 9 gap-closure pass.
+    """
     client.cookies.set("session_id", signed_cookie)
     client.cookies.delete("csrftoken")
-    resp = client.get("/admin/system")
+    resp = client.get("/admin")
     token = resp.cookies.get("csrftoken") or client.cookies.get("csrftoken", "")
     if token:
         client.cookies.set("csrftoken", token)
@@ -58,9 +64,10 @@ def _seed_app_setting(key: str, value: str) -> None:
     async def _do() -> None:
         async with async_session_factory() as db:
             from sqlalchemy import select as sa_select
-            row = (await db.execute(
-                sa_select(AppSetting).where(AppSetting.key == key)
-            )).scalar_one_or_none()
+
+            row = (
+                await db.execute(sa_select(AppSetting).where(AppSetting.key == key))
+            ).scalar_one_or_none()
             if row is None:
                 row = AppSetting(
                     key=key,
@@ -108,15 +115,17 @@ def _seed_ai_recommendation(
 
 def _count_ai_recommendations() -> int:
     """Return total ai_recommendations row count."""
+    from sqlalchemy import func
+    from sqlalchemy import select as sa_select
+
     from app.main import async_session_factory
     from app.models.ai_recommendation import AIRecommendation
-    from sqlalchemy import func, select as sa_select
 
     async def _do() -> int:
         async with async_session_factory() as db:
-            return (await db.execute(
-                sa_select(func.count()).select_from(AIRecommendation)
-            )).scalar_one()
+            return (
+                await db.execute(sa_select(func.count()).select_from(AIRecommendation))
+            ).scalar_one()
 
     return asyncio.run(_do())
 
@@ -147,10 +156,10 @@ def _enable_credential(provider: str, enabled: bool = True) -> None:
 
 def _seed_eligible_user() -> int:
     """Seed a user with 3 brew sessions so _get_eligible_user_ids includes them."""
-    from tests.conftest import _seed_user
     from app.main import async_session_factory
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
+    from tests.conftest import _seed_user
 
     seeded = _seed_user(is_admin=False)
     user_id = seeded["user"].id
@@ -189,67 +198,85 @@ def _seed_ineligible_user() -> int:
 
 
 class TestSystemInfo:
-    """ADMIN-05: GET /admin/system renders all six system-info data points."""
+    """ADMIN-05: GET /admin renders all six system-info data points.
+
+    The System page moved from /admin/system to /admin in the Phase 9
+    gap-closure pass. GET /admin/system now 301-redirects to /admin.
+    """
 
     def test_system_info(
         self,
         client: Any,
         admin_session: dict[str, str],
     ) -> None:
-        """System page renders: app version, DB version, storage, session count,
-        last-backup line. Non-admin → 403.
+        """System page at GET /admin renders: app version, DB version, storage,
+        session count, last-backup line.
         """
         _prime_csrf(client, admin_session["session_id"])
-        resp = client.get("/admin/system")
+        resp = client.get("/admin")
         assert resp.status_code == 200, (
-            f"Expected 200 on GET /admin/system, got {resp.status_code}\n"
+            f"Expected 200 on GET /admin (System page), got {resp.status_code}\n"
             f"Body: {resp.text[:500]}"
         )
         body = resp.text
 
         # App version — either from importlib.metadata or pyproject.toml fallback.
-        # The container runs without pip install -e so we check for "0.1.0" or
-        # any version-like string (the handler reads pyproject.toml as fallback).
         try:
             from importlib.metadata import version as pkg_version
+
             app_version = pkg_version("coffee-snobbery")
         except Exception:
             app_version = "0.1.0"  # pyproject.toml fallback value
-        assert app_version in body, (
-            f"App version '{app_version}' not found in /admin/system body"
-        )
+        assert app_version in body, f"App version '{app_version}' not found in /admin body"
 
         # DB version — postgres version string contains "PostgreSQL"
         assert "PostgreSQL" in body or "postgresql" in body.lower(), (
-            "DB version string not found in /admin/system body"
+            "DB version string not found in /admin body"
         )
 
         # Storage — bytes, KB, or MB rendered for photos + backups
-        # We just check some kind of storage label exists
-        assert any(label in body for label in ("Photo", "photo", "Backup", "backup", "Storage", "storage")), (
-            "Storage section not found in /admin/system body"
-        )
+        assert any(
+            label in body for label in ("Photo", "photo", "Backup", "backup", "Storage", "storage")
+        ), "Storage section not found in /admin body"
 
         # Session count — the page must render a sessions panel
         assert any(label in body for label in ("Session", "session", "active")), (
-            "Session count section not found in /admin/system body"
+            "Session count section not found in /admin body"
         )
 
         # Backup status — either a status value or a "never run" message
         assert any(label in body for label in ("Backup", "backup", "never", "Never")), (
-            "Last backup status not found in /admin/system body"
+            "Last backup status not found in /admin body"
         )
+
+    def test_system_page_redirect(
+        self,
+        client: Any,
+        admin_session: dict[str, str],
+    ) -> None:
+        """GET /admin/system returns 301 redirect to /admin (bookmark compat).
+
+        Verified with follow_redirects=False so the redirect response itself
+        is asserted, not the final destination.
+        """
+        client.cookies.set("session_id", admin_session["session_id"])
+        resp = client.get("/admin/system", follow_redirects=False)
+        assert resp.status_code == 301, (
+            f"Expected 301 from GET /admin/system, got {resp.status_code}"
+        )
+        location = resp.headers.get("location", "")
+        assert location == "/admin", f"Expected Location: /admin, got '{location}'"
 
     def test_system_info_non_admin_403(
         self,
         client: Any,
         regular_session: dict[str, str],
     ) -> None:
-        """Non-admin GET /admin/system returns 403."""
+        """Non-admin GET /admin returns 403."""
         client.cookies.set("session_id", regular_session["session_id"])
-        resp = client.get("/admin/system")
+        resp = client.get("/admin")
         assert resp.status_code == 403, (
-            f"Expected 403 for non-admin on /admin/system, got {resp.status_code}"
+            f"Expected 403 for non-admin on /admin, got {resp.status_code}"
         )
 
     def test_system_info_stub_state(
@@ -259,7 +286,7 @@ class TestSystemInfo:
     ) -> None:
         """System page renders cleanly with no AI run history (stub/empty state)."""
         _prime_csrf(client, admin_session["session_id"])
-        resp = client.get("/admin/system")
+        resp = client.get("/admin")
         assert resp.status_code == 200, (
             f"System page must render even with no AI run data, got {resp.status_code}"
         )
@@ -304,7 +331,7 @@ class TestHealthPanel:
 
         _prime_csrf(client, admin_session["session_id"])
         # This must NOT raise SettingNotFoundError (which would return a 500)
-        resp = client.get("/admin/system")
+        resp = client.get("/admin")
         assert resp.status_code == 200, (
             f"Expected 200 after set_setting popped cache; got {resp.status_code}\n"
             f"Body: {resp.text[:800]}"
@@ -366,7 +393,7 @@ class TestHealthPanel:
         )
 
         _prime_csrf(client, admin_session["session_id"])
-        resp = client.get("/admin/system")
+        resp = client.get("/admin")
         assert resp.status_code == 200, (
             f"Expected 200 with seeded error rows, got {resp.status_code}"
         )
@@ -395,15 +422,23 @@ class TestHealthPanel:
     ) -> None:
         """Page renders per-recommendation-type section (ROADMAP success #5)."""
         _prime_csrf(client, admin_session["session_id"])
-        resp = client.get("/admin/system")
+        resp = client.get("/admin")
         assert resp.status_code == 200
         # The page should render the rec-type panel (even if empty)
         body = resp.text
         # At minimum the section label must exist
-        assert any(label in body for label in (
-            "coffee", "equipment", "sweet_spots", "paste_rank",
-            "Recommendation", "recommendation", "rec type",
-        )), "Per-recommendation-type section not found in health panel"
+        assert any(
+            label in body
+            for label in (
+                "coffee",
+                "equipment",
+                "sweet_spots",
+                "paste_rank",
+                "Recommendation",
+                "recommendation",
+                "rec type",
+            )
+        ), "Per-recommendation-type section not found in health panel"
 
 
 # ---------------------------------------------------------------------------
@@ -459,9 +494,7 @@ class TestAiRefresh:
         assert call["generated_by"] == "admin", (
             f"Expected generated_by='admin', got '{call['generated_by']}'"
         )
-        assert call["force"] is False, (
-            f"Expected force=False, got {call['force']}"
-        )
+        assert call["force"] is False, f"Expected force=False, got {call['force']}"
 
     def test_ai_refresh_force_all(
         self,
@@ -507,9 +540,7 @@ class TestAiRefresh:
         assert call["generated_by"] == "admin_force", (
             f"Expected generated_by='admin_force', got '{call['generated_by']}'"
         )
-        assert call["force"] is True, (
-            f"Expected force=True, got {call['force']}"
-        )
+        assert call["force"] is True, f"Expected force=True, got {call['force']}"
 
     def test_ai_refresh_only_eligible(
         self,
@@ -583,17 +614,14 @@ class TestTestConnection:
         _prime_csrf(client, admin_session["session_id"])
 
         with respx.mock(base_url="https://api.anthropic.com") as mock:
-            mock.get("/v1/models").mock(
-                return_value=httpx.Response(200, json={"data": []})
-            )
+            mock.get("/v1/models").mock(return_value=httpx.Response(200, json={"data": []}))
             resp = client.post(
                 "/admin/system/test-connection/anthropic",
                 data={"X-CSRF-Token": client.headers.get("X-CSRF-Token", "")},
             )
 
         assert resp.status_code == 200, (
-            f"Expected 200 from test-connection, got {resp.status_code}\n"
-            f"Body: {resp.text[:400]}"
+            f"Expected 200 from test-connection, got {resp.status_code}\nBody: {resp.text[:400]}"
         )
         body = resp.text
         assert "Connected" in body or "ok" in body.lower(), (
@@ -615,7 +643,10 @@ class TestTestConnection:
             mock.get("/v1/models").mock(
                 return_value=httpx.Response(
                     401,
-                    json={"type": "error", "error": {"type": "authentication_error", "message": "invalid api key"}},
+                    json={
+                        "type": "error",
+                        "error": {"type": "authentication_error", "message": "invalid api key"},
+                    },
                 )
             )
             resp = client.post(
@@ -672,9 +703,7 @@ class TestTestConnection:
         _prime_csrf(client, admin_session["session_id"])
 
         with respx.mock(base_url="https://api.anthropic.com") as mock:
-            mock.get("/v1/models").mock(
-                return_value=httpx.Response(200, json={"data": []})
-            )
+            mock.get("/v1/models").mock(return_value=httpx.Response(200, json={"data": []}))
             resp = client.post(
                 "/admin/system/test-connection/anthropic",
                 data={"X-CSRF-Token": client.headers.get("X-CSRF-Token", "")},
@@ -712,6 +741,4 @@ class TestTestConnection:
             "/admin/system/test-connection/badprovider",
             data={"X-CSRF-Token": client.headers.get("X-CSRF-Token", "")},
         )
-        assert resp.status_code == 404, (
-            f"Expected 404 for invalid provider, got {resp.status_code}"
-        )
+        assert resp.status_code == 404, f"Expected 404 for invalid provider, got {resp.status_code}"

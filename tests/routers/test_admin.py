@@ -1,7 +1,7 @@
-"""AUTH-09 + D-13: ``GET /admin`` three-state gate + hub-body coverage.
+"""AUTH-09 + D-13: ``GET /admin`` three-state gate + System-page body coverage.
 
-Originally Plan 02-08 stub coverage; the admin-200 body assertions were
-updated for Phase 9 (Plan 09-01) when the stub became the real admin hub.
+Originally Plan 02-08 stub coverage; updated for the Phase 9 gap-closure pass
+when /admin was redesigned to serve the System page directly (hub page removed).
 
 Four tests cover the VALIDATION map rows:
 
@@ -10,11 +10,9 @@ Four tests cover the VALIDATION map rows:
   on 403 via ``require_admin``).
 * ``test_admin_gate_non_admin_returns_403`` — seeded non-admin session → 403.
 * ``test_admin_gate_admin_returns_200`` — seeded admin session → 200 with the
-  Phase 9 admin hub (section nav + hub links). Phase 2's stub body was
-  retired when Plan 09-01 built the real admin sub-package.
-* ``test_admin_hub_body`` — same 200-path but asserts the hub card grid links
-  to all five admin sections (the durable replacement for the old
-  "D-13 /admin stub literal body" VALIDATION row).
+  System page that extends ``admin_base.html`` (section nav present).
+* ``test_admin_hub_body`` — same 200-path but asserts the System page content
+  and the section nav links (hub card grid retired; /admin/system not in nav).
 
 The ``_require_admin_router`` helper turns "Plan 02-08 not yet executed"
 into a clean ``pytest.skip`` rather than an ``ImportError`` collection
@@ -69,12 +67,12 @@ def test_admin_gate_non_admin_returns_403(client, seeded_regular_user) -> None:
 
 
 def test_admin_gate_admin_returns_200(client, seeded_admin_user) -> None:
-    """Admin seeded session → 200 with the Phase 9 admin hub.
+    """Admin seeded session → 200 with the System page at /admin.
 
-    Phase 2 shipped a literal stub here; Plan 09-01 replaced it with the
-    real admin hub that extends ``admin_base.html`` and renders the
-    persistent section nav. Assert the stable hub markers rather than the
-    retired stub string.
+    /admin now serves the System page (hub page removed in Phase 9 gap closure).
+    The System page extends admin_base.html, so the persistent section nav is
+    present. Assert the stable markers: 200, section nav, and a System-page
+    data label.
     """
     _require_admin_router()
     r = client.get(
@@ -87,11 +85,14 @@ def test_admin_gate_admin_returns_200(client, seeded_admin_user) -> None:
 
 
 def test_admin_hub_body(client, seeded_admin_user) -> None:
-    """The Phase 9 admin hub body (replaced the Phase 2 D-13 stub).
+    """GET /admin serves the System page; section nav has correct links.
 
-    Plan 09-01 turned the single-file stub into the admin sub-package whose
-    hub page renders a card grid linking to the five sections. Assert the
-    hub links — the durable replacement for the old stub line.
+    The hub card grid was removed in the Phase 9 gap-closure pass. /admin now
+    renders the System page (System Info + API Health). Assert:
+    - A stable System-page marker is present (App Version or System Info heading).
+    - The section nav links to Users, Credentials, Settings, Backups.
+    - System nav link points to /admin (not /admin/system).
+    - /admin/system is NOT a nav link (it is a 301 redirect, not a nav item).
     """
     _require_admin_router()
     r = client.get(
@@ -99,11 +100,20 @@ def test_admin_hub_body(client, seeded_admin_user) -> None:
         cookies={"session_id": seeded_admin_user["signed_cookie"]},
     )
     assert r.status_code == 200
-    for path in (
-        "/admin/users",
-        "/admin/credentials",
-        "/admin/settings",
-        "/admin/backups",
-        "/admin/system",
-    ):
-        assert f'href="{path}"' in r.text, f"hub missing link to {path}"
+
+    # System page content — the System Info panel has an "App Version" label
+    assert any(
+        marker in r.text
+        for marker in ("App Version", "System Info", "API Health", "Database Version")
+    ), "System-page content not found at /admin"
+
+    # Section nav links (hub cards replaced by section nav from admin_base.html)
+    for path in ("/admin/users", "/admin/credentials", "/admin/settings", "/admin/backups"):
+        assert f'href="{path}"' in r.text, f"section nav missing link to {path}"
+
+    # System nav entry points to /admin, not /admin/system
+    assert 'href="/admin"' in r.text, "System nav link href=/admin not found"
+    # /admin/system must NOT appear as a nav href (it's a redirect, not a nav item)
+    assert 'href="/admin/system"' not in r.text, (
+        "href=/admin/system must not appear in nav (System links to /admin now)"
+    )
