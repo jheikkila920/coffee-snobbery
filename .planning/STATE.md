@@ -151,6 +151,6 @@ Three plan-phase research flags carried forward:
 ## Session Continuity
 
 Last session: 2026-05-22T12:08:20.814Z
-Stopped at: Phase 10 UI-SPEC approved
-Resume file: None
-Next: Rebuild container and verify paste-rank, wishlist, equipment button at 375px mobile viewport.
+Stopped at: Phase 10 executed + verified — 4/4 must-haves, 15/15 search tests GREEN; automated verification PASS, status human_needed for manual UAT only
+Resume file: .planning/phases/10-global-search/10-VERIFICATION.md
+Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).
