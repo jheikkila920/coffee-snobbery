@@ -330,9 +330,11 @@ async def update_user(
     if password_changed:
         log.info(events.ADMIN_PASSWORD_RESET, user_id=target.id, by_user_id=admin_user.id)
 
-    # Invalidate sessions if is_admin changed (T-09-04)
-    if is_admin_changed:
+    # Invalidate sessions on is_admin change OR password reset (T-09-04).
+    # A password reset on a compromised account must force re-auth everywhere.
+    if is_admin_changed or password_changed:
         await _delete_user_sessions(target_id)
+    if is_admin_changed:
         log.info(events.ADMIN_IS_ADMIN_TOGGLED, user_id=target.id, by_user_id=admin_user.id)
 
     return templates.TemplateResponse(
@@ -450,7 +452,7 @@ async def reactivate_user(
     db.commit()
     db.refresh(target)
 
-    log.info(events.ADMIN_USER_UPDATED, user_id=target.id, by_user_id=admin_user.id)
+    log.info(events.ADMIN_USER_REACTIVATED, user_id=target.id, by_user_id=admin_user.id)
     return templates.TemplateResponse(
         request=request,
         name="fragments/admin_user_row.html",
