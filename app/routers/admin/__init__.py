@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import importlib
 
+import structlog
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 
 from app.dependencies.auth import require_admin
 from app.models.user import User
 from app.templates_setup import templates
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/admin")
 
@@ -67,6 +70,11 @@ _SUB_MODULES = [
 for _name in _SUB_MODULES:
     try:
         _sub = importlib.import_module(f"app.routers.admin.{_name}")
-        router.include_router(_sub.router)
-    except ImportError:
-        pass  # feature module not yet created — guard keeps hub working
+    except ModuleNotFoundError as exc:
+        # Only swallow "this exact module file is absent"; a broken import
+        # *inside* an existing module must not be silently dropped.
+        if exc.name == f"app.routers.admin.{_name}":
+            log.warning("admin.submodule_absent", module=_name)
+            continue
+        raise
+    router.include_router(_sub.router)
