@@ -28,7 +28,7 @@ from pathlib import Path
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -95,17 +95,25 @@ def _truncate_error(s: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# GET /admin/system — System Info + API Health read handler
+# GET /admin — System Info + API Health read handler (was /admin/system)
 # ---------------------------------------------------------------------------
 
 
 @router.get("/system", response_class=HTMLResponse)
+def admin_system_redirect(
+    user: User = Depends(require_admin),  # noqa: B008
+) -> RedirectResponse:
+    """301 redirect /admin/system → /admin (keeps bookmarks working)."""
+    return RedirectResponse("/admin", status_code=301)
+
+
+@router.get("", response_class=HTMLResponse)
 def admin_system(
     request: Request,
     user: User = Depends(require_admin),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """System Info + API Health page.
+    """System Info + API Health page — now served at GET /admin.
 
     Reads are raw DB queries; never calls get_str() for status rows so the
     page cannot crash after a backup/AI run pops the cache key (Pitfall 2).
