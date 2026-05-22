@@ -23,7 +23,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 7 | 4/7 | In Progress|  |
 | 8 | 3/3 | Complete   | 2026-05-21 |
 | 9 | 6/6 | Complete   | 2026-05-21 |
-| 10 | 1/3 | In Progress|  |
+| 10 | 2/3 | In Progress|  |
 | 11 | PWA + Mobile Polish | 17 | 6, 9 |
 | 12 | Hardening + Tests | 6 | 11 |
 
@@ -295,13 +295,13 @@ Plans:
   2. User A's search for a phrase that appears only in User B's brew-session notes does not surface User B's row; the shared catalog (coffees, roasters, recipes, equipment, flavor notes) appears in everyone's results regardless of who created the row.
   3. In-flight HTMX requests are cancelled by `hx-sync="this:replace"` when the user keeps typing; rapid typing of "ethiopia" results in at most 1â€“2 queries hitting Postgres rather than 8.
   4. The search input collapses to an icon at <768px and expands to a full-screen sheet on tap; at â‰¥768px it is inline in the top nav.
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 **Wave 1**
 - [x] 10-01-PLAN.md — Wave 0 Nyquist test scaffold (full VALIDATION map + two-user IDOR fixtures) + six GIN trigram index migration (SEARCH-01..04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 10-02-PLAN.md — search service (six ILIKE queries + IDOR-scoped brew notes + markupsafe highlight) + GET /search router + grouped results fragment + main.py registration (SEARCH-02, SEARCH-03, SEARCH-04)
+- [x] 10-02-PLAN.md — search service (six ILIKE queries + IDOR-scoped brew notes + markupsafe highlight) + GET /search router + grouped results fragment + main.py registration (SEARCH-02, SEARCH-03, SEARCH-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 10-03-PLAN.md — auth-gated persistent search header in base.html (inline desktop input / mobile icon→sheet) + searchBar Alpine CSP component + .htmx-indicator confirm (SEARCH-01, SEARCH-03, SEARCH-04)
