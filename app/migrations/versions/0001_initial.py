@@ -166,7 +166,7 @@ def upgrade() -> None:
         # 'anthropic' | 'openai'
         sa.Column("provider_used", sa.Text, nullable=False),
         sa.Column("model_used", sa.Text, nullable=False),
-        # e.g. 'web_search_20250305' (Anthropic) or 'web_search' (OpenAI)
+        # e.g. 'web_search_20260209' (Anthropic) or 'web_search' (OpenAI)
         sa.Column("tool_version", sa.Text, nullable=True),
         # COST-1 columns:
         sa.Column("tokens_input", sa.Integer, nullable=False, server_default="0"),
@@ -269,7 +269,7 @@ def upgrade() -> None:
             },
             {
                 "key": "ai_tool_version_anthropic",
-                "value": "web_search_20250305",
+                "value": "web_search_20260209",
                 "value_type": "string",
                 "description": (
                     "AI-5: Anthropic web-search tool version; editable from admin."
