@@ -15,6 +15,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* htmx indicator — defined as plain CSS so it survives the strict nonce-based
+ * CSP that blocks the inline <style> htmx normally injects at load time.
+ * Without this rule the .htmx-indicator span is permanently visible because
+ * the browser drops htmx's injected stylesheet (no unsafe-inline allowed).
+ * Placed outside @layer so Tailwind's purge pass cannot remove it. */
+.htmx-indicator { opacity: 0; transition: opacity 150ms ease-in; }
+.htmx-request .htmx-indicator { opacity: 1; }
+.htmx-request.htmx-indicator { opacity: 1; }
+
 @layer base {
   /* 16px floor (PITFALL MX-1): iOS Safari auto-zooms a focused input whose
      computed font-size is < 16px. */
