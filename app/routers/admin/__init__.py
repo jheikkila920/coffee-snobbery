@@ -12,8 +12,14 @@ working. Each feature plan (09-02..09-06) only has to create its own module
 file — no edits to this file are needed.
 
 The hub page (pages/admin.html) was removed in the Phase 9 gap-closure pass.
-GET /admin now serves the System page (via system.py's "" route); GET
-/admin/system 301-redirects to /admin for bookmark compatibility.
+GET /admin now serves the System page; GET /admin/system 301-redirects to
+/admin for bookmark compatibility.
+
+Route registration note: the System page handler is defined in system.py but
+registered directly on this package router (path "") because FastAPI raises
+FastAPIError when include_router() combines an empty include-prefix with a ""
+route path. The sub-router action routes (/system/ai-refresh,
+/system/test-connection/*) are still registered via include_router as normal.
 """
 
 from __future__ import annotations
@@ -22,10 +28,32 @@ import importlib
 
 import structlog
 from fastapi import APIRouter
+from fastapi.responses import HTMLResponse
 
 log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/admin")
+
+# ---------------------------------------------------------------------------
+# GET /admin — System page (registered directly; see module docstring for why)
+# ---------------------------------------------------------------------------
+
+# Import guard: if system.py hasn't landed yet, skip the registration and
+# leave /admin without a handler (same graceful-degradation policy as the
+# sub-router guards below).
+try:
+    from app.routers.admin.system import admin_system as _admin_system_fn
+
+    router.add_api_route(
+        "",
+        _admin_system_fn,
+        methods=["GET"],
+        response_class=HTMLResponse,
+        name="admin_system",
+    )
+except ImportError:
+    log.warning("admin.submodule_absent", module="system (landing route)")
+
 
 # ---------------------------------------------------------------------------
 # Feature sub-router auto-include with import guards
@@ -34,7 +62,7 @@ router = APIRouter(prefix="/admin")
 # A missing module (ImportError) is silently swallowed so the hub kept
 # working before feature plans landed.  Plans 09-02..09-06 are purely
 # additive — they create their module file and never touch this block.
-# system.py registers GET "" (the /admin landing) + GET "/system" (redirect).
+# system.py registers GET "/system" (redirect) + action POSTs.
 # ---------------------------------------------------------------------------
 
 _SUB_MODULES = [

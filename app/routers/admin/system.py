@@ -95,7 +95,7 @@ def _truncate_error(s: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# GET /admin — System Info + API Health read handler (was /admin/system)
+# GET /admin/system — 301 redirect to /admin (bookmark compatibility)
 # ---------------------------------------------------------------------------
 
 
@@ -107,13 +107,23 @@ def admin_system_redirect(
     return RedirectResponse("/admin", status_code=301)
 
 
-@router.get("", response_class=HTMLResponse)
+# ---------------------------------------------------------------------------
+# admin_system — System Info + API Health handler (exposed for __init__.py)
+#
+# Registered as GET /admin (path "") directly on the package router in
+# __init__.py to avoid the FastAPI empty-prefix + empty-path error that
+# occurs when include_router() combines an empty include-prefix with a ""
+# route path. The function is defined here so all system logic stays in one
+# module, but the route registration happens in __init__.py.
+# ---------------------------------------------------------------------------
+
+
 def admin_system(
     request: Request,
     user: User = Depends(require_admin),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """System Info + API Health page — now served at GET /admin.
+    """System Info + API Health page — served at GET /admin.
 
     Reads are raw DB queries; never calls get_str() for status rows so the
     page cannot crash after a backup/AI run pops the cache key (Pitfall 2).
@@ -423,4 +433,4 @@ def test_connection(
     )
 
 
-__all__ = ["router"]
+__all__ = ["admin_system", "router"]
