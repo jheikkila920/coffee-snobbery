@@ -119,6 +119,29 @@ Out of scope (belongs to later phases or deferred):
   visually tagged so the user can re-find a discontinued bean without confusion.
   (Chosen over excluding them; needs a small badge style.)
 
+### Plan-phase clarifications (resolved 2026-05-21, post-research)
+
+Research found two ROADMAP/CONTEXT phrasings that did not match the shipped
+schema; John resolved both:
+
+- **D-13: Recipe search is name-only.** `recipes` has NO `description` column
+  (cols: `name, dose_grams, water_grams, water_temp_c, grind_setting, steps,
+  archived`). The ROADMAP goal / SEARCH-01 "recipe name + description" wording
+  predates the actual schema. Search `recipes.name` ONLY. Do **not** add a
+  `description` column (out of scope — that would touch recipe CRUD). The D-05
+  result context line for recipes uses the ratio / `grind_setting`, not a
+  description.
+- **D-14: Archived rows surface for coffees + equipment ONLY.** Only archived
+  coffees and equipment appear in results (with the D-12 "Archived" badge).
+  Archived roasters, recipes, and flavor notes are **excluded** from results
+  (apply `archived == False` to those three queries). Brew notes have no
+  archived concept.
+- **Schema note (equipment has no `name`):** equipment identity is `brand` +
+  `model` (both `Text`). The searchable target is the concatenation
+  `brand || ' ' || model` (expression GIN trigram index); the result display
+  "name" is `"{brand} {model}"`. Implementation detail — planner/executor
+  handle, no further decision needed.
+
 ### Claude's Discretion (resolve with these defaults)
 
 - **FTS vs trigram** — explicitly punted to plan-phase research (PROJECT Key
