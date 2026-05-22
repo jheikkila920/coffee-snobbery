@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import json
 import tomllib
-from importlib.metadata import PackageNotFoundError, version as pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 import structlog
@@ -77,11 +78,11 @@ def _human_size(n_bytes: int) -> str:
     """Format bytes as human-readable string (B / KB / MB / GB)."""
     if n_bytes < 1024:
         return f"{n_bytes} B"
-    if n_bytes < 1024 ** 2:
+    if n_bytes < 1024**2:
         return f"{n_bytes / 1024:.1f} KB"
-    if n_bytes < 1024 ** 3:
-        return f"{n_bytes / 1024 ** 2:.1f} MB"
-    return f"{n_bytes / 1024 ** 3:.2f} GB"
+    if n_bytes < 1024**3:
+        return f"{n_bytes / 1024**2:.1f} MB"
+    return f"{n_bytes / 1024**3:.2f} GB"
 
 
 def _truncate_error(s: str | None) -> str | None:
@@ -210,20 +211,32 @@ def admin_system(
             ],
         }
 
-    # Per-recommendation-type last run (ROADMAP success #5)
+    # Per-recommendation-type last run — window function to get the
+    # error_status of the LATEST row per type, not the lexical MAX
+    # (ROADMAP success #5; WR-03 fix).
+    _latest_subq = select(
+        AIRecommendation.recommendation_type,
+        AIRecommendation.generated_at,
+        AIRecommendation.error_status,
+        func.row_number()
+        .over(
+            partition_by=AIRecommendation.recommendation_type,
+            order_by=AIRecommendation.generated_at.desc(),
+        )
+        .label("rn"),
+    ).subquery()
     per_rec_type_rows = db.execute(
         select(
-            AIRecommendation.recommendation_type,
-            func.max(AIRecommendation.generated_at).label("last_run"),
-            func.max(AIRecommendation.error_status).label("last_status"),
-        )
-        .group_by(AIRecommendation.recommendation_type)
+            _latest_subq.c.recommendation_type,
+            _latest_subq.c.generated_at,
+            _latest_subq.c.error_status,
+        ).where(_latest_subq.c.rn == 1)
     ).all()
     per_rec_type = [
         {
             "rec_type": r.recommendation_type,
-            "last_run": r.last_run,
-            "last_status": r.last_status,
+            "last_run": r.generated_at,
+            "last_status": r.error_status,
         }
         for r in per_rec_type_rows
     ]
@@ -368,9 +381,19 @@ def test_connection(
         import anthropic as _ant
         import openai as _oai
 
-        if isinstance(exc, (_ant.AuthenticationError, _ant.PermissionDeniedError, _oai.AuthenticationError)):
+        if isinstance(
+            exc, (_ant.AuthenticationError, _ant.PermissionDeniedError, _oai.AuthenticationError)
+        ):
             result = {"status": "error", "reason": "invalid_key"}
-        elif isinstance(exc, (_ant.APIConnectionError, _ant.APITimeoutError, _oai.APIConnectionError, _oai.APITimeoutError)):
+        elif isinstance(
+            exc,
+            (
+                _ant.APIConnectionError,
+                _ant.APITimeoutError,
+                _oai.APIConnectionError,
+                _oai.APITimeoutError,
+            ),
+        ):
             result = {"status": "error", "reason": "network"}
         else:
             result = {"status": "error", "reason": "unknown"}
