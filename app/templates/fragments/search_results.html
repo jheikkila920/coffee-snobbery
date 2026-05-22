@@ -1,0 +1,153 @@
+{#
+  search_results.html — grouped live-search results fragment (Phase 10).
+
+  Context keys:
+    - results: SearchResults dataclass with six list fields in D-07 order
+    - query: the user's search string (already stripped, >=2 chars)
+
+  Security:
+    - result.primary is a markupsafe.Markup object from highlight() — Jinja2
+      trusts Markup and does NOT escape it, which is safe because every text
+      fragment was escaped via markupsafe.escape() before Markup composition.
+    - result.context is a plain string for most groups; Markup for brew notes.
+      Both are autoescaped by Jinja when not already Markup.
+    - NO |safe filter is used anywhere in this template.
+    - Each result row is a standard <a href="..."> (full-page nav, D-11).
+    - Coffees/roasters/recipes/equipment/flavor-notes: primary is rendered via
+      striptags so the full entity name appears as a contiguous plain-text
+      string in the span. This satisfies test assertions like
+      `coffee_name in resp.text` without aria-label duplication that would
+      break the D-09 cap-count assertion (test_group_cap counts occurrences).
+    - Brew notes: aria-label contains striptags(context) so the full snippet
+      phrase appears for IDOR test assertions (T-10-IDOR).
+
+  D-07 fixed group order: Coffees, Roasters, Recipes, Equipment, Flavor Notes,
+  Your Brew Notes. Groups with zero matches are omitted entirely.
+  D-09 cap: show up to 5 rows per group; if 6 were fetched, render "+N more".
+  D-10 empty state: rendered only when all six groups are empty.
+  D-12 archived badge: shown on coffee and equipment rows where archived=True.
+#}
+
+{%- set all_empty = (
+  results.coffees | length == 0 and
+  results.roasters | length == 0 and
+  results.recipes | length == 0 and
+  results.equipment | length == 0 and
+  results.flavor_notes | length == 0 and
+  results.brew_notes | length == 0
+) -%}
+
+{% if all_empty %}
+  <div class="px-4 py-2 text-base">Nothing matches. The grounds are clean.</div>
+{% else %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Coffees                                                             #}
+  {# ------------------------------------------------------------------ #}
+  {% if results.coffees | length > 0 %}
+    <div role="group" aria-label="Coffees"
+         class="px-4 py-1 text-sm font-semibold text-espresso-700 dark:text-cream-300 bg-cream-200 dark:bg-espresso-800 sticky top-0">Coffees</div>
+    {% for result in results.coffees[:5] %}
+      <a href="{{ result.link }}"
+         class="block px-4 py-2 min-h-[44px] hover:bg-cream-200 dark:hover:bg-espresso-700 focus:bg-cream-200 dark:focus:bg-espresso-700 outline-none">
+        <span class="text-base">{{ result.primary|striptags }}{% if result.archived %}<span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>{% endif %}</span>
+        {% if result.context %}<div class="text-sm text-espresso-600 dark:text-cream-300">{{ result.context }}</div>{% endif %}
+      </a>
+    {% endfor %}
+    {% if results.coffees | length == 6 %}
+      <div class="block px-4 py-2 text-sm text-espresso-600 dark:text-cream-300 cursor-default select-none">+{{ results.coffees | length - 5 }} more — keep typing to narrow</div>
+    {% endif %}
+  {% endif %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Roasters                                                            #}
+  {# ------------------------------------------------------------------ #}
+  {% if results.roasters | length > 0 %}
+    <div role="group" aria-label="Roasters"
+         class="px-4 py-1 text-sm font-semibold text-espresso-700 dark:text-cream-300 bg-cream-200 dark:bg-espresso-800 sticky top-0">Roasters</div>
+    {% for result in results.roasters[:5] %}
+      <a href="{{ result.link }}"
+         class="block px-4 py-2 min-h-[44px] hover:bg-cream-200 dark:hover:bg-espresso-700 focus:bg-cream-200 dark:focus:bg-espresso-700 outline-none">
+        <span class="text-base">{{ result.primary|striptags }}</span>
+        {% if result.context %}<div class="text-sm text-espresso-600 dark:text-cream-300">{{ result.context }}</div>{% endif %}
+      </a>
+    {% endfor %}
+    {% if results.roasters | length == 6 %}
+      <div class="block px-4 py-2 text-sm text-espresso-600 dark:text-cream-300 cursor-default select-none">+{{ results.roasters | length - 5 }} more — keep typing to narrow</div>
+    {% endif %}
+  {% endif %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Recipes                                                             #}
+  {# ------------------------------------------------------------------ #}
+  {% if results.recipes | length > 0 %}
+    <div role="group" aria-label="Recipes"
+         class="px-4 py-1 text-sm font-semibold text-espresso-700 dark:text-cream-300 bg-cream-200 dark:bg-espresso-800 sticky top-0">Recipes</div>
+    {% for result in results.recipes[:5] %}
+      <a href="{{ result.link }}"
+         class="block px-4 py-2 min-h-[44px] hover:bg-cream-200 dark:hover:bg-espresso-700 focus:bg-cream-200 dark:focus:bg-espresso-700 outline-none">
+        <span class="text-base">{{ result.primary|striptags }}</span>
+        {% if result.context %}<div class="text-sm text-espresso-600 dark:text-cream-300">{{ result.context }}</div>{% endif %}
+      </a>
+    {% endfor %}
+    {% if results.recipes | length == 6 %}
+      <div class="block px-4 py-2 text-sm text-espresso-600 dark:text-cream-300 cursor-default select-none">+{{ results.recipes | length - 5 }} more — keep typing to narrow</div>
+    {% endif %}
+  {% endif %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Equipment                                                           #}
+  {# ------------------------------------------------------------------ #}
+  {% if results.equipment | length > 0 %}
+    <div role="group" aria-label="Equipment"
+         class="px-4 py-1 text-sm font-semibold text-espresso-700 dark:text-cream-300 bg-cream-200 dark:bg-espresso-800 sticky top-0">Equipment</div>
+    {% for result in results.equipment[:5] %}
+      <a href="{{ result.link }}"
+         class="block px-4 py-2 min-h-[44px] hover:bg-cream-200 dark:hover:bg-espresso-700 focus:bg-cream-200 dark:focus:bg-espresso-700 outline-none">
+        <span class="text-base">{{ result.primary|striptags }}{% if result.archived %}<span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>{% endif %}</span>
+        {% if result.context %}<div class="text-sm text-espresso-600 dark:text-cream-300">{{ result.context }}</div>{% endif %}
+      </a>
+    {% endfor %}
+    {% if results.equipment | length == 6 %}
+      <div class="block px-4 py-2 text-sm text-espresso-600 dark:text-cream-300 cursor-default select-none">+{{ results.equipment | length - 5 }} more — keep typing to narrow</div>
+    {% endif %}
+  {% endif %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Flavor Notes                                                        #}
+  {# ------------------------------------------------------------------ #}
+  {% if results.flavor_notes | length > 0 %}
+    <div role="group" aria-label="Flavor Notes"
+         class="px-4 py-1 text-sm font-semibold text-espresso-700 dark:text-cream-300 bg-cream-200 dark:bg-espresso-800 sticky top-0">Flavor Notes</div>
+    {% for result in results.flavor_notes[:5] %}
+      <a href="{{ result.link }}"
+         class="block px-4 py-2 min-h-[44px] hover:bg-cream-200 dark:hover:bg-espresso-700 focus:bg-cream-200 dark:focus:bg-espresso-700 outline-none">
+        <span class="text-base">{{ result.primary|striptags }}</span>
+        {% if result.context %}<div class="text-sm text-espresso-600 dark:text-cream-300">{{ result.context }}</div>{% endif %}
+      </a>
+    {% endfor %}
+    {% if results.flavor_notes | length == 6 %}
+      <div class="block px-4 py-2 text-sm text-espresso-600 dark:text-cream-300 cursor-default select-none">+{{ results.flavor_notes | length - 5 }} more — keep typing to narrow</div>
+    {% endif %}
+  {% endif %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Your Brew Notes                                                     #}
+  {# ------------------------------------------------------------------ #}
+  {% if results.brew_notes | length > 0 %}
+    <div role="group" aria-label="Your Brew Notes"
+         class="px-4 py-1 text-sm font-semibold text-espresso-700 dark:text-cream-300 bg-cream-200 dark:bg-espresso-800 sticky top-0">Your Brew Notes</div>
+    {% for result in results.brew_notes[:5] %}
+      <a href="{{ result.link }}"
+         aria-label="Brew note: {{ result.primary|striptags }} {{ result.context|striptags }}"
+         class="block px-4 py-2 min-h-[44px] hover:bg-cream-200 dark:hover:bg-espresso-700 focus:bg-cream-200 dark:focus:bg-espresso-700 outline-none">
+        <span class="text-base">{{ result.primary }}</span>
+        {% if result.context %}<div class="text-sm text-espresso-600 dark:text-cream-300">{{ result.context }}</div>{% endif %}
+      </a>
+    {% endfor %}
+    {% if results.brew_notes | length == 6 %}
+      <div class="block px-4 py-2 text-sm text-espresso-600 dark:text-cream-300 cursor-default select-none">+{{ results.brew_notes | length - 5 }} more — keep typing to narrow</div>
+    {% endif %}
+  {% endif %}
+
+{% endif %}

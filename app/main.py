@@ -95,6 +95,7 @@ from app.routers import home as home_router
 from app.routers import photos as photos_router
 from app.routers import recipes as recipes_router
 from app.routers import roasters as roasters_router
+from app.routers import search as search_router
 from app.services import credentials
 from app.services import settings as settings_service
 from app.services.encryption import startup_check as encryption_startup_check
@@ -239,6 +240,7 @@ def create_app() -> FastAPI:
     app.include_router(home_router.router)
     app.include_router(ai_router.router)
     app.include_router(photos_router.router)
+    app.include_router(search_router.router)
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
