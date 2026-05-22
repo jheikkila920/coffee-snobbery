@@ -47,7 +47,7 @@ from app.dependencies.db import get_session
 from app.models.brew_session import BrewSession
 from app.models.session import Session as SessionModel
 from app.models.user import User
-from app.schemas.admin_user import AdminPasswordReset, AdminUserCreate
+from app.schemas.admin_user import AdminPasswordReset, AdminUserCreate, AdminUserEdit
 from app.services.auth import hash_password
 from app.services.form_validation import errors_by_field
 from app.templates_setup import templates
@@ -73,9 +73,7 @@ async def _delete_user_sessions(target_id: int) -> None:
     from app.main import async_session_factory
 
     async with async_session_factory() as async_db:
-        await async_db.execute(
-            sql_delete(SessionModel).where(SessionModel.user_id == target_id)
-        )
+        await async_db.execute(sql_delete(SessionModel).where(SessionModel.user_id == target_id))
         await async_db.commit()
 
 
@@ -244,24 +242,32 @@ async def update_user(
     skip = {"X-CSRF-Token"}
     raw = {k: v for k, v in form_data.items() if k not in skip}
 
-    new_email = raw.get("email") or None
-    new_username = raw.get("username", "").strip()
-    new_password = raw.get("password", "").strip()
-    new_is_admin_raw = raw.get("is_admin") in ("true", "on", "1", True)
+    # Coerce empty email to None so EmailStr doesn't reject ""
+    if raw.get("email") == "":
+        raw["email"] = None
+    # Coerce is_admin checkbox: present = True, absent = False
+    raw["is_admin"] = raw.get("is_admin") in ("true", "on", "1", True)
 
-    # Validate username length
-    if len(new_username) < 3 or len(new_username) > 32:
+    # Validate through Pydantic (matches create path — EmailStr, length rules)
+    try:
+        form = AdminUserEdit(**raw)
+    except ValidationError as exc:
         return templates.TemplateResponse(
             request=request,
             name="fragments/admin_user_form.html",
             context={
                 "values": raw,
-                "errors": {"username": "Username must be 3-32 characters."},
+                "errors": errors_by_field(exc),
                 "mode": "edit",
                 "target_id": target_id,
             },
             status_code=200,
         )
+
+    new_username = form.username
+    new_email = str(form.email) if form.email else None
+    new_is_admin_raw = form.is_admin
+    new_password = raw.get("password", "").strip()
 
     # Validate password if provided
     if new_password:
@@ -285,9 +291,7 @@ async def update_user(
         # Use transaction for FOR UPDATE count
         admin_count = _count_active_admins(db)
         if admin_count <= 1:
-            return _render_error_fragment(
-                request, "Cannot demote the last active admin.", 409
-            )
+            return _render_error_fragment(request, "Cannot demote the last active admin.", 409)
         if target_id == admin_user.id:
             return _render_error_fragment(request, "Cannot demote yourself.", 409)
 
@@ -358,9 +362,7 @@ async def toggle_admin(
     if target.is_admin:
         admin_count = _count_active_admins(db)
         if admin_count <= 1:
-            return _render_error_fragment(
-                request, "Cannot demote the last active admin.", 409
-            )
+            return _render_error_fragment(request, "Cannot demote the last active admin.", 409)
         if target_id == admin_user.id:
             return _render_error_fragment(request, "Cannot demote yourself.", 409)
 
@@ -411,9 +413,7 @@ async def deactivate_user(
     if target.is_admin:
         admin_count = _count_active_admins(db)
         if admin_count <= 1:
-            return _render_error_fragment(
-                request, "Cannot deactivate the last active admin.", 409
-            )
+            return _render_error_fragment(request, "Cannot deactivate the last active admin.", 409)
 
     target.is_active = False
     db.commit()
@@ -481,9 +481,7 @@ async def delete_user(
     if target.is_admin:
         admin_count = _count_active_admins(db)
         if admin_count <= 1:
-            return _render_error_fragment(
-                request, "Cannot delete the last active admin.", 409
-            )
+            return _render_error_fragment(request, "Cannot delete the last active admin.", 409)
 
     # D-15 guard: refuse hard-delete if user has brew_sessions (RESTRICT FK)
     brew_count = db.execute(

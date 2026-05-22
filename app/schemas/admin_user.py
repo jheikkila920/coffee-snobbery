@@ -41,4 +41,14 @@ class AdminPasswordReset(BaseModel):
     password: str = Field(..., min_length=12)
 
 
-__all__ = ["AdminPasswordReset", "AdminUserCreate"]
+class AdminUserEdit(BaseModel):
+    """Admin edit-user form. Same field rules as create; password handled separately."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    username: str = Field(..., min_length=3, max_length=32)
+    email: EmailStr | None = None
+    is_admin: bool = False
+
+
+__all__ = ["AdminPasswordReset", "AdminUserCreate", "AdminUserEdit"]
