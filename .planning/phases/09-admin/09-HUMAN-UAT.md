@@ -3,46 +3,56 @@ status: partial
 phase: 09-admin
 source: [09-VERIFICATION.md]
 started: 2026-05-21T00:00:00Z
-updated: 2026-05-21T00:00:00Z
+updated: 2026-05-22T00:00:00Z
 ---
 
 ## Current Test
 
-[awaiting human testing]
+[awaiting re-test of item 4 + item 7 after gap-closure fixes]
 
 ## Tests
 
 ### 1. User management lifecycle at 375px (ADMIN-01 / SC-1)
-expected: At /admin/users on a 375px viewport — create a user, reset password, toggle is_admin, deactivate, reactivate, and delete an empty user. All actions succeed; no horizontal scroll; forms readable; inline errors display below fields; action buttons have >=44px tap targets.
-result: [pending]
+expected: full CRUD lifecycle at 375px, no horizontal scroll, 44px tap targets.
+result: passed (John, 2026-05-21)
 
 ### 2. Credential masking + test-connection (ADMIN-02 / SC-2)
-expected: At /admin/credentials — set an Anthropic (or OpenAI) key; after save only the last 4 chars show (full key never in page source); "Test connection" renders ok / invalid_key / network; the enable/disable toggle persists independently of the key save.
-result: [pending]
+expected: only last-4 shows after save; test-connection renders status; toggle persists.
+result: passed (John, 2026-05-21)
 
 ### 3. Settings editor type-driven inputs + read-only guard (ADMIN-03 / SC-3)
-expected: At /admin/settings — edit min_sessions_for_ai and save (shows "Saved", new value persists); description shows as helper text; input control matches value_type (number/checkbox/text); attempting to save setup_completed (read-only) is rejected with 403 and no mutation.
-result: [pending]
+expected: editable rows save; read-only keys rejected (403); type-appropriate inputs.
+result: passed (John, 2026-05-21)
 
 ### 4. Backups list / download / run-now / traversal (ADMIN-04 / SC-4)
-expected: At /admin/backups — "Run backup now" produces a result card; the produced file downloads with correct content-type; a manual traversal attempt (e.g. /admin/backups/../../etc/passwd) returns 404. (Local note: backups dir must be writable; on the VPS this needs the deferred G-01 chown.)
-result: [pending]
+expected: run-now produces a file; download works; traversal returns 404; timestamps in local timezone; "Run backup now" spinner clears after completion.
+result: download passed; run-now bugs FIXED in gap closure (re-test in browser):
+  - "Stuck on Running": root cause was strict nonce-CSP blocking htmx's auto-injected `.htmx-indicator` style. Fixed by adding `.htmx-indicator` rules to app/static/css/tailwind.src.css (commit 71bbce1). Spinner now hides at rest and clears after the request.
+  - Timezone: backup filename date + all admin timestamps now use APP_TIMEZONE (America/Chicago) instead of UTC, via the new `localdt` Jinja filter + local-tz `date.today()` (commit f566b1a). An evening run now dates the file to the local day (e.g. db_2026-05-21.sql), not tomorrow's UTC date.
+  - Same-name overwrite is by design (one file per day, 14-day retention); the timezone fix aligns "today" with the local day.
 
 ### 5. System info + API health panel (ADMIN-05 / ADMIN-06 / SC-5)
-expected: At /admin/system — app version, DB version, photo + backup storage, active session count, and last backup status+timestamp all present; API health panel renders the last AI run summary, per-provider last success/error + last 5 errors, and per-recommendation-type last run; no SettingNotFoundError after a backup or AI run.
-result: [pending]
+expected: all system info fields + per-provider/per-type health render.
+result: passed (John, 2026-05-21). Timestamps now render in local timezone (gap-closure).
 
 ### 6. Manual AI refresh respect/force modes (ADMIN-05 / D-13/D-14)
-expected: "Run AI refresh now" writes ai_recommendations rows tagged generated_by="admin" (respect signature/eligibility) and the force path tagged generated_by="admin_force"; only eligible users (>=3 sessions) are refreshed in respect mode; the force action is labeled as expensive in the UI. (Requires real AI credentials + an eligible user; verify telemetry via DB query.)
-result: [pending]
+expected: generated_by="admin" vs "admin_force"; eligibility respected; force labeled expensive.
+result: passed pending real data (John, 2026-05-21 — "seems good"; full confirmation needs real AI creds + an eligible user on the VPS).
+
+### 7. Admin landing redesign (post-UAT enhancement, John-requested)
+expected: GET /admin renders the System page (hub card grid removed); "System" is the far-left item in the admin section nav and links to /admin; GET /admin/system 301-redirects to /admin; credential test-connection + AI refresh actions still work.
+result: [pending browser re-test] — implemented (commit 0ddc49e); routes + redirect verified, 630-test suite green.
 
 ## Summary
 
-total: 6
-passed: 0
+total: 7
+passed: 4
 issues: 0
-pending: 6
+pending: 2
 skipped: 0
 blocked: 0
+notes: item 4 bugs fixed (re-test); item 6 passed pending real data; item 7 (redesign) implemented, re-test in browser
 
 ## Gaps
+
+- Item 4 backup defects (stuck-spinner under CSP + UTC timezone) were found in UAT and FIXED in gap closure (commits f566b1a, 71bbce1). Awaiting browser re-test.
