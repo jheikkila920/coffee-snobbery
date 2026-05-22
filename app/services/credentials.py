@@ -167,30 +167,31 @@ def set_provider_credential(
     db: Session,
     provider: Provider,
     *,
-    key: str,
-    model_name: str,
+    key: str | None,
+    model_name: str | None,
     by_user_id: int | None,
+    is_enabled: bool | None = None,
 ) -> None:
-    """Encrypt *key*, UPDATE the seeded row, write the fingerprint baseline if missing.
+    """Encrypt *key* (when non-empty), UPDATE the seeded row, write the fingerprint baseline.
 
     D-01 + D-03 + D-08-style. Single transaction:
 
-    1. Encrypt *key* via :func:`encryption.encrypt` (UTF-8 encode first;
-       the SDKs accept ``str``, so encoding lives here rather than at
-       the call site — D-09).
-    2. UPDATE ``api_credentials`` for *provider* with the new
-       ciphertext, ``last_four``, ``model_name``, ``is_enabled=True``,
-       ``updated_by_user_id``.
-    3. If no fingerprint baseline is stored
-       (``encryption_key_primary_fingerprint`` row has
-       ``value_type='null'`` per the Plan 03-01 seed), inline-UPDATE
-       that row to the current primary fingerprint (value + value_type
-       in one statement — see the module docstring's deviation note).
-       This is the **only** location in the codebase that writes to
-       ``app_settings`` outside :func:`settings_service.set_setting`;
-       it is exempt for atomicity + ``value_type`` transition reasons.
-    4. Commit.
-    5. Emit ``admin.api_credential_set`` with ``provider``,
+    1. If *key* is provided (non-empty string): encrypt via
+       :func:`encryption.encrypt` (UTF-8 encode first — D-09) and
+       write ``key_ciphertext`` + ``last_four``.  A ``None`` or empty
+       *key* means "leave the stored key unchanged" (e.g., model-only
+       update).
+    2. If *model_name* is a non-empty string, write it to the row.
+       A ``None`` or empty *model_name* means "leave the stored value
+       unchanged".
+    3. If *is_enabled* is explicitly passed (not ``None``), write it.
+       When omitted: default ``True`` for a **new** key write so the
+       provider becomes active immediately; preserve the existing flag
+       for a model-only update (WR-04 fix).
+    4. UPDATE ``api_credentials`` for *provider* with whatever columns
+       changed; write the fingerprint baseline when a key was set.
+    5. Commit.
+    6. Emit ``admin.api_credential_set`` with ``provider``,
        ``last_four``, ``model_name``, ``user_id`` ONLY. NEVER include
        ``key`` or ``ciphertext`` (T-03-T1, CLAUDE.md "Never log API
        keys"). The kwarg field is ``user_id`` (not ``by_user_id``) per
@@ -201,57 +202,61 @@ def set_provider_credential(
         provider: Must be a value satisfying ``Provider`` (mypy/ty
             catches typos; the DB CHECK is the runtime backstop —
             T-03-T7).
-        key: Plaintext key from the admin form (e.g.,
-            ``"sk-ant-..."``). Encrypted immediately; the local
-            variable goes out of scope on function return.
-        model_name: The model identifier (e.g.,
-            ``"claude-opus-4-7"``); stored verbatim in the row.
+        key: Plaintext key from the admin form (e.g., ``"sk-ant-..."``),
+            or ``None`` / ``""`` to leave the stored key unchanged.
+        model_name: The model identifier (e.g., ``"claude-opus-4-7"``);
+            ``None`` / ``""`` leaves the stored value unchanged.
         by_user_id: User id recorded on the row's
             ``updated_by_user_id`` column AND emitted as the audit
             event's ``user_id``. ``None`` for system writes.
+        is_enabled: Explicit override for the ``is_enabled`` flag.
+            Defaults to ``True`` when a new key is written; omit (or
+            pass ``None``) to preserve the current flag for model-only
+            updates.
     """
-    ciphertext = encryption.encrypt(key.encode("utf-8"))
-    # D-03 denormalization. ``str[-4:]`` is safe past-end in Python:
-    # a 1-char key yields ``last_four == "x"`` — a tiny corner case
-    # that doesn't break anything (the admin form's min-length
-    # validator is the real defense).
-    last_four = key[-4:]
-    db.execute(
-        update(ApiCredential)
-        .where(ApiCredential.provider == provider)
-        .values(
-            key_ciphertext=ciphertext,
-            last_four=last_four,
-            model_name=model_name,
-            is_enabled=True,
-            updated_by_user_id=by_user_id,
-            updated_at=func.now(),
-        )
-    )
+    values: dict = {
+        "updated_by_user_id": by_user_id,
+        "updated_at": func.now(),
+    }
+    last_four: str | None = None
 
-    # Fingerprint baseline write is unconditional: the ciphertext we just
-    # wrote is always encrypted under the current primary key, so the
-    # stored fingerprint must always reflect the current primary. A
-    # conditional ``if stored_fp is None`` guard left the fingerprint
-    # stale after a mid-session APP_ENCRYPTION_KEY rotation (rewrap on
-    # next restart self-heals, but the invariant is violated between
-    # the set and the restart).
-    #
-    # Documented exception: direct UPDATE bypasses ``set_setting`` so the
-    # fingerprint and credential writes land in ONE transaction AND we
-    # can flip ``value_type`` from ``'null'`` to ``'string'`` (set_setting
-    # does NOT change ``value_type`` by contract — Plan 03-03 Task 1).
-    db.execute(
-        update(AppSetting)
-        .where(AppSetting.key == _FINGERPRINT_KEY)
-        .values(
-            value=encryption.primary_key_fingerprint(),
-            value_type="string",
-            updated_by_user_id=by_user_id,
+    if key:
+        # D-03 denormalization. ``str[-4:]`` is safe past-end in Python.
+        last_four = key[-4:]
+        ciphertext = encryption.encrypt(key.encode("utf-8"))
+        values["key_ciphertext"] = ciphertext
+        values["last_four"] = last_four
+        # Default to enabled when a new key is being stored; only
+        # override when caller passes an explicit is_enabled value.
+        values["is_enabled"] = True if is_enabled is None else is_enabled
+    elif is_enabled is not None:
+        # Model-only or toggle call with explicit is_enabled.
+        values["is_enabled"] = is_enabled
+
+    if model_name:
+        values["model_name"] = model_name
+
+    db.execute(update(ApiCredential).where(ApiCredential.provider == provider).values(**values))
+
+    if key:
+        # Fingerprint baseline write is unconditional when a key is written:
+        # the ciphertext is always encrypted under the current primary key.
+        #
+        # Documented exception: direct UPDATE bypasses ``set_setting`` so the
+        # fingerprint and credential writes land in ONE transaction AND we
+        # can flip ``value_type`` from ``'null'`` to ``'string'`` (set_setting
+        # does NOT change ``value_type`` by contract — Plan 03-03 Task 1).
+        db.execute(
+            update(AppSetting)
+            .where(AppSetting.key == _FINGERPRINT_KEY)
+            .values(
+                value=encryption.primary_key_fingerprint(),
+                value_type="string",
+                updated_by_user_id=by_user_id,
+            )
         )
-    )
-    # Write-through invalidation, mirroring set_setting's contract.
-    settings_service.invalidate(_FINGERPRINT_KEY)
+        # Write-through invalidation, mirroring set_setting's contract.
+        settings_service.invalidate(_FINGERPRINT_KEY)
 
     db.commit()
     log.info(

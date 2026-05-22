@@ -119,14 +119,37 @@ async def set_credential(
     raw = {k: v for k, v in form_data.items() if k not in skip}
 
     api_key = raw.get("api_key", "").strip()  # stays local — never in context
-    model_name = raw.get("model_name", "").strip()
+    model_name = raw.get("model_name", "").strip() or None  # None = preserve existing
 
+    # WR-06: blank api_key means "leave key unchanged" — do not encrypt "".
+    # If no key and no model_name were submitted, there is nothing to write.
+    if not api_key and model_name is None:
+        # Nothing to update; re-render the current row as-is.
+        row = db.execute(
+            select(ApiCredential).where(ApiCredential.provider == provider)
+        ).scalar_one_or_none()
+        ctx = {
+            "provider": provider,
+            "last_four": row.last_four or "" if row else "",
+            "model_name": row.model_name or "" if row else "",
+            "is_enabled": row.is_enabled if row else False,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/admin_credential_row.html",
+            context=ctx,
+        )
+
+    # WR-04: pass key=None when blank so set_provider_credential skips the
+    # key write (preserves ciphertext + is_enabled; only updates model_name).
     cred_service.set_provider_credential(
         db,
         provider,  # type: ignore[arg-type]
-        key=api_key,
+        key=api_key or None,
         model_name=model_name,
         by_user_id=user.id,
+        # is_enabled not passed: service defaults True on new key write,
+        # preserves existing flag on model-only update (WR-04 fix).
     )
 
     # Build display row from DB — only last_four/model_name/is_enabled (SEC-6)
@@ -138,7 +161,7 @@ async def set_credential(
         "provider": provider,
         "last_four": row.last_four or "" if row else "",
         "model_name": row.model_name or "" if row else "",
-        "is_enabled": row.is_enabled if row else True,
+        "is_enabled": row.is_enabled if row else False,
     }
     # Emit audit event — provider + last_four only, NEVER the key (T-09-11)
     log.info(events.ADMIN_API_CREDENTIAL_SET, provider=provider, last_four=ctx["last_four"])
