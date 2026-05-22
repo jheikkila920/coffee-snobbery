@@ -11,7 +11,7 @@
       {{ result.status | upper }}
     </span>
     <span class="text-sm text-espresso-600 dark:text-espresso-300">
-      {{ result.timestamp }}
+      {{ result.timestamp | localdt }}
     </span>
     <span class="text-xs text-espresso-400 dark:text-espresso-500">
       {{ result.duration_ms }} ms

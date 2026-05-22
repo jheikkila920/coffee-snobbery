@@ -5,7 +5,7 @@
         <div>
           <span class="font-mono text-sm text-espresso-900 dark:text-cream-100">{{ f.filename }}</span>
           <span class="ml-3 text-xs text-espresso-500 dark:text-espresso-400">{{ f.size_human }}</span>
-          <span class="ml-3 text-xs text-espresso-400 dark:text-espresso-500">{{ f.mtime_iso }}</span>
+          <span class="ml-3 text-xs text-espresso-400 dark:text-espresso-500">{{ f.mtime | localdt }}</span>
         </div>
         <a href="/admin/backups/{{ f.filename }}"
            class="rounded border border-espresso-300 px-3 py-1 text-xs font-semibold text-espresso-700 hover:bg-espresso-100 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-800">

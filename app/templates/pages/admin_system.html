@@ -48,7 +48,7 @@
               {{ last_backup.status }}
             </span>
             {% if last_backup.timestamp %}
-              &mdash; {{ last_backup.timestamp }}
+              &mdash; {{ last_backup.timestamp | localdt }}
             {% endif %}
           {% else %}
             <span class="text-espresso-400 dark:text-espresso-500">Never run</span>
@@ -103,7 +103,7 @@
           {% if last_ai_run.timestamp %}
             <div class="col-span-2">
               <dt class="text-xs text-espresso-500">Timestamp</dt>
-              <dd class="text-sm text-espresso-900 dark:text-cream-100">{{ last_ai_run.timestamp }}</dd>
+              <dd class="text-sm text-espresso-900 dark:text-cream-100">{{ last_ai_run.timestamp | localdt }}</dd>
             </div>
           {% endif %}
         </dl>
@@ -121,7 +121,7 @@
             <dt class="text-xs text-espresso-500">Last success</dt>
             <dd class="text-sm text-espresso-900 dark:text-cream-100">
               {% if pdata.last_success %}
-                {{ pdata.last_success.model_used }} &mdash; {{ pdata.last_success.generated_at }}
+                {{ pdata.last_success.model_used }} &mdash; {{ pdata.last_success.generated_at | localdt }}
               {% else %}
                 <span class="text-espresso-400">None</span>
               {% endif %}
@@ -131,7 +131,7 @@
             <dt class="text-xs text-espresso-500">Last error</dt>
             <dd class="text-sm {% if pdata.last_error %}text-red-700 dark:text-red-400{% else %}text-espresso-400{% endif %}">
               {% if pdata.last_error %}
-                {{ pdata.last_error_truncated }} &mdash; {{ pdata.last_error.generated_at }}
+                {{ pdata.last_error_truncated }} &mdash; {{ pdata.last_error.generated_at | localdt }}
               {% else %}
                 None
               {% endif %}
@@ -145,7 +145,7 @@
             <ul class="space-y-1">
               {% for err in pdata.recent_errors %}
                 <li class="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950 rounded px-2 py-1">
-                  {{ err.error_status }} &mdash; {{ err.model_used }} &mdash; {{ err.generated_at }}
+                  {{ err.error_status }} &mdash; {{ err.model_used }} &mdash; {{ err.generated_at | localdt }}
                 </li>
               {% endfor %}
             </ul>
@@ -163,7 +163,7 @@
             <div>
               <dt class="text-xs text-espresso-500 capitalize">{{ rec.rec_type }}</dt>
               <dd class="text-sm text-espresso-900 dark:text-cream-100">
-                {{ rec.last_run }}
+                {{ rec.last_run | localdt }}
                 {% if rec.last_status %}
                   &mdash; <span class="text-red-700 dark:text-red-400">{{ rec.last_status }}</span>
                 {% endif %}

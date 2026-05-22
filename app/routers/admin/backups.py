@@ -22,7 +22,7 @@ All handlers require require_admin (T-09-24).
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -49,9 +49,7 @@ _BACKUP_DIR = Path("/app/data/backups")
 # Strict filename regex: db_YYYY-MM-DD.sql or photos_YYYY-MM-DD.tar.gz
 # This is the PRIMARY path-traversal defense — any separator, dot-dot, or
 # unexpected extension fails here before the filesystem is touched.
-_BACKUP_FILENAME_RE = re.compile(
-    r"^(?:db|photos)_\d{4}-\d{2}-\d{2}\.(?:sql|tar\.gz)$"
-)
+_BACKUP_FILENAME_RE = re.compile(r"^(?:db|photos)_\d{4}-\d{2}-\d{2}\.(?:sql|tar\.gz)$")
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +70,9 @@ def _list_backup_files(backup_dir: Path) -> list[dict]:
     """Walk backup_dir and return file metadata list, newest-first.
 
     Returns an empty list if the directory doesn't exist or is empty.
-    Each item: {filename, size_bytes, size_human, mtime_iso}.
+    Each item: {filename, size_bytes, size_human, mtime}.
+    ``mtime`` is an aware UTC datetime; templates render it via the
+    ``| localdt`` filter so it displays in APP_TIMEZONE.
     Only files matching _BACKUP_FILENAME_RE are included.
     """
     if not backup_dir.exists():
@@ -84,17 +84,17 @@ def _list_backup_files(backup_dir: Path) -> list[dict]:
         if not _BACKUP_FILENAME_RE.match(p.name):
             continue
         stat = p.stat()
-        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
         entries.append(
             {
                 "filename": p.name,
                 "size_bytes": stat.st_size,
                 "size_human": _human_size(stat.st_size),
-                "mtime_iso": mtime.strftime("%Y-%m-%d %H:%M UTC"),
+                "mtime": mtime,
             }
         )
-    # Newest first (by mtime)
-    entries.sort(key=lambda e: e["mtime_iso"], reverse=True)
+    # Newest first (by real mtime datetime, not a formatted string)
+    entries.sort(key=lambda e: e["mtime"], reverse=True)
     return entries
 
 
@@ -163,11 +163,7 @@ def download_backup(
     if not backup_path.is_file():
         raise HTTPException(status_code=404)
 
-    media_type = (
-        "application/gzip"
-        if filename.endswith(".gz")
-        else "application/octet-stream"
-    )
+    media_type = "application/gzip" if filename.endswith(".gz") else "application/octet-stream"
     return FileResponse(backup_path, media_type=media_type, filename=filename)
 
 

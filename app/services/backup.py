@@ -30,9 +30,10 @@ import subprocess
 import tarfile
 import time
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy.engine import make_url
@@ -318,7 +319,10 @@ def run_backup(
     log.info(BACKUP_STARTED)
 
     start_time = time.monotonic()
-    today = date.today()
+    # Use APP_TIMEZONE so "today" matches the household's local calendar day,
+    # not the container's UTC clock (e.g. an evening run in America/Chicago
+    # would otherwise produce a file dated tomorrow).
+    today = datetime.now(ZoneInfo(settings.APP_TIMEZONE)).date()
     today_str = today.isoformat()  # YYYY-MM-DD
 
     Path(backup_dir).mkdir(parents=True, exist_ok=True)
@@ -393,9 +397,7 @@ def run_backup(
     duration_ms = int((time.monotonic() - start_time) * 1000)
     result.duration_ms = duration_ms
 
-    import datetime
-
-    result.timestamp = datetime.datetime.now(tz=datetime.UTC).isoformat()
+    result.timestamp = datetime.now(tz=UTC).isoformat()
 
     # --- Write last_backup_status ---
     status_dict = {

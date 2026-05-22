@@ -28,9 +28,13 @@ test prefers this symbol (per the test's import-probe order).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi.templating import Jinja2Templates
 from jinja2 import select_autoescape
 from starlette.requests import Request
+
+from app.config import settings
 
 # Single Jinja2Templates instance for the whole application.
 templates = Jinja2Templates(directory="app/templates")
@@ -55,9 +59,46 @@ def csp_nonce(request: Request) -> str:
     return getattr(request.state, "csp_nonce", "")
 
 
+def localdt(value: datetime | str | None, fmt: str = "%Y-%m-%d %H:%M %Z") -> str:
+    """Jinja filter: convert a UTC datetime (or ISO-8601 string) to APP_TIMEZONE.
+
+    - Naive datetimes are assumed UTC before conversion.
+    - ISO-8601 strings are parsed via ``datetime.fromisoformat``; a trailing
+      "Z" is normalised to "+00:00" for Python < 3.11 compatibility.
+    - On parse error or None input the original value is returned as-is so
+      the template degrades gracefully rather than crashing.
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    if value is None:
+        return ""
+    try:
+        tz = ZoneInfo(settings.APP_TIMEZONE)
+    except ZoneInfoNotFoundError:
+        tz = UTC
+
+    try:
+        if isinstance(value, str):
+            # Normalise trailing Z for Python fromisoformat (pre-3.11 doesn't parse it)
+            normalised = value.rstrip("Z") + "+00:00" if value.endswith("Z") else value
+            dt = datetime.fromisoformat(normalised)
+        else:
+            dt = value
+        # Treat naive datetimes as UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(tz).strftime(fmt)
+    except Exception:
+        return str(value)
+
+
 # Registered as a Jinja global so templates can call ``csp_nonce(request)``
 # without an explicit context push. RESEARCH §4 Option B — preferred over
 # the per-route ``Depends(get_csp_nonce)`` approach because every Phase 4+
 # template that extends ``base.html`` would otherwise need the dependency
 # threaded through its handler.
 templates.env.globals["csp_nonce"] = csp_nonce
+
+# ``localdt`` filter: converts UTC datetimes / ISO-8601 strings to APP_TIMEZONE
+# for display. Registered globally so all templates can use it without imports.
+templates.env.filters["localdt"] = localdt
