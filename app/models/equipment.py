@@ -59,7 +59,7 @@ class Equipment(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "type IN ('brewer','grinder','kettle','scale','water_filter','other')",
+            "type IN ('brewer','dripper','grinder','kettle','scale','water_filter','other')",
             name="equipment_type_check",
         ),
         Index("ix_equipment_type", "type"),
