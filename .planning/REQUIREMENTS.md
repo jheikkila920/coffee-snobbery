@@ -117,10 +117,10 @@
 
 ### Global Search (SEARCH)
 
-- [ ] **SEARCH-01**: Persistent search input in top nav: collapsed to icon at <768px (expands to full-screen sheet on tap), expanded inline at ≥768px
-- [ ] **SEARCH-02**: Postgres-based search across coffee names, roaster names, flavor note names, brew session notes (only the current user's), recipe names/descriptions, equipment names; implementation choice (full-text vs trigram) made in plan-phase
-- [ ] **SEARCH-03**: HTMX live results with 250ms debounce; results grouped by entity type; each result links to the relevant edit page
-- [ ] **SEARCH-04**: User only sees their own brew session notes in results; all shared catalog (coffees, equipment, recipes, roasters, flavor notes) is searchable to every authenticated user
+- [x] **SEARCH-01**: Persistent search input in top nav: collapsed to icon at <768px (expands to full-screen sheet on tap), expanded inline at ≥768px
+- [x] **SEARCH-02**: Postgres-based search across coffee names, roaster names, flavor note names, brew session notes (only the current user's), recipe names/descriptions, equipment names; implementation choice (full-text vs trigram) made in plan-phase
+- [x] **SEARCH-03**: HTMX live results with 250ms debounce; results grouped by entity type; each result links to the relevant edit page
+- [x] **SEARCH-04**: User only sees their own brew session notes in results; all shared catalog (coffees, equipment, recipes, roasters, flavor notes) is searchable to every authenticated user
 
 ### Admin (ADMIN)
 
@@ -283,10 +283,10 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | SCHED-02 | Phase 8 — Scheduler + Backups | Complete |
 | SCHED-03 | Phase 8 — Scheduler + Backups | Complete |
 | SCHED-04 | Phase 8 — Scheduler + Backups | Complete |
-| SEARCH-01 | Phase 10 — Global Search | Pending |
-| SEARCH-02 | Phase 10 — Global Search | Pending |
-| SEARCH-03 | Phase 10 — Global Search | Pending |
-| SEARCH-04 | Phase 10 — Global Search | Pending |
+| SEARCH-01 | Phase 10 — Global Search | Complete |
+| SEARCH-02 | Phase 10 — Global Search | Complete |
+| SEARCH-03 | Phase 10 — Global Search | Complete |
+| SEARCH-04 | Phase 10 — Global Search | Complete |
 | ADMIN-01 | Phase 9 — Admin | Complete |
 | ADMIN-02 | Phase 9 — Admin | Complete |
 | ADMIN-03 | Phase 9 — Admin | Complete |
