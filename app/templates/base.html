@@ -23,6 +23,9 @@
     <script defer src="/static/js/alpine-components/flavor-tag-input.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/brew-ratio.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/brew-draft.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 10 search bar component (plan 10-03) — registers Alpine.data('searchBar')
+       before the @alpinejs/csp core boots and walks x-data="searchBar" in the header. #}
+    <script defer src="/static/js/alpine-components/search-bar.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Alpine CSP build — declarative-only (no eval). 3.15.x rewrote the CSP
        expression evaluator to support operators/arithmetic/concat/method-args
        that the Phase 4 templates rely on; 3.14.9 only parsed bare member access
@@ -37,6 +40,115 @@
     <script defer src="/static/js/photo-upload.js" nonce="{{ csp_nonce(request) }}"></script>
   </head>
   <body class="bg-cream-50 text-espresso-900 dark:bg-espresso-950 dark:text-cream-100">
+    {# Persistent search header — auth-gated (D-01). Hidden on /login and /setup
+       (both extend base.html) because request.state.user is None for those routes.
+       Phase 11 absorbs this into the full top/bottom nav + sign-out. #}
+    {% if request.state.user %}
+    <header x-data="searchBar" class="relative">
+      {# ── Desktop (≥768px): inline search bar ── #}
+      <div class="hidden md:flex h-14 px-6 items-center gap-3 bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+        {# Magnifying glass icon #}
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-espresso-600 dark:text-cream-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+        </svg>
+        {# Search input wrapper (relative so the results dropdown is positioned under it) #}
+        <div class="relative">
+          <input
+            type="search"
+            name="q"
+            autocomplete="off"
+            placeholder="Search coffees, roasters, recipes&#8230;"
+            minlength="2"
+            class="rounded border border-espresso-200 dark:border-espresso-700 bg-cream-50 dark:bg-espresso-900 px-3 py-2 text-base w-64 lg:w-80"
+            hx-get="/search"
+            hx-trigger="keyup changed delay:250ms"
+            hx-sync="this:replace"
+            hx-target="#search-results"
+            hx-indicator="#search-spinner"
+            hx-swap="innerHTML"
+            @keydown.enter.prevent="">
+          {# Results dropdown — populated by HTMX, positioned absolute under the input #}
+          <div id="search-results"
+               role="listbox"
+               aria-label="Search results"
+               aria-live="polite"
+               aria-atomic="false"
+               class="absolute top-full left-0 z-50 w-full min-w-[20rem] max-w-xl bg-cream-100 dark:bg-espresso-900 border border-espresso-200 dark:border-espresso-700 rounded-lg shadow-lg empty:hidden">
+          </div>
+        </div>
+        {# HTMX loading spinner — shown while request is in flight (.htmx-indicator rule in tailwind.src.css) #}
+        <span id="search-spinner" class="htmx-indicator" aria-label="Searching&#8230;">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 animate-spin text-espresso-700 dark:text-cream-100" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        </span>
+      </div>
+
+      {# ── Mobile (<768px): icon → full-screen sheet ── #}
+      <div class="md:hidden flex h-12 px-4 items-center justify-end bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+        <button
+          x-on:click="openSheet()"
+          aria-label="Open search"
+          class="flex items-center justify-center min-h-[44px] min-w-[44px] text-espresso-700 dark:text-cream-100">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+          </svg>
+        </button>
+      </div>
+
+      {# Full-screen mobile search sheet #}
+      <div
+        x-show="sheetOpen"
+        @keydown.escape.window="closeSheet()"
+        class="fixed inset-0 z-50 flex flex-col bg-cream-50 dark:bg-espresso-950 md:hidden">
+        {# Scrim (backdrop) — tap to close #}
+        <div class="absolute inset-0 bg-espresso-950/50 dark:bg-espresso-950/70" @click.self="closeSheet()"></div>
+        {# Sheet panel #}
+        <div class="relative z-10 flex flex-col flex-1">
+          {# Sheet header row #}
+          <div class="flex items-center justify-between px-4 pt-4 pb-2">
+            <h2 class="text-lg font-semibold text-espresso-900 dark:text-cream-100">Search</h2>
+            <button
+              x-on:click="closeSheet()"
+              aria-label="Close search"
+              class="flex items-center justify-center min-h-[44px] min-w-[44px] text-espresso-700 dark:text-cream-100">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          {# Sheet search input #}
+          <div class="px-4 pb-2">
+            <input
+              type="search"
+              name="q"
+              autocomplete="off"
+              placeholder="Search coffees, roasters, recipes&#8230;"
+              minlength="2"
+              data-sheet-input
+              class="w-full rounded border border-espresso-200 dark:border-espresso-700 bg-cream-50 dark:bg-espresso-900 px-3 py-3 text-base"
+              hx-get="/search"
+              hx-trigger="keyup changed delay:250ms"
+              hx-sync="this:replace"
+              hx-target="[data-sheet-results]"
+              hx-indicator="#search-spinner"
+              hx-swap="innerHTML"
+              @keydown.enter.prevent="">
+          </div>
+          {# Sheet results area #}
+          <div
+            data-sheet-results
+            role="listbox"
+            aria-label="Search results"
+            aria-live="polite"
+            aria-atomic="false"
+            class="flex-1 overflow-y-auto px-4 pb-4">
+          </div>
+        </div>
+      </div>
+    </header>
+    {% endif %}
     {% block content %}{% endblock %}
     {# Global mini-modal mount point (D-15 / plan 04-11). "+ Create new"
        affordances inside coffee-form autocomplete dropdowns swap their
