@@ -62,8 +62,8 @@
       {# Left: logo badge + wordmark #}
       <div class="flex items-center gap-3 shrink-0">
         <a href="/" class="flex items-center gap-2 hover:opacity-80">
-          <img src="/static/img/logo-badge.png" alt="Snobbery" class="h-8 w-8 rounded-full">
-          <span class="text-lg font-semibold text-espresso-900 dark:text-cream-100">Snobbery</span>
+          <img src="/static/img/logo-badge.png" alt="Snobbery" class="h-12 w-12 rounded-full">
+          <span class="text-xl font-semibold text-espresso-900 dark:text-cream-100">Snobbery</span>
         </a>
       </div>
 
@@ -151,8 +151,13 @@
       </div>
     </header>
 
-    {# ── Mobile top strip (<768px): search icon only ── #}
-    <div x-data="searchBar" class="md:hidden flex h-12 px-4 items-center justify-end bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+    {# ── Mobile top strip (<768px): logo + search icon ── #}
+    <div x-data="searchBar" class="md:hidden flex h-14 px-4 items-center justify-between bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+      {# Brand logo (left) — gives the mobile chrome identity, not just a bare search icon #}
+      <a href="/" class="flex items-center gap-2 hover:opacity-80">
+        <img src="/static/img/logo-badge.png" alt="Snobbery" class="h-10 w-10 rounded-full">
+        <span class="text-lg font-semibold text-espresso-900 dark:text-cream-100">Snobbery</span>
+      </a>
       <button
         x-on:click="openSheet()"
         aria-label="Open search"
