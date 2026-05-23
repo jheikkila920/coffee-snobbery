@@ -429,3 +429,83 @@ def test_app_settings_has_encryption_key_primary_fingerprint_row(
             f"only 'null' (seed) or 'string' (post-rewrap) are valid; "
             f"got {row.value_type!r}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# Phase 11 schema introspection (Plan 11-02)                                  #
+# --------------------------------------------------------------------------- #
+#
+# Two new tests for Plan 11-02's p11_brew_time_seconds migration and the
+# BrewSessionCreate Pydantic schema field.
+
+
+def test_brew_sessions_has_brew_time_seconds_column(pg_session: Connection) -> None:
+    """BREW-12: brew_sessions.brew_time_seconds exists and is nullable integer.
+
+    Pins the column type and nullability so a future migration that changes
+    the column will surface here first rather than silently breaking GBM.
+    """
+    rows = pg_session.execute(
+        text(
+            "SELECT column_name, data_type, is_nullable "
+            "FROM information_schema.columns "
+            "WHERE table_schema='public' "
+            "  AND table_name='brew_sessions' "
+            "  AND column_name='brew_time_seconds'"
+        )
+    ).all()
+    assert len(rows) == 1, (
+        "brew_sessions.brew_time_seconds column must exist after p11_brew_time_seconds migration"
+    )
+    col_name, data_type, is_nullable = rows[0]
+    assert data_type == "integer", (
+        f"brew_time_seconds: expected type 'integer', got {data_type!r}"
+    )
+    assert is_nullable == "YES", (
+        f"brew_time_seconds must be nullable (is_nullable='YES'), got {is_nullable!r}"
+    )
+
+
+def test_brew_session_create_brew_time_seconds_validation() -> None:
+    """BREW-12 / T-11-06: BrewSessionCreate validates brew_time_seconds range 0..86400.
+
+    - Valid value (300) passes.
+    - Negative value (-1) raises ValidationError.
+    - Value exceeding 24h (86401) raises ValidationError.
+    - Omission defaults to None.
+    """
+    from decimal import Decimal
+
+    from pydantic import ValidationError
+
+    from app.schemas.brew_session import BrewSessionCreate
+
+    base = {
+        "coffee_id": 1,
+        "dose_grams_actual": Decimal("15"),
+        "water_grams_actual": Decimal("250"),
+    }
+
+    # Valid: 300 seconds passes
+    obj = BrewSessionCreate(**base, brew_time_seconds=300)
+    assert obj.brew_time_seconds == 300
+
+    # Default: omission yields None
+    obj_none = BrewSessionCreate(**base)
+    assert obj_none.brew_time_seconds is None
+
+    # Boundary: 0 is valid (immediate brew / timer not started)
+    obj_zero = BrewSessionCreate(**base, brew_time_seconds=0)
+    assert obj_zero.brew_time_seconds == 0
+
+    # Boundary: 86400 (24h) is valid
+    obj_max = BrewSessionCreate(**base, brew_time_seconds=86400)
+    assert obj_max.brew_time_seconds == 86400
+
+    # Rejection: negative
+    with pytest.raises(ValidationError):
+        BrewSessionCreate(**base, brew_time_seconds=-1)
+
+    # Rejection: over 24h
+    with pytest.raises(ValidationError):
+        BrewSessionCreate(**base, brew_time_seconds=86401)

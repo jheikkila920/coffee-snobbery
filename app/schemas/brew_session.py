@@ -96,6 +96,7 @@ class BrewSessionCreate(BaseModel):
     rating: Decimal | None = Field(None, ge=0, le=5, multiple_of=Decimal("0.25"))
     flavor_note_ids_observed: list[int] = Field(default_factory=list)
     notes: str = Field("", max_length=5000)
+    brew_time_seconds: int | None = Field(None, ge=0, le=86400)
 
     # --- timing -----------------------------------------------------------
     # Server stores tz-aware UTC; a None default lets the column server_default
