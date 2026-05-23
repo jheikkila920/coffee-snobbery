@@ -42,10 +42,24 @@ findings:
   warning: 6
   info: 5
   total: 13
-status: issues_found
+status: criticals_resolved
+resolved:
+  - "CR-01: brew_time_seconds now persists on edit (commit 5ffa4d3) + WR-01 edit-form seed + regression test"
+  - "CR-02: '/' removed from SW APP_SHELL so the authenticated home shell is not stale-served across users (commit 5ffa4d3)"
+warnings_open: [WR-02, WR-03, WR-05, WR-06]
 ---
 
 # Phase 11: Code Review Report
+
+> **Post-review resolution (2026-05-23):** Both critical blockers were fixed in
+> commit `5ffa4d3` during phase execution. CR-01 (brew_time_seconds dropped on
+> edit) — added to `_WRITABLE_FIELDS`, passed through `update_brew`, seeded into
+> the edit form, plus a round-trip-on-edit regression test (now 7/7 GBM tests
+> green). CR-02 (SW stale-serving the authenticated `/` shell across household
+> users) — `/` removed from the precache APP_SHELL; it now uses network-first.
+> Remaining WARN/INFO items (WR-02 GBM equal-offset steps, WR-03 advance/finish
+> duplication, WR-05 tojson-in-attr regression test, WR-06 manifest media_type)
+> are non-blocking and left as tracked follow-ups.
 
 **Reviewed:** 2026-05-23
 **Depth:** standard
