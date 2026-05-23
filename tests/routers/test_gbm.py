@@ -253,6 +253,56 @@ def test_brew_time_seconds_persisted(
     )
 
 
+def test_brew_time_seconds_persists_on_edit(
+    app: Any, seeded_regular_user: Any, clean_gbm: Any
+) -> None:
+    """Editing a session must update brew_time_seconds (regression: CR-01 dropped it on edit)."""
+    _require_postgres()
+    _require_brew_sessions_table()
+    _require_gbm_router()
+
+    from app.db import SessionLocal
+    from app.services import brew_sessions as svc
+
+    with SessionLocal() as db:
+        coffee = _seed_coffee(db, name="GBMCoffee Edit Round-trip")
+        db.commit()
+        cid = coffee.id
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    base_payload = {
+        "coffee_id": str(cid),
+        "dose_grams_actual": "18",
+        "water_grams_actual": "300",
+        "water_temp_c_actual": "93",
+        "grind_setting_actual": "22",
+        "rating": "4",
+        "notes": "",
+        # The real edit form always submits brewed_at (seeded from the session);
+        # include it so the update does not null the not-null column.
+        "brewed_at": "2026-05-23T08:00",
+    }
+    r = client.post("/brew", data={**base_payload, "brew_time_seconds": "300"})
+    assert r.status_code in (200, 204, 302, 303), f"create failed: {r.status_code}"
+
+    uid = seeded_regular_user["user"].id
+    with SessionLocal() as db:
+        sessions = svc.list_brew_sessions(db, by_user_id=uid)
+    assert len(sessions) == 1, f"expected 1 session after create, got {len(sessions)}"
+    sid = sessions[0].id
+
+    # Edit: change brew_time_seconds 300 -> 420
+    r = client.post(f"/brew/{sid}", data={**base_payload, "brew_time_seconds": "420"})
+    assert r.status_code in (200, 204, 302, 303), f"edit failed: {r.status_code}: {r.text[:300]}"
+
+    with SessionLocal() as db:
+        edited = svc.get_brew_session(db, session_id=sid, by_user_id=uid)
+    assert edited is not None
+    assert edited.brew_time_seconds == 420, (
+        f"expected brew_time_seconds=420 after edit, got {edited.brew_time_seconds}"
+    )
+
+
 def test_brew_time_seconds_validation_rejects_86401(
     app: Any, seeded_regular_user: Any, clean_gbm: Any
 ) -> None:

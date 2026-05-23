@@ -8,8 +8,14 @@ const CACHE_NAME = 'snobbery-v__BUILD_HASH__';
 // The hashed Tailwind CSS URL is NOT listed here because its filename is
 // dynamic. It is caught by the /static/ stale-while-revalidate branch on
 // first navigation (Pattern 2, Assumption A6).
+// NOTE: '/' is deliberately NOT precached. The home shell is require_user-gated
+// and embeds per-user chrome (username, admin link/tab). Caching it with
+// stale-while-revalidate would let the next user on a shared household device
+// briefly see the prior user's identity, and serve an authenticated shell after
+// sign-out / offline (code review CR-02). '/' therefore falls through to the
+// network-first branch below (always fresh online; offline returns the 503
+// "you're offline" message — offline writes are deferred in v1).
 const APP_SHELL = [
-    '/',
     '/manifest.json',
     '/static/img/icon-192.png',
     '/static/img/icon-512.png',

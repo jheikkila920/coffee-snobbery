@@ -852,6 +852,9 @@ def edit_brew_form(
         "flavor_note_ids_observed": [str(i) for i in (session.flavor_note_ids_observed or [])],
         "notes": session.notes or "",
         "brewed_at": session.brewed_at.strftime("%Y-%m-%dT%H:%M") if session.brewed_at else "",
+        "brew_time_seconds": (
+            str(session.brew_time_seconds) if session.brew_time_seconds is not None else ""
+        ),
     }
     context = _hydrate_form_context(
         db,
@@ -920,6 +923,7 @@ async def update_brew(
         flavor_note_ids_observed=form.flavor_note_ids_observed,
         notes=form.notes,
         brewed_at=form.brewed_at,
+        brew_time_seconds=form.brew_time_seconds,
     )
     if updated is None:  # raced delete / cross-user — IDOR non-leak.
         raise HTTPException(status_code=404)

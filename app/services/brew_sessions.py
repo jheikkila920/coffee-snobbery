@@ -82,6 +82,7 @@ _WRITABLE_FIELDS = frozenset(
         "flavor_note_ids_observed",
         "notes",
         "brewed_at",
+        "brew_time_seconds",
     }
 )
 
