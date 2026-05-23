@@ -220,6 +220,18 @@
             </div>
           </div>
 
+          {# Brew time (GBM completion path + manual entry, D-10). Editable,
+             seeded from ?brew_time= when arriving from Guided Brew Mode. #}
+          <label class="flex flex-col gap-1">
+            <span class="text-sm font-semibold">Brew time (seconds)</span>
+            <input type="number" name="brew_time_seconds"
+                   inputmode="numeric" min="0" max="86400"
+                   value="{{ values.get('brew_time_seconds', '') }}"
+                   placeholder="e.g. 210"
+                   class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('brew_time_seconds') %} border-red-300{% else %}{% endif %}">
+            {% if errors.get('brew_time_seconds') %}<p class="text-sm text-red-700 mt-1">{{ errors['brew_time_seconds'] }}</p>{% endif %}
+          </label>
+
           <label class="flex flex-col gap-1">
             <span class="text-sm font-semibold">Notes</span>
             <textarea name="notes" maxlength="5000" rows="3"
@@ -284,8 +296,19 @@
              (equal height), vertically centered (items-center) and each an
              inline-flex/justify-center so the ghost anchor and the accent button
              match exactly on mobile and desktop (Phase 5 round-3 fix). #}
-          <div class="sticky bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex items-center gap-3 dark:bg-espresso-950/95 dark:border-espresso-800"
+          {# D-20 (Plan 11-04): bottom-16 on mobile (above the persistent bottom nav);
+             md:bottom-0 on desktop (no bottom nav there). #}
+          <div class="sticky bottom-16 md:bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex flex-col gap-2 dark:bg-espresso-950/95 dark:border-espresso-800"
                style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
+            {# D-07a: "Brew with timer" entry point — shown only in create mode
+               when both coffee and recipe are already prefilled (GBM path). #}
+            {% if not is_edit and values.get('coffee_id') and values.get('recipe_id') %}
+              <a href="/brew/guided?recipe_id={{ values.get('recipe_id') }}&amp;coffee_id={{ values.get('coffee_id') }}"
+                 class="w-full inline-flex items-center justify-center rounded border border-espresso-700 text-espresso-700 bg-transparent px-4 py-2 text-base hover:bg-espresso-50 dark:border-espresso-400 dark:text-espresso-300 dark:hover:bg-espresso-900">
+                Brew with timer
+              </a>
+            {% endif %}
+            <div class="flex items-center gap-3">
             {% if is_edit %}
               <a href="/brew"
                  class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Discard changes</a>
@@ -298,6 +321,7 @@
                     class="flex-1 inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
               {% if is_edit %}Save session{% else %}Log session{% endif %}
             </button>
+            </div>{# end flex items-center gap-3 #}
           </div>
         </form>
       </div>

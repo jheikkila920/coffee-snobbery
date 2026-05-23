@@ -89,6 +89,7 @@ _FORM_FIELDS = {
     "flavor_note_ids_observed",
     "notes",
     "brewed_at",
+    "brew_time_seconds",
 }
 
 # Optional scalar FK / text fields where an empty string from the browser means
@@ -106,6 +107,7 @@ _EMPTY_TO_NONE_FIELDS = {
     "water_temp_c_actual",
     "rating",
     "brewed_at",
+    "brew_time_seconds",
 }
 
 # Integer FK fields the router casts before handing to the schema (so a bad int
@@ -644,6 +646,7 @@ def new_brew_form(
     from_session_id = _int_or_none(qp.get("from"))
     coffee_id = _int_or_none(qp.get("coffee_id"))
     recipe_id = _int_or_none(qp.get("recipe_id"))
+    brew_time = _int_or_none(qp.get("brew_time"))  # GBM completion path (BREW-13)
 
     prefill = brew_sessions_service.resolve_prefill(
         db,
@@ -653,6 +656,11 @@ def new_brew_form(
         recipe_id=recipe_id,
     )
     values = _stringify_prefill(prefill)
+    # Seed brew_time_seconds from the GBM completion redirect (?brew_time=T).
+    # This is a direct query-param value, not a prefill-engine field, so it's
+    # applied after _stringify_prefill (T-11-13: _int_or_none + schema ge=0/le=86400).
+    if brew_time is not None:
+        values["brew_time_seconds"] = str(brew_time)
     # Prefilled-untouched: every prefilled field starts touched=False (drives
     # the pills); per-attempt fields are always blank, so no pill there.
     touched = {field: False for field in brew_sessions_service._CARRYABLE_FIELDS}
