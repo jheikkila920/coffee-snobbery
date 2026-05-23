@@ -47,6 +47,13 @@ self.addEventListener('fetch', event => {
     if (req.method !== 'GET') return;
 
     const url = new URL(req.url);
+
+    // Only handle same-origin requests. Cross-origin assets (the Alpine + htmx
+    // CDN scripts) must be left to the browser: intercepting them returns opaque
+    // responses that can break script execution once the SW controls the page,
+    // which broke Alpine hydration on in-app navigations (Phase 11-03 checkpoint).
+    if (url.origin !== self.location.origin) return;
+
     const isAppShell = APP_SHELL.includes(url.pathname);
     const isStatic = url.pathname.startsWith('/static/');
 

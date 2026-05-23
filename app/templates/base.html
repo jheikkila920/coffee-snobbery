@@ -167,10 +167,14 @@
         </svg>
       </button>
 
-      {# Full-screen mobile search sheet #}
+      {# Full-screen mobile search sheet. Inline display:none keeps it hidden
+         pre-hydration (this app has no [x-cloak] rule); x-show takes over once
+         Alpine boots. Without this a slow/failed Alpine left the sheet stuck
+         open over the page with a dead X (Phase 11-03 checkpoint). #}
       <div
         x-show="sheetOpen"
         @keydown.escape.window="closeSheet()"
+        style="display: none"
         class="fixed inset-0 z-50 flex flex-col bg-cream-50 dark:bg-espresso-950 md:hidden">
         {# Scrim (backdrop) — tap to close #}
         <div class="absolute inset-0 bg-espresso-950/50 dark:bg-espresso-950/70" @click.self="closeSheet()"></div>
@@ -286,6 +290,7 @@
        Fixed above the bottom nav (bottom-16), hidden on desktop (md:hidden). #}
     <div x-data="iosBanner"
          x-show="show"
+         style="display: none"
          class="fixed bottom-16 left-0 right-0 z-30 bg-espresso-900 text-cream-100 px-4 py-3 text-sm flex items-center justify-between md:hidden">
       <p class="flex-1 pr-3">Add to Home Screen: tap the share icon then &ldquo;Add to Home Screen&rdquo; for the best experience.</p>
       <button
