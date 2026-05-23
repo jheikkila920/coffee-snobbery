@@ -14,23 +14,22 @@
 #}
 <div x-data="miniModal"
      x-on:click="onBackdropClick($event)"
-     class="fixed inset-0 z-50">
-  {# Backdrop — separate stacking context; click bubbles up to root for onBackdropClick. #}
-  <div class="absolute inset-0 bg-espresso-950/50 dark:bg-espresso-950/70 z-40" aria-hidden="true"></div>
-  {# Modal panel — full-screen sheet on mobile, centered dialog ≥sm. The
-     x-on:click.stop keeps clicks inside the panel from bubbling to the
-     backdrop-close handler on the root. #}
+     class="fixed inset-0 z-50 flex flex-col md:flex-row md:items-center md:justify-center">
+  {# Backdrop — full-screen scrim behind the panel; tap-to-close bubbles to root. #}
+  <div class="absolute inset-0 bg-espresso-950/50 z-40" aria-hidden="true"></div>
+  {# Modal panel — full-height sheet on mobile (<768px), centered dialog on desktop (>=768px).
+     x-on:click.stop keeps clicks inside the panel from bubbling to the backdrop handler. #}
   <div x-on:click.stop
        role="dialog"
        aria-modal="true"
        aria-labelledby="modal-title-roaster"
-       class="fixed bottom-0 inset-x-0 sm:bottom-auto sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 z-50 w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-cream-50 dark:bg-espresso-900 rounded-t-2xl sm:rounded-lg shadow-xl">
-    <header class="flex items-center justify-between px-6 pt-6">
+       class="relative z-50 flex flex-col flex-1 bg-cream-50 dark:bg-espresso-950 md:flex-none md:rounded-xl md:w-full md:max-w-lg md:mx-4 md:max-h-[90vh] md:overflow-y-auto shadow-xl">
+    <header class="flex items-center justify-between px-4 pt-4 pb-2">
       <h2 id="modal-title-roaster" class="text-lg font-semibold">New roaster</h2>
       <button type="button"
               aria-label="Close new roaster dialog"
               x-on:click="close()"
-              class="w-11 h-11 rounded text-espresso-900 hover:bg-cream-100 dark:text-cream-100 dark:hover:bg-espresso-900">
+              class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded text-espresso-900 hover:bg-cream-100 dark:text-cream-100 dark:hover:bg-espresso-800">
         &times;
       </button>
     </header>
