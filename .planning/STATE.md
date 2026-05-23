@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: verifying
+status: executing
 stopped_at: Phase 11 UI-SPEC approved
-last_updated: "2026-05-23T17:53:26.667Z"
-last_activity: 2026-05-22
+last_updated: "2026-05-23T18:39:20.640Z"
+last_activity: 2026-05-23
 progress:
   total_phases: 13
   completed_phases: 11
-  total_plans: 71
-  completed_plans: 71
-  percent: 100
+  total_plans: 76
+  completed_plans: 72
+  percent: 95
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-16)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 10 — global-search
+**Current focus:** Phase 11 — pwa-mobile-polish
 
 ## Current Position
 
-Phase: 10 (global-search) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-05-22
+Phase: 11 (pwa-mobile-polish) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-05-23
 
-Progress: [██████████] 100%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Progress: [██████████] 100%
 | Phase 10 P01 | 25 | 2 tasks | 2 files |
 | Phase 10-global-search P02 | 180 | 2 tasks | 10 files |
 | Phase 10-global-search P10-03 | 25 | 2 tasks | 2 files |
+| Phase 11-pwa-mobile-polish P01 | 5 | 4 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -150,7 +151,7 @@ Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-23T17:53:26.649Z
+Last session: 2026-05-23T18:39:20.618Z
 Stopped at: Phase 11 UI-SPEC approved
-Resume file: .planning/phases/11-pwa-mobile-polish/11-UI-SPEC.md
+Resume file: None
 Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).
