@@ -88,6 +88,7 @@ from app.routers import bags as bags_router
 from app.routers import brew as brew_router
 from app.routers import coffees as coffees_router
 from app.routers import csp_report as csp_report_router
+from app.routers import pwa as pwa_router
 from app.routers import debug as debug_router
 from app.routers import equipment as equipment_router
 from app.routers import flavor_notes as flavor_notes_router
@@ -226,6 +227,8 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
 
     # Routers.
+    # pwa_router first — serves root-level /manifest.json and /sw.js.
+    app.include_router(pwa_router.router)
     app.include_router(csp_report_router.router)
     app.include_router(auth_router.router)
     app.include_router(debug_router.router)
