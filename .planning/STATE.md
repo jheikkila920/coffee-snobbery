@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 11 UI-SPEC approved
-last_updated: "2026-05-23T18:43:34.723Z"
+status: planning
+stopped_at: Phase 12 context gathered
+last_updated: "2026-05-23T23:29:45.593Z"
 last_activity: 2026-05-23
 progress:
   total_phases: 13
   completed_phases: 12
   total_plans: 76
-  completed_plans: 73
-  percent: 92
+  completed_plans: 76
+  percent: 100
 ---
 
 # Project State
@@ -153,7 +153,7 @@ Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-23T18:43:34.700Z
-Stopped at: Phase 11 UI-SPEC approved
-Resume file: None
+Last session: 2026-05-23T23:29:45.571Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-hardening-tests/12-CONTEXT.md
 Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).
