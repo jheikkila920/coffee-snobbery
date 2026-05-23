@@ -86,3 +86,47 @@ def test_start_url_returns_200(client, seeded_regular_user) -> None:
         f"Authenticated GET /?source=pwa must return 200; got {r.status_code}. "
         "The home route must pass through query params without redirecting."
     )
+
+
+def test_manifest_link_in_head(client) -> None:
+    """GET /login renders <link rel="manifest"> in <head> unconditionally (MOB-12).
+
+    This is a regression test for the Phase 11 verification gap: base.html was
+    missing PWA discovery tags, breaking browser installability (MOB-12 / ROADMAP
+    SC#1).  The fix (lines 16-20 of base.html) must be present on every page,
+    including the anonymous /login page — so no auth fixture is needed.
+    """
+    r = client.get("/login")
+    assert r.status_code == 200, f"Expected 200 from /login, got {r.status_code}"
+    assert '<link rel="manifest" href="/manifest.json">' in r.text, (
+        "base.html must include <link rel=\"manifest\" href=\"/manifest.json\"> "
+        "unconditionally so browsers can discover the PWA manifest (MOB-12). "
+        f"Tag not found in /login response. Head excerpt:\n{r.text[:500]}"
+    )
+
+
+def test_apple_touch_icon_and_web_app_meta_in_head(client) -> None:
+    """GET /login renders apple-touch-icon + apple-mobile-web-app-* meta tags (MOB-11).
+
+    Regression test for Phase 11 verification gap: iOS Safari requires these tags
+    for Add-to-Home-Screen standalone launch behaviour (MOB-11).  They live in
+    base.html outside the auth gate and must be present on every page.
+    """
+    r = client.get("/login")
+    assert r.status_code == 200, f"Expected 200 from /login, got {r.status_code}"
+    assert 'rel="apple-touch-icon"' in r.text, (
+        "base.html must include <link rel=\"apple-touch-icon\"> for iOS Home Screen "
+        "install (MOB-11). Tag not found in /login response."
+    )
+    assert 'apple-mobile-web-app-capable' in r.text, (
+        "base.html must include <meta name=\"apple-mobile-web-app-capable\"> for iOS "
+        "standalone mode (MOB-11). Meta tag not found in /login response."
+    )
+    assert 'apple-mobile-web-app-title' in r.text, (
+        "base.html must include <meta name=\"apple-mobile-web-app-title\"> for the "
+        "iOS Home Screen label (MOB-11). Meta tag not found in /login response."
+    )
+    assert 'apple-mobile-web-app-status-bar-style' in r.text, (
+        "base.html must include <meta name=\"apple-mobile-web-app-status-bar-style\"> "
+        "for iOS status bar appearance (MOB-11). Meta tag not found in /login response."
+    )
