@@ -1,4 +1,4 @@
-{# Base layout. CSP-strict — no |safe, no hx-on:, no hx-vals='js:'. Plan 01's grep test enforces this for pages/; this base file is reviewed at PR time. #}
+{# Base layout. CSP-strict: forbids the safe filter, hx-on:, hx-vals='js:'. Plan 01's grep test enforces this for pages/; this base file is reviewed at PR time. #}
 <!doctype html>
 <html lang="en">
   <head>
@@ -26,6 +26,14 @@
     {# Phase 10 search bar component (plan 10-03) — registers Alpine.data('searchBar')
        before the @alpinejs/csp core boots and walks x-data="searchBar" in the header. #}
     <script defer src="/static/js/alpine-components/search-bar.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 11 nav + account dropdown + iOS banner components (plan 11-03) — must
+       load BEFORE the @alpinejs/csp core, exactly like the components above. #}
+    <script defer src="/static/js/alpine-components/nav-bar.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/account-dropdown.js" nonce="{{ csp_nonce(request) }}"></script>
+    <script defer src="/static/js/alpine-components/ios-banner.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 11: per-page head extras (e.g. GBM's NoSleep.js). Empty by default.
+       Populate from page templates via {% block head_extra %}...{% endblock %}. #}
+    {% block head_extra %}{% endblock %}
     {# Alpine CSP build — declarative-only (no eval). 3.15.x rewrote the CSP
        expression evaluator to support operators/arithmetic/concat/method-args
        that the Phase 4 templates rely on; 3.14.9 only parsed bare member access
@@ -36,66 +44,123 @@
     <script defer src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Local HTMX listeners (Plan 01-05) — MUST load AFTER the htmx core script so htmx.config.allowEval=false runs after htmx is defined. #}
     <script defer src="/static/js/htmx-listeners.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Service worker registration — nonce-tagged per CSP; must be inline (not a
+       static file) because StaticFiles responses bypass the Jinja nonce pipeline.
+       RESEARCH Pitfall 5: registration call must carry the nonce. #}
+    <script nonce="{{ csp_nonce(request) }}">if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function(){}); }</script>
     {# Photo upload Canvas downscale (Plan 04-09 / D-05). Capture-phase form submit listener + DataTransfer file swap. Load order non-critical since the listener is not HTMX-event-based, but kept after htmx-listeners.js for the CSRF header handler to fire on the retrigger. #}
     <script defer src="/static/js/photo-upload.js" nonce="{{ csp_nonce(request) }}"></script>
   </head>
   <body class="bg-cream-50 text-espresso-900 dark:bg-espresso-950 dark:text-cream-100">
-    {# Persistent search header — auth-gated (D-01). Hidden on /login and /setup
-       (both extend base.html) because request.state.user is None for those routes.
-       Phase 11 absorbs this into the full top/bottom nav + sign-out. #}
+    {# Persistent nav frame — auth-gated (D-01 / Plan 11-03). Hidden on /login and
+       /setup because request.state.user is None for those routes.
+       Top nav (>=768px): logo + wordmark + search + account dropdown.
+       Bottom tab nav (<768px): Home / Log / Config / Admin tabs. #}
     {% if request.state.user %}
-    <header x-data="searchBar" class="relative">
-      {# ── Desktop (≥768px): inline search bar ── #}
-      <div class="hidden md:flex h-14 px-6 items-center gap-3 bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
-        {# Magnifying glass icon #}
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-espresso-600 dark:text-cream-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-        </svg>
-        {# Search input wrapper (relative so the results dropdown is positioned under it) #}
-        <div class="relative">
-          <input
-            type="search"
-            name="q"
-            autocomplete="off"
-            placeholder="Search coffees, roasters, recipes&#8230;"
-            minlength="2"
-            class="rounded border border-espresso-200 dark:border-espresso-700 bg-cream-50 dark:bg-espresso-900 px-3 py-2 text-base w-64 lg:w-80"
-            hx-get="/search"
-            hx-trigger="keyup changed delay:250ms"
-            hx-sync="this:replace"
-            hx-target="#search-results"
-            hx-indicator="#search-spinner"
-            hx-swap="innerHTML"
-            @keydown.enter.prevent="">
-          {# Results dropdown — populated by HTMX, positioned absolute under the input #}
-          <div id="search-results"
-               role="listbox"
-               aria-label="Search results"
-               aria-live="polite"
-               aria-atomic="false"
-               class="absolute top-full left-0 z-50 w-full min-w-[20rem] max-w-xl bg-cream-100 dark:bg-espresso-900 border border-espresso-200 dark:border-espresso-700 rounded-lg shadow-lg empty:hidden">
-          </div>
-        </div>
-        {# HTMX loading spinner — shown while request is in flight (.htmx-indicator rule in tailwind.src.css) #}
-        <span id="search-spinner" class="htmx-indicator" aria-label="Searching&#8230;">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 animate-spin text-espresso-700 dark:text-cream-100" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-          </svg>
-        </span>
+    {# ── Top horizontal nav (>=768px) ── #}
+    <header class="hidden md:flex h-14 px-6 items-center justify-between bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+      {# Left: logo badge + wordmark #}
+      <div class="flex items-center gap-3 shrink-0">
+        <a href="/" class="flex items-center gap-2 hover:opacity-80">
+          <img src="/static/img/logo-badge.png" alt="Snobbery" class="h-8 w-8 rounded-full">
+          <span class="text-lg font-semibold text-espresso-900 dark:text-cream-100">Snobbery</span>
+        </a>
       </div>
 
-      {# ── Mobile (<768px): icon → full-screen sheet ── #}
-      <div class="md:hidden flex h-12 px-4 items-center justify-end bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+      {# Center: nav links + absorbed search bar #}
+      <div x-data="searchBar" class="flex items-center gap-6 flex-1 px-8">
+        {# Nav links #}
+        <nav class="flex items-center gap-5">
+          <a href="/" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Home</a>
+          <a href="/brew" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Log</a>
+          <a href="/config" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Config</a>
+          {% if request.state.user.is_admin %}
+          <a href="/admin" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Admin</a>
+          {% endif %}
+        </nav>
+
+        {# Absorbed desktop search input #}
+        <div class="relative ml-4">
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-espresso-600 dark:text-cream-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+            </svg>
+            <div class="relative">
+              <input
+                type="search"
+                name="q"
+                autocomplete="off"
+                placeholder="Search coffees, roasters, recipes&#8230;"
+                minlength="2"
+                class="rounded border border-espresso-200 dark:border-espresso-700 bg-cream-50 dark:bg-espresso-900 px-3 py-2 text-base w-64 lg:w-80"
+                hx-get="/search"
+                hx-trigger="keyup changed delay:250ms"
+                hx-sync="this:replace"
+                hx-target="#search-results"
+                hx-indicator="#search-spinner"
+                hx-swap="innerHTML"
+                @keydown.enter.prevent="">
+              <div id="search-results"
+                   role="listbox"
+                   aria-label="Search results"
+                   aria-live="polite"
+                   aria-atomic="false"
+                   class="absolute top-full left-0 z-50 w-full min-w-[20rem] max-w-xl bg-cream-100 dark:bg-espresso-900 border border-espresso-200 dark:border-espresso-700 rounded-lg shadow-lg empty:hidden">
+              </div>
+            </div>
+            <span id="search-spinner" class="htmx-indicator" aria-label="Searching&#8230;">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 animate-spin text-espresso-700 dark:text-cream-100" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {# Right: account dropdown (D-05) #}
+      <div x-data="accountDropdown" class="relative shrink-0">
         <button
-          x-on:click="openSheet()"
-          aria-label="Open search"
-          class="flex items-center justify-center min-h-[44px] min-w-[44px] text-espresso-700 dark:text-cream-100">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+          x-on:click="toggle()"
+          :aria-expanded="open"
+          aria-haspopup="true"
+          class="flex items-center gap-2 min-h-[44px] px-3 rounded hover:bg-cream-200 dark:hover:bg-espresso-800 text-sm font-semibold text-espresso-900 dark:text-cream-100">
+          <span>{{ request.state.user.username }}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-espresso-600 dark:text-cream-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
           </svg>
         </button>
+        {# Dropdown panel #}
+        <div
+          x-show="open"
+          x-on:click.outside="close()"
+          class="absolute right-0 top-full mt-1 w-48 bg-cream-100 dark:bg-espresso-900 border border-espresso-200 dark:border-espresso-700 rounded-lg shadow-lg z-50">
+          <div class="px-4 py-3 border-b border-espresso-200 dark:border-espresso-700">
+            <p class="text-sm text-espresso-600 dark:text-cream-300">Signed in as</p>
+            <p class="text-sm font-semibold text-espresso-900 dark:text-cream-100 truncate">{{ request.state.user.username }}</p>
+          </div>
+          <div class="py-1">
+            <form method="post" action="/logout">
+              <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+              <button type="submit" class="w-full text-left px-4 py-2 text-sm text-espresso-900 dark:text-cream-100 hover:bg-cream-200 dark:hover:bg-espresso-800 min-h-[44px]">
+                Sign out
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
+    </header>
+
+    {# ── Mobile top strip (<768px): search icon only ── #}
+    <div x-data="searchBar" class="md:hidden flex h-12 px-4 items-center justify-end bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+      <button
+        x-on:click="openSheet()"
+        aria-label="Open search"
+        class="flex items-center justify-center min-h-[44px] min-w-[44px] text-espresso-700 dark:text-cream-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+        </svg>
+      </button>
 
       {# Full-screen mobile search sheet #}
       <div
@@ -147,9 +212,62 @@
           </div>
         </div>
       </div>
-    </header>
+    </div>
+
+    {# ── Bottom tab nav (<768px, fixed) ── #}
+    <nav x-data="navBar"
+         class="fixed bottom-0 left-0 right-0 z-40 h-16 pb-[env(safe-area-inset-bottom)]
+                bg-cream-100 dark:bg-espresso-900
+                border-t border-espresso-200 dark:border-espresso-700 md:hidden">
+      <div class="flex h-full items-stretch">
+        {# Home tab #}
+        <a href="/"
+           class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
+           :class="activeTab === 'home' ? 'text-espresso-700 dark:text-cream-100' : 'text-espresso-400 dark:text-espresso-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+          <span class="text-xs">Home</span>
+        </a>
+        {# Log tab #}
+        <a href="/brew"
+           class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
+           :class="activeTab === 'brew' ? 'text-espresso-700 dark:text-cream-100' : 'text-espresso-400 dark:text-espresso-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span class="text-xs">Log</span>
+        </a>
+        {# Config tab #}
+        <a href="/config"
+           class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
+           :class="activeTab === 'config' ? 'text-espresso-700 dark:text-cream-100' : 'text-espresso-400 dark:text-espresso-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="text-xs">Config</span>
+        </a>
+        {# Admin tab — hidden for non-admins (MOB-02) #}
+        {% if request.state.user.is_admin %}
+        <a href="/admin"
+           class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
+           :class="activeTab === 'admin' ? 'text-espresso-700 dark:text-cream-100' : 'text-espresso-400 dark:text-espresso-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          <span class="text-xs">Admin</span>
+        </a>
+        {% endif %}
+      </div>
+    </nav>
     {% endif %}
-    {% block content %}{% endblock %}
+
+    {# Main content — pb-16 so content scrolls clear of the fixed bottom nav on mobile #}
+    <div class="pb-16 md:pb-0">
+      {% block content %}{% endblock %}
+    </div>
+
     {# Global mini-modal mount point (D-15 / plan 04-11). "+ Create new"
        affordances inside coffee-form autocomplete dropdowns swap their
        modal-body fragment in here via hx-target="#modal-mount". The
@@ -157,5 +275,22 @@
        the global roaster-created / flavor-note-created HX-Trigger
        listeners empty this div on successful submit (close == empty). #}
     <div id="modal-mount"></div>
+
+    {# iOS install banner (MOB-11 / Plan 11-03) — shown only on iOS Safari
+       non-standalone; hidden once dismissed (localStorage flag).
+       Fixed above the bottom nav (bottom-16), hidden on desktop (md:hidden). #}
+    <div x-data="iosBanner"
+         x-show="show"
+         class="fixed bottom-16 left-0 right-0 z-30 bg-espresso-900 text-cream-100 px-4 py-3 text-sm flex items-center justify-between md:hidden">
+      <p class="flex-1 pr-3">Add to Home Screen: tap the share icon then &ldquo;Add to Home Screen&rdquo; for the best experience.</p>
+      <button
+        x-on:click="dismiss()"
+        aria-label="Dismiss"
+        class="flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 text-cream-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
   </body>
 </html>

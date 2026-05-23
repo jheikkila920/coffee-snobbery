@@ -15,6 +15,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Nav safe-area bottom padding — outside @layer so it is not purged.
+ * Applied to the fixed bottom nav's pb-[env(safe-area-inset-bottom)] utility.
+ * Explicit rule for environments where the arbitrary value syntax is not
+ * recognised (belt-and-suspenders alongside the Tailwind arbitrary value). */
+.nav-safe-area { padding-bottom: env(safe-area-inset-bottom); }
+
 /* htmx indicator — defined as plain CSS so it survives the strict nonce-based
  * CSP that blocks the inline <style> htmx normally injects at load time.
  * Without this rule the .htmx-indicator span is permanently visible because
