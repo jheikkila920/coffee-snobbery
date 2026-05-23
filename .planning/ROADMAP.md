@@ -343,8 +343,25 @@ Plans:
   3. Playwright responsive smoke runs at 375Ã—667 and 390Ã—844 and asserts: bottom nav present and functional, brew session form usable without horizontal scroll, photo upload control present, home page analytics cards stack vertically and remain readable, no form input triggers iOS focus zoom (computed font-size â‰¥16px on every input/select/textarea).
   4. CI grep test fails the build if `|safe` appears anywhere under `templates/pages/`; a CSP audit (manual or scripted) confirms every `<script>` and `<style>` carries a nonce and no `'unsafe-eval'` or `'unsafe-inline'` is present outside the documented trade-off in `docs/decisions/`.
   5. README is publishable: documents the NGINX server block (including `proxy_set_header X-Forwarded-Proto $scheme`, the `Strict-Transport-Security` line, and `Cache-Control: no-cache` on `/sw.js`), the `.env.example` generation hints, the single-uvicorn-worker requirement (re-stated), the backup restore runbook (per CLAUDE.md), and the iOS Wake-Lock-fallback caveat.
-**Plans:** TBD
-**Notes:** Carries HX-6 (`|safe` grep test), SEC-1 follow-through (CSP audit), MX-1 (Playwright zoom assertion), SEC-6 (CI grep for `model_dump\(\)` on `ApiCredential`). This phase is the final ship gate; if any item slips, the project does not deploy to the VPS.
+**Plans:** 7 plans
+Plans:
+**Wave 1** *(parallel — disjoint files; the D-01/D-02 conftest spine + the independent grep tests)*
+- [ ] 12-01-PLAN.md — D-01 full-suite isolation teardown (FK-safe catalog TRUNCATE + settings _cache.clear) + D-02 SNOB_CI skip-enforcement + addopts -x drop
+- [ ] 12-02-PLAN.md — D-07a CSP nonce/unsafe-* template grep + D-07b SEC-6 model_dump-on-ApiCredential grep (tests/ci/)
+
+**Wave 2** *(blocked on 12-01 — needs corrected fixtures + skip gate)*
+- [ ] 12-03-PLAN.md — TEST-01 full happy-path smoke (setup → coffee → equipment → recipe → session → home), hard test under SNOB_CI
+- [ ] 12-04-PLAN.md — TEST-02..05 VERIFY-AND-EXTEND (ai_service / encryption / analytics / CSRF coverage mapping; gap-closers only)
+
+**Wave 3** *(blocked on 12-01)*
+- [ ] 12-05-PLAN.md — D-03 Dockerfile dev/test stage + compose test profile + playwright pin (prod image stays pytest-free)
+
+**Wave 4** *(blocked on 12-05 — needs the baked chromium dev image)*
+- [ ] 12-06-PLAN.md — TEST-06 Playwright responsive smoke at 375x667 + 390x844 (tests/e2e/, local-only D-06) + pre-deploy human-verify
+
+**Wave 5** *(blocked on 12-01, 12-02, 12-05)*
+- [ ] 12-07-PLAN.md — D-04 GitHub Actions CI (ruff + grep + full pytest vs Postgres 16, SNOB_CI=1, e2e excluded) + D-08 README gap-fill (iOS Wake-Lock caveat + G-01 chown note)
+**Notes:** Carries HX-6 (|safe grep), SEC-1 (CSP audit), MX-1 (Playwright zoom), SEC-6 (model_dump grep). Final ship gate; if any item slips, the project does not deploy. AUDIT + GAP-FILL phase: TEST-02..05 are verify-and-extend (Plan 04), not rebuilds. Net-new: TEST-01 smoke, TEST-06 Playwright, D-01/D-02 isolation+skip spine, D-07 grep tests, D-03 dev image + compose test profile, D-04 CI. Out of scope: full per-router coverage, new features, the G-01 VPS chown deploy fix (README note only, D-08).
 
 ## Progress
 
