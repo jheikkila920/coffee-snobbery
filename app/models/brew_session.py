@@ -46,6 +46,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    Integer,
     Numeric,
     Text,
     text,
@@ -129,6 +130,10 @@ class BrewSession(Base):
         server_default=text("'{}'::bigint[]"),
     )
     notes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    brew_time_seconds: Mapped[int | None] = mapped_column(
+        Integer,  # seconds fit in a 32-bit int; BigInteger not needed
+        nullable=True,
+    )
 
     # --- timestamps -------------------------------------------------------
     brewed_at: Mapped[datetime] = mapped_column(
