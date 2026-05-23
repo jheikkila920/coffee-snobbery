@@ -41,12 +41,12 @@
     <div class="mt-3 flex gap-3">
       <a href="/brew/{{ row.id }}/edit"
          aria-label="Edit brew session"
-         class="rounded border border-espresso-300 px-3 py-2 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+         class="inline-flex items-center justify-center rounded border border-espresso-300 px-3 py-2 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
         Edit
       </a>
       <a href="/brew/new?from={{ row.id }}"
          aria-label="{{ again_label }}"
-         class="rounded bg-espresso-700 px-3 py-2 text-sm text-cream-50 hover:bg-espresso-800">
+         class="inline-flex items-center justify-center rounded bg-espresso-700 px-3 py-2 text-sm text-cream-50 hover:bg-espresso-800 min-h-[44px] min-w-[44px]">
         Brew again
       </a>
     </div>

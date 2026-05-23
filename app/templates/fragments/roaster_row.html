@@ -37,7 +37,7 @@
               hx-get="/roasters/{{ roaster.id }}/edit"
               hx-target="closest [data-row]"
               hx-swap="outerHTML"
-              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+              class="inline-flex items-center justify-center rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
         Edit
       </button>
       {% if not roaster.archived %}
@@ -46,7 +46,7 @@
                 hx-target="closest [data-row]"
                 hx-swap="outerHTML"
                 hx-confirm="{{ archive_confirm }}"
-                class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+                class="inline-flex items-center justify-center rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
           Archive
         </button>
       {% endif %}
