@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: verifying
-stopped_at: Phase 11 context gathered
-last_updated: "2026-05-22T13:29:55.109Z"
+stopped_at: Phase 11 UI-SPEC approved
+last_updated: "2026-05-23T17:53:26.667Z"
 last_activity: 2026-05-22
 progress:
   total_phases: 13
@@ -150,7 +150,7 @@ Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-22T13:29:55.085Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-pwa-mobile-polish/11-CONTEXT.md
+Last session: 2026-05-23T17:53:26.649Z
+Stopped at: Phase 11 UI-SPEC approved
+Resume file: .planning/phases/11-pwa-mobile-polish/11-UI-SPEC.md
 Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).
