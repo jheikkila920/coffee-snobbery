@@ -172,6 +172,7 @@ def create_brew_session(
     flavor_note_ids_observed: list[int],
     notes: str,
     brewed_at: datetime | None,
+    brew_time_seconds: int | None = None,
 ) -> BrewSession:
     """Insert a per-user brew session, bump equipment usage, emit the audit event.
 
@@ -199,6 +200,7 @@ def create_brew_session(
         flavor_note_ids_observed=flavor_note_ids_observed,
         notes=notes,
         brewed_at=brewed_at if brewed_at is not None else datetime.now(UTC),
+        brew_time_seconds=brew_time_seconds,
     )
     db.add(session)
     # +1 each non-null equipment FK, same transaction (before commit).

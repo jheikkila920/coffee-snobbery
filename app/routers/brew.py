@@ -807,6 +807,7 @@ async def create_brew(
         flavor_note_ids_observed=form.flavor_note_ids_observed,
         notes=form.notes,
         brewed_at=form.brewed_at,
+        brew_time_seconds=form.brew_time_seconds,
     )
     brew_drafts_service.clear_draft(db, by_user_id=user.id)
     return Response(status_code=204, headers={"HX-Redirect": _LIST_URL})
