@@ -236,4 +236,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-16 after initialization*
+*Last updated: 2026-05-23 — Phase 11 (PWA + mobile polish) complete: installable PWA, persistent nav + sign-out, Guided Brew Mode, mobile responsive sweep. (Validated/Active requirement reconciliation is overdue across all phases — run /gsd-docs-update.)*
