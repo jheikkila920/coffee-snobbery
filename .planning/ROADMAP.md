@@ -24,7 +24,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 8 | 3/3 | Complete   | 2026-05-21 |
 | 9 | 6/6 | Complete   | 2026-05-21 |
 | 10 | 3/3 | Complete   | 2026-05-22 |
-| 11 | 5/5 | Complete   | 2026-05-23 |
+| 11 | 5/5 | Complete    | 2026-05-23 |
 | 12 | Hardening + Tests | 6 | 11 |
 
 **Total mapped requirements:** 116/116

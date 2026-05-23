@@ -73,7 +73,7 @@
 - [x] **BREW-10**: Sessions list view per user with filters: coffee, brewer, rating range, date range; CSV export
 - [x] **BREW-11**: CSV import of brew sessions (limited scope: refuse rows where coffee or bag not in catalog; force conscious add)
 - [x] **BREW-12**: Guided Brew Mode full-screen interface: large countdown timer, current step highlighted with cumulative water target and elapsed time, audio chime + vibration at step transitions (configurable), pause/resume, cancel-without-logging, "Done brewing" returns to session form with timer data + recipe + selected coffee prefilled
-- [ ] **BREW-13**: Guided Brew Mode requests `wakeLock`; re-acquires on `visibilitychange`; iOS Safari fallback via silent audio loop or NoSleep.js; visible indicator when wake lock is held
+- [x] **BREW-13**: Guided Brew Mode requests `wakeLock`; re-acquires on `visibilitychange`; iOS Safari fallback via silent audio loop or NoSleep.js; visible indicator when wake lock is held
 
 ### Home Page Analytics (HOME)
 
@@ -133,26 +133,26 @@
 
 ### Mobile-First + PWA (MOB)
 
-- [ ] **MOB-01**: Bottom tab nav (Home / Log / Config / Admin) at <768px with iOS safe-area inset respected; top horizontal nav at ≥768px
-- [ ] **MOB-02**: Admin tab hidden for non-admins
-- [ ] **MOB-03**: Tables collapse to card lists at mobile widths; no horizontal scroll anywhere
-- [ ] **MOB-04**: All tap targets ≥44×44px
+- [x] **MOB-01**: Bottom tab nav (Home / Log / Config / Admin) at <768px with iOS safe-area inset respected; top horizontal nav at ≥768px
+- [x] **MOB-02**: Admin tab hidden for non-admins
+- [x] **MOB-03**: Tables collapse to card lists at mobile widths; no horizontal scroll anywhere
+- [x] **MOB-04**: All tap targets ≥44×44px
 - [x] **MOB-05**: Form inputs use correct `inputmode` (`decimal` for grams/temp/rating, `numeric` for integer counts) and `type` (`date`, `datetime-local`) so mobile keyboards match
 - [x] **MOB-06**: Global CSS rule `input, select, textarea { font-size: 16px; }` to prevent iOS Safari auto-zoom; Playwright assertion at 375px confirms no zoom on focus
-- [ ] **MOB-07**: Native `<select>` for short dropdowns on mobile; searchable HTMX dropdowns for long lists (coffees only)
-- [ ] **MOB-08**: Modals are full-screen sheets at <768px, dialogs at ≥768px
+- [x] **MOB-07**: Native `<select>` for short dropdowns on mobile; searchable HTMX dropdowns for long lists (coffees only)
+- [x] **MOB-08**: Modals are full-screen sheets at <768px, dialogs at ≥768px
 - [x] **MOB-09**: `manifest.json` with name, `short_name`, `description`, icons (192px, 512px, maskable), `display: standalone`, dual `theme-color` (light + dark), `start_url: "/?source=pwa"` that returns 200 (no redirect)
 - [x] **MOB-10**: Service worker served from `/sw.js` with `Service-Worker-Allowed: /` header; caches app shell + offline read-only fallback; explicit version + cache-bust on deploy
-- [ ] **MOB-11**: Apple touch icon + iOS install meta tags; in-app "Add to Home Screen" instructions banner for iOS Safari (since iOS never prompts)
+- [x] **MOB-11**: Apple touch icon + iOS install meta tags; in-app "Add to Home Screen" instructions banner for iOS Safari (since iOS never prompts)
 - [x] **MOB-12**: Installable to home screen on iOS Safari and Android Chrome
-- [ ] **MOB-13**: Responsive smoke check (Playwright) at 375×667 and 390×844 viewports asserts: bottom nav present and functional, brew session form fully usable without horizontal scroll, photo upload control present, home page analytics cards stack vertically and remain readable
+- [x] **MOB-13**: Responsive smoke check (Playwright) at 375×667 and 390×844 viewports asserts: bottom nav present and functional, brew session form fully usable without horizontal scroll, photo upload control present, home page analytics cards stack vertically and remain readable
 
 ### Aesthetic (UX)
 
-- [ ] **UX-01**: Warm minimalist palette (off-white/cream surfaces, espresso accents) implemented as Tailwind theme; system-preference dark mode (no manual toggle in v1)
+- [x] **UX-01**: Warm minimalist palette (off-white/cream surfaces, espresso accents) implemented as Tailwind theme; system-preference dark mode (no manual toggle in v1)
 - [x] **UX-02**: PWA branding: name `"Snobbery — Coffee Log"`, short_name `"Snobbery"`, description `"Self-hosted coffee log for households who take pour-over seriously"`
-- [ ] **UX-03**: Browser tab title format `Snobbery — {Page Name}`; top nav wordmark on desktop, icon-only on mobile
-- [ ] **UX-04**: Empty states lean into the "snobbery" tone without being gimmicky (e.g. home page when no brews logged: "No brews logged yet. The snobbery awaits.")
+- [x] **UX-03**: Browser tab title format `Snobbery — {Page Name}`; top nav wordmark on desktop, icon-only on mobile
+- [x] **UX-04**: Empty states lean into the "snobbery" tone without being gimmicky (e.g. home page when no brews logged: "No brews logged yet. The snobbery awaits.")
 
 ### Testing (TEST)
 
@@ -251,7 +251,7 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | BREW-10 | Phase 5 — Brew Sessions | Complete |
 | BREW-11 | Phase 5 — Brew Sessions | Complete |
 | BREW-12 | Phase 11 — PWA + Mobile Polish | Complete |
-| BREW-13 | Phase 11 — PWA + Mobile Polish | Pending |
+| BREW-13 | Phase 11 — PWA + Mobile Polish | Complete |
 | HOME-01 | Phase 6 — Analytics (Home Page) | Pending |
 | HOME-02 | Phase 6 — Analytics (Home Page) | Pending |
 | HOME-03 | Phase 6 — Analytics (Home Page) | Pending |
@@ -293,23 +293,23 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | ADMIN-04 | Phase 9 — Admin | Complete |
 | ADMIN-05 | Phase 9 — Admin | Complete |
 | ADMIN-06 | Phase 9 — Admin | Complete |
-| MOB-01 | Phase 11 — PWA + Mobile Polish | Pending |
-| MOB-02 | Phase 11 — PWA + Mobile Polish | Pending |
-| MOB-03 | Phase 11 — PWA + Mobile Polish | Pending |
-| MOB-04 | Phase 11 — PWA + Mobile Polish | Pending |
+| MOB-01 | Phase 11 — PWA + Mobile Polish | Complete |
+| MOB-02 | Phase 11 — PWA + Mobile Polish | Complete |
+| MOB-03 | Phase 11 — PWA + Mobile Polish | Complete |
+| MOB-04 | Phase 11 — PWA + Mobile Polish | Complete |
 | MOB-05 | Phase 5 — Brew Sessions | Complete |
 | MOB-06 | Phase 5 — Brew Sessions | Complete |
-| MOB-07 | Phase 11 — PWA + Mobile Polish | Pending |
-| MOB-08 | Phase 11 — PWA + Mobile Polish | Pending |
+| MOB-07 | Phase 11 — PWA + Mobile Polish | Complete |
+| MOB-08 | Phase 11 — PWA + Mobile Polish | Complete |
 | MOB-09 | Phase 11 — PWA + Mobile Polish | Complete |
 | MOB-10 | Phase 11 — PWA + Mobile Polish | Complete |
-| MOB-11 | Phase 11 — PWA + Mobile Polish | Pending |
+| MOB-11 | Phase 11 — PWA + Mobile Polish | Complete |
 | MOB-12 | Phase 11 — PWA + Mobile Polish | Complete |
-| MOB-13 | Phase 11 — PWA + Mobile Polish | Pending |
-| UX-01 | Phase 11 — PWA + Mobile Polish | Pending |
+| MOB-13 | Phase 11 — PWA + Mobile Polish | Complete |
+| UX-01 | Phase 11 — PWA + Mobile Polish | Complete |
 | UX-02 | Phase 11 — PWA + Mobile Polish | Complete |
-| UX-03 | Phase 11 — PWA + Mobile Polish | Pending |
-| UX-04 | Phase 11 — PWA + Mobile Polish | Pending |
+| UX-03 | Phase 11 — PWA + Mobile Polish | Complete |
+| UX-04 | Phase 11 — PWA + Mobile Polish | Complete |
 | TEST-01 | Phase 12 — Hardening + Tests | Pending |
 | TEST-02 | Phase 12 — Hardening + Tests | Pending |
 | TEST-03 | Phase 12 — Hardening + Tests | Pending |
