@@ -24,7 +24,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 8 | 3/3 | Complete   | 2026-05-21 |
 | 9 | 6/6 | Complete   | 2026-05-21 |
 | 10 | 3/3 | Complete   | 2026-05-22 |
-| 11 | 2/5 | In Progress|  |
+| 11 | 3/5 | In Progress|  |
 | 12 | Hardening + Tests | 6 | 11 |
 
 **Total mapped requirements:** 116/116
@@ -317,14 +317,14 @@ Plans:
   3. Mobile chrome works: bottom tab nav (Home / Log / Config / Admin) at <768px with `env(safe-area-inset-bottom)` padding, top horizontal nav at â‰¥768px, Admin tab hidden for non-admins; every table on mobile collapses to a card list with no horizontal scroll; every tap target measures â‰¥44Ã—44px; modals are full-screen sheets <768px and dialogs â‰¥768px; native `<select>` for short lists, HTMX searchable dropdown only for the long coffees list.
   4. Guided Brew Mode launches full-screen with a large countdown timer, the current step highlighted with cumulative water target and elapsed time, audio chime + vibration at each step transition (each configurable), pause/resume, cancel-without-logging, and "Done brewing" returns to the session form with timer data + recipe + selected coffee prefilled. Wake lock is requested on start, re-acquired on `visibilitychange` to `visible`, and a visible indicator shows when it's held; on iOS a silent-audio-loop / NoSleep.js fallback engages because the Wake Lock API has incomplete iOS support.
   5. Aesthetic: warm off-white/cream surfaces with espresso accents, system-preference dark mode (no manual toggle in v1), dual `<meta name="theme-color">` tags so the iOS status bar matches the active scheme on launch, "Snobbery â€” {Page Name}" tab title format, wordmark on desktop / icon-only on mobile, empty-state copy that leans into the snobbery tone without being gimmicky ("No brews logged yet. The snobbery awaits.").
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 Plans:
 **Wave 1** *(parallel — disjoint files)*
 - [x] 11-01-PLAN.md — PWA backend + assets: /manifest.json + /sw.js routes (custom headers), service worker (SWR shell / network-first / non-GET bypass / build-hash cache), Pillow icon-generation script + committed icons/hero, README NGINX note, Wave 0 tests (MOB-09, MOB-10, MOB-12, UX-02)
 - [x] 11-02-PLAN.md — brew_time_seconds additive nullable migration + model column + Pydantic field (ge=0, le=86400) + migration/schema tests (BREW-12)
 
 **Wave 2** *(blocked on 11-01 — needs icons + SW route)*
-- [ ] 11-03-PLAN.md — Persistent nav frame (bottom tabs / top nav), account dropdown + mobile config-hub sign-out, dark login hero, iOS install banner, SW registration + head_extra block in base.html, three Alpine CSP components, /config route + page (MOB-01, MOB-02, MOB-11, UX-01, UX-03, UX-04)
+- [x] 11-03-PLAN.md — Persistent nav frame (bottom tabs / top nav), account dropdown + mobile config-hub sign-out, dark login hero, iOS install banner, SW registration + head_extra block in base.html, three Alpine CSP components, /config route + page (MOB-01, MOB-02, MOB-11, UX-01, UX-03, UX-04)
 
 **Wave 3** *(blocked on 11-02 + 11-03)*
 - [ ] 11-04-PLAN.md — Guided Brew Mode: /brew/guided full-screen page + guidedBrewMode component (timer, auto-advance + manual skip, audio/vibration cues, wake lock + self-hosted NoSleep.js fallback), brew-form integration (button + brew_time field + sticky-nav offset), recipe-row entry, GBM tests + real-device iOS wake-lock validation (BREW-12, BREW-13)
