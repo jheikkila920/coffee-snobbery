@@ -6,10 +6,12 @@
      dark wrapper; this avoids modifying the base body class. #}
   <div class="min-h-screen bg-espresso-950 flex flex-col items-center justify-center px-6 py-12">
 
-    {# Mascot hero — centered, constrained width (D-13, UI-SPEC §2) #}
+    {# Mascot hero — centered, constrained width (D-13, UI-SPEC §2).
+       Enlarged per checkpoint feedback (was 280/360). Source image is <=720px
+       wide, so these caps stay within intrinsic resolution (no upscaling blur). #}
     <img src="/static/img/snobbery-login-hero.jpg"
          alt="Snobbery"
-         class="max-w-[280px] md:max-w-[360px] mx-auto rounded-xl mb-6">
+         class="w-full max-w-[340px] md:max-w-[500px] mx-auto rounded-xl mb-6">
 
     {# Login card — dark surface, light text #}
     <div class="bg-espresso-900 rounded-xl p-6 shadow-xl max-w-sm w-full">
