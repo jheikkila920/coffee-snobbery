@@ -9,6 +9,15 @@
     {# Double-submit CSRF token surface — read by /static/js/htmx-listeners.js at request time. #}
     <meta name="csrf-token" content="{{ request.cookies.get('csrftoken', '') }}">
     <title>Snobbery — {% block page_title %}{% endblock %}{% block title %}{% endblock %}</title>
+    {# PWA install metadata (Phase 11 verification gap fix): the manifest link makes
+       the app discoverable + installable on Chrome/Safari; the apple-* tags drive
+       iOS Home Screen install + standalone launch (MOB-11, MOB-12). The /manifest.json
+       and icon assets are served by app/routers/pwa.py + committed under /static/img. #}
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Snobbery">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="{{ tailwind_css_path }}">
     {# Alpine.data() component registrations — MUST load BEFORE the alpine-csp core
        script so registrations are present when Alpine boots and walks the DOM
