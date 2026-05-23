@@ -106,12 +106,18 @@ server {
   # Phase 11 PWA service worker needs scope: / — file is served from /sw.js so the
   # default scope already allows it, but the explicit header is required if the file
   # ever moves under /static/. Documented here now to avoid a retroactive edit.
+  #
+  # IMPORTANT (PWA-7): the app already sets Cache-Control: no-cache on the /sw.js
+  # response. Do NOT add an override like `add_header Cache-Control "public, max-age=..."`.
+  # Caching the service worker file causes users to run stale SW code after deploys.
+  # The no-cache directive ensures the browser revalidates on every page load.
   location = /sw.js {
     proxy_pass http://127.0.0.1:8080;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     add_header Service-Worker-Allowed "/" always;
+    # Do not set Cache-Control here — the app sends Cache-Control: no-cache (PWA-7).
   }
 
   location / {
