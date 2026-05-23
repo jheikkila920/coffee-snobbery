@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{#
+  Guided Brew Mode — full-screen page (BREW-12/13, Phase 11 / Plan 04).
+
+  Covers the bottom nav via fixed inset-0 z-50 (D-20). The guidedBrewMode Alpine
+  component owns all timer/wake-lock/cue state. Three screens toggled by Alpine state:
+    - Start screen (pre-start / zero-steps disabled state)
+    - Timer screen (countdown + step progress + cues)
+    - Done screen (log or skip)
+
+  NoSleep.js is loaded ONLY on this page via head_extra (Pitfall 5 — not globally).
+  The guided-brew-mode.js component is also loaded here so it registers with Alpine
+  before the CSP core boots; this page is the only surface that uses guidedBrewMode.
+
+  CSP-strict: no |safe, no inline hx-on:, no hx-vals='js:'. Autoescape ON.
+#}
+{% block page_title %}Guided brew{% endblock %}
+{% block head_extra %}
+  {# guided-brew-mode.js registers Alpine.data('guidedBrewMode') — must load
+     BEFORE the @alpinejs/csp core (which is in base.html after head_extra). #}
+  <script defer src="/static/js/alpine-components/guided-brew-mode.js" nonce="{{ csp_nonce(request) }}"></script>
+  {# NoSleep.js v0.12.0 — self-hosted iOS wake-lock fallback. Loaded ONLY on
+     the GBM page (RESEARCH Pitfall 5). Nonce-tagged per CSP requirement. #}
+  <script defer src="/static/js/vendor/NoSleep.min.js" nonce="{{ csp_nonce(request) }}"></script>
+{% endblock %}
+{% block content %}
+  {# Full-screen GBM container — covers the persistent bottom nav (z-50 > z-40 nav).
+     The three Alpine-toggled screens live inside this single x-data scope. #}
+  <div x-data="guidedBrewMode"
+       data-recipe-id="{{ recipe.id }}"
+       data-coffee-id="{{ coffee.id if coffee else '' }}"
+       data-steps="{{ recipe.steps | tojson }}"
+       class="fixed inset-0 z-50 flex flex-col bg-cream-50 dark:bg-espresso-950 overflow-y-auto">
+
+    {# ── No-steps state ── show when recipe.steps is empty; no JS needed #}
+    {% if not recipe.steps %}
+      <div class="flex flex-col items-center justify-center min-h-screen gap-6 px-6 text-center">
+        <h1 class="text-2xl font-semibold">{{ recipe.name }}</h1>
+        <p class="text-base text-espresso-700 dark:text-cream-200">Recipe has no steps.</p>
+        <p class="text-sm text-espresso-600 dark:text-cream-300">
+          Add steps in the recipe builder before starting a guided brew.
+        </p>
+        <a href="/recipes/{{ recipe.id }}/edit"
+           class="rounded bg-espresso-700 text-cream-50 px-6 py-3 text-base font-semibold min-h-[56px] inline-flex items-center justify-center hover:bg-espresso-800">
+          Go to recipe builder
+        </a>
+        <a href="/brew" class="text-sm text-espresso-600 dark:text-cream-300 underline">
+          Back to brews
+        </a>
+      </div>
+
+    {# ── Active GBM (recipe has steps) ── #}
+    {% else %}
+
+      {# === START SCREEN === shown before start() is called #}
+      <div x-show="!isRunning && !isDone" class="flex flex-col min-h-screen px-6 py-8 gap-6">
+
+        {# Header row #}
+        <div class="flex items-center justify-between">
+          <a href="/brew" class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
+            Cancel
+          </a>
+        </div>
+
+        {# Recipe info #}
+        <div class="flex-1 flex flex-col gap-4">
+          <h1 class="text-2xl font-semibold">{{ recipe.name }}</h1>
+          {% if coffee %}
+            <p class="text-base text-espresso-700 dark:text-cream-200">{{ coffee.name }}</p>
+          {% endif %}
+          <div class="text-sm text-espresso-600 dark:text-cream-300 tabular-nums">
+            {{ recipe.dose_grams }}g dose · {{ recipe.water_grams }}g water ·
+            {{ recipe.steps | length }} step{% if recipe.steps | length != 1 %}s{% endif %}
+            {% if recipe.water_temp_c %}· {{ recipe.water_temp_c }}°C{% endif %}
+          </div>
+
+          {# Step preview list #}
+          <div class="rounded-lg border border-espresso-200 dark:border-espresso-700 overflow-hidden">
+            {% for step in recipe.steps %}
+              <div class="flex items-center justify-between px-4 py-3 {% if not loop.last %}border-b border-espresso-100 dark:border-espresso-800{% endif %}">
+                <span class="text-sm font-medium">{{ step.label or ('Step ' ~ loop.index) }}</span>
+                <span class="text-sm tabular-nums text-espresso-600 dark:text-cream-300">
+                  {% if step.water_grams %}{{ step.water_grams }}g{% endif %}
+                  {% if step.time_seconds %}· {{ step.time_seconds // 60 }}:{{ '%02d' % (step.time_seconds % 60) }}{% endif %}
+                </span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Cue toggles #}
+        <div class="rounded-lg border border-espresso-200 dark:border-espresso-700 p-4 flex flex-col gap-4">
+          <p class="text-sm font-semibold text-espresso-700 dark:text-cream-200">Audio &amp; haptic cues</p>
+          <div class="flex items-center justify-between">
+            <label for="gbm-chime" class="text-sm">Chime at each step</label>
+            <button type="button"
+                    id="gbm-chime"
+                    x-on:click="toggleChime()"
+                    :aria-checked="cuePrefs.chime.toString()"
+                    role="switch"
+                    :class="cuePrefs.chime ? 'bg-espresso-700' : 'bg-espresso-300 dark:bg-espresso-700'"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors min-h-[44px] min-w-[44px] justify-center">
+              <span :class="cuePrefs.chime ? 'translate-x-5' : 'translate-x-1'"
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+            </button>
+          </div>
+          <div class="flex items-center justify-between">
+            <label for="gbm-vibrate" class="text-sm">Vibration at each step</label>
+            <button type="button"
+                    id="gbm-vibrate"
+                    x-on:click="toggleVibrate()"
+                    :aria-checked="cuePrefs.vibrate.toString()"
+                    role="switch"
+                    :class="cuePrefs.vibrate ? 'bg-espresso-700' : 'bg-espresso-300 dark:bg-espresso-700'"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors min-h-[44px] min-w-[44px] justify-center">
+              <span :class="cuePrefs.vibrate ? 'translate-x-5' : 'translate-x-1'"
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+            </button>
+          </div>
+        </div>
+
+        {# Start CTA #}
+        <button type="button"
+                x-on:click="start()"
+                class="rounded bg-espresso-700 text-cream-50 px-6 py-4 text-lg font-semibold min-h-[56px] w-full flex items-center justify-center hover:bg-espresso-800 focus:outline-none focus:ring-2 focus:ring-espresso-700 focus:ring-offset-2">
+          Start guided brew
+        </button>
+
+        <p class="text-xs text-espresso-500 dark:text-cream-400 text-center pb-4">
+          Keep your screen on for the full brew.
+        </p>
+      </div>
+
+      {# === TIMER SCREEN === shown while isRunning (paused or running) #}
+      <div x-show="isRunning && !isDone" style="display:none" class="flex flex-col min-h-screen px-4 py-6 gap-4">
+
+        {# Top row: cancel + wake lock indicator #}
+        <div class="flex items-center justify-between">
+          <button type="button"
+                  x-on:click="cancelWithoutLogging()"
+                  class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
+            &times; Cancel without logging
+          </button>
+          <span x-show="wakeLockState === 'held'"
+                class="text-xs text-green-600 dark:text-green-400 tabular-nums">
+            ● Screen stays on
+          </span>
+          <span x-show="wakeLockState === 'fallback'"
+                class="text-xs text-yellow-600 dark:text-yellow-400 tabular-nums">
+            ● Screen kept on (fallback)
+          </span>
+        </div>
+
+        {# Step counter #}
+        <div class="text-center text-sm text-espresso-600 dark:text-cream-300">
+          Step <span x-text="currentStepIndex + 1"></span> of <span x-text="stepCount"></span>
+        </div>
+
+        {# Countdown #}
+        <div class="text-center">
+          <span class="text-7xl font-semibold tabular-nums" x-text="formattedRemaining">00:00</span>
+        </div>
+
+        {# Progress bar #}
+        <div class="w-full h-1 bg-espresso-200 dark:bg-espresso-700 rounded-full">
+          <div class="h-1 bg-espresso-700 dark:bg-cream-200 rounded-full transition-all"
+               :style="'width: ' + progressPct + '%'"></div>
+        </div>
+
+        {# Current step card #}
+        <div class="rounded-lg bg-espresso-700 text-cream-50 px-4 py-4 flex flex-col gap-1">
+          <p class="text-base font-semibold" x-text="currentStep ? (currentStep.label || 'Step ' + (currentStepIndex + 1)) : ''"></p>
+          <p class="text-sm tabular-nums opacity-80"
+             x-show="currentStep && currentStep.water_grams"
+             x-text="currentStep ? currentStep.water_grams + 'g / {{ recipe.water_grams }}g total' : ''"></p>
+        </div>
+
+        {# Upcoming step preview #}
+        <div x-show="nextStep" class="text-sm text-espresso-600 dark:text-cream-300">
+          Next: <span x-text="nextStep ? (nextStep.label || 'Step ' + (currentStepIndex + 2)) : ''"></span>
+          <span x-show="nextStep && nextStep.water_grams"
+                x-text="nextStep ? ' — ' + nextStep.water_grams + 'g' : ''"
+                class="tabular-nums"></span>
+        </div>
+
+        {# Elapsed time #}
+        <div class="text-center text-sm text-espresso-600 dark:text-cream-300 tabular-nums">
+          Elapsed: <span x-text="formattedElapsed"></span>
+        </div>
+
+        {# Timer controls #}
+        <div class="flex gap-3">
+          <button type="button"
+                  x-on:click="togglePause()"
+                  :class="isPaused ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 text-espresso-800 dark:border-espresso-600 dark:text-cream-200'"
+                  class="flex-1 rounded px-4 py-3 text-base font-semibold min-h-[56px] flex items-center justify-center hover:opacity-90">
+            <span x-text="isPaused ? 'Resume' : 'Pause'">Pause</span>
+          </button>
+          <button type="button"
+                  x-on:click="nextStep_action()"
+                  class="flex-1 rounded bg-espresso-700 text-cream-50 px-4 py-3 text-base font-semibold min-h-[56px] flex items-center justify-center hover:bg-espresso-800">
+            Next step
+          </button>
+        </div>
+
+        {# In-brew cue mute toggles #}
+        <div class="flex gap-4 justify-center pt-2">
+          <button type="button"
+                  x-on:click="toggleChime()"
+                  :aria-label="cuePrefs.chime ? 'Mute chime' : 'Unmute chime'"
+                  :class="cuePrefs.chime ? 'text-espresso-700 dark:text-cream-200' : 'text-espresso-400 dark:text-espresso-500'"
+                  class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded border border-espresso-200 dark:border-espresso-700 px-3">
+            <span aria-hidden="true" x-text="cuePrefs.chime ? '🔔' : '🔕'"></span>
+            <span class="sr-only" x-text="cuePrefs.chime ? 'Mute chime' : 'Unmute chime'"></span>
+          </button>
+          <button type="button"
+                  x-on:click="toggleVibrate()"
+                  :aria-label="cuePrefs.vibrate ? 'Disable vibration' : 'Enable vibration'"
+                  :class="cuePrefs.vibrate ? 'text-espresso-700 dark:text-cream-200' : 'text-espresso-400 dark:text-espresso-500'"
+                  class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded border border-espresso-200 dark:border-espresso-700 px-3">
+            <span aria-hidden="true">📳</span>
+            <span class="sr-only" x-text="cuePrefs.vibrate ? 'Disable vibration' : 'Enable vibration'"></span>
+          </button>
+        </div>
+      </div>
+
+      {# === DONE SCREEN === shown after all steps complete #}
+      <div x-show="isDone" style="display:none" class="flex flex-col items-center justify-center min-h-screen px-6 gap-6 text-center">
+        <h1 class="text-2xl font-semibold">Brew complete!</h1>
+        <p class="text-xl tabular-nums text-espresso-700 dark:text-cream-200">
+          Time: <span x-text="formattedElapsed"></span>
+        </p>
+        <p class="text-sm text-espresso-600 dark:text-cream-300">
+          Log this brew to track your snobbery.
+        </p>
+        <button type="button"
+                x-on:click="finishBrewing()"
+                class="rounded bg-espresso-700 text-cream-50 px-6 py-4 text-base font-semibold min-h-[56px] w-full flex items-center justify-center hover:bg-espresso-800">
+          Log this brew
+        </button>
+        <button type="button"
+                x-on:click="doneWithoutLogging()"
+                class="rounded border border-espresso-300 text-espresso-800 dark:border-espresso-700 dark:text-cream-200 px-6 py-3 text-base min-h-[44px] w-full flex items-center justify-center hover:bg-espresso-50 dark:hover:bg-espresso-900">
+          Done without logging
+        </button>
+      </div>
+
+    {% endif %}
+  </div>
+{% endblock %}
