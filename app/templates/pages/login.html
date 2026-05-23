@@ -1,21 +1,48 @@
 {% extends "base.html" %}
 {% block page_title %}Sign in{% endblock %}
 {% block content %}
-  <main class="mx-auto max-w-prose px-6 py-12">
-    <h1 class="text-2xl font-semibold">Sign in to Snobbery</h1>
-    {% if error %}<p class="mt-4 text-red-700">{{ error }}</p>{% endif %}
-    <form method="post" action="/login" class="mt-6 flex flex-col gap-4">
-      {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
-      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
-      <label class="flex flex-col">Username
-        <input name="username" required value="{{ username or '' }}" class="rounded border px-2 py-1">
-      </label>
-      <label class="flex flex-col">Password
-        <input name="password" type="password" required class="rounded border px-2 py-1">
-      </label>
-      <button type="submit" class="mt-2 self-start rounded bg-espresso-900 px-4 py-2 text-cream-50">
-        Sign in
-      </button>
-    </form>
-  </main>
+  {# Login page — always dark (D-14, UI-SPEC §2). The base body class is
+     bg-cream-50 (light) but we override the whole screen with a full-height
+     dark wrapper; this avoids modifying the base body class. #}
+  <div class="min-h-screen bg-espresso-950 flex flex-col items-center justify-center px-6 py-12">
+
+    {# Mascot hero — centered, constrained width (D-13, UI-SPEC §2) #}
+    <img src="/static/img/snobbery-login-hero.jpg"
+         alt="Snobbery"
+         class="max-w-[280px] md:max-w-[360px] mx-auto rounded-xl mb-6">
+
+    {# Login card — dark surface, light text #}
+    <div class="bg-espresso-900 rounded-xl p-6 shadow-xl max-w-sm w-full">
+      {% if error %}
+        <p class="text-red-400 mb-4 text-sm">{{ error }}</p>
+      {% endif %}
+
+      <form method="post" action="/login" class="flex flex-col gap-4">
+        {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
+        <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+        <label class="flex flex-col gap-1 text-sm font-semibold text-cream-100">
+          Username
+          <input name="username"
+                 required
+                 value="{{ username or '' }}"
+                 class="rounded border border-espresso-700 bg-espresso-800 text-cream-100 px-3 py-2 text-base placeholder-cream-300">
+        </label>
+
+        <label class="flex flex-col gap-1 text-sm font-semibold text-cream-100">
+          Password
+          <input name="password"
+                 type="password"
+                 required
+                 class="rounded border border-espresso-700 bg-espresso-800 text-cream-100 px-3 py-2 text-base">
+        </label>
+
+        {# CTA — inverted: light button on dark surface (UI-SPEC §2) #}
+        <button type="submit"
+                class="mt-2 rounded bg-cream-50 px-4 py-3 text-base font-semibold text-espresso-900 hover:bg-cream-100 min-h-[44px]">
+          Sign in
+        </button>
+      </form>
+    </div>
+  </div>
 {% endblock %}

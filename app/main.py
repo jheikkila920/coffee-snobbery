@@ -89,6 +89,7 @@ from app.routers import brew as brew_router
 from app.routers import coffees as coffees_router
 from app.routers import csp_report as csp_report_router
 from app.routers import pwa as pwa_router
+from app.routers import config_hub as config_hub_router
 from app.routers import debug as debug_router
 from app.routers import equipment as equipment_router
 from app.routers import flavor_notes as flavor_notes_router
@@ -241,6 +242,7 @@ def create_app() -> FastAPI:
     app.include_router(bags_router.router)
     app.include_router(brew_router.router)
     app.include_router(home_router.router)
+    app.include_router(config_hub_router.router)
     app.include_router(ai_router.router)
     app.include_router(photos_router.router)
     app.include_router(search_router.router)
