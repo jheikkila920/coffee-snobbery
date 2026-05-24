@@ -88,11 +88,16 @@ services:
       SNOB_CI: "1"
     networks:
       - coffee-snobbery-net
-    # Source bind-mount: test runs pick up local changes without a rebuild.
-    # No container_name (allows parallel `run` invocations), no restart, no ports,
-    # no photo/backup volumes.
-    volumes:
-      - .:/app
+    # No source bind-mount on purpose. A `.:/app` mount masks the image's baked
+    # (gitignored) app/static/css/tailwind.<hash>.css, making app.main unimportable
+    # and silently skipping ~a third of the suite ("Tailwind CSS missing") — exactly
+    # the hollow green-by-skip the D-02 gate forbids. The gate runs the BAKED tree,
+    # so refresh code with a rebuild before running:
+    #   docker compose build coffee-snobbery-test && docker compose run --rm coffee-snobbery-test
+    # (or one-shot: docker compose run --build --rm coffee-snobbery-test).
+    # Fast per-file iteration: `docker compose cp` into the live coffee-snobbery
+    # container (see CLAUDE.md). No container_name (parallel `run`), no restart,
+    # no ports, no photo/backup volumes.
 
 networks:
   coffee-snobbery-net:
