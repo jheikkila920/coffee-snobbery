@@ -1,0 +1,69 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: snobbery
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+
+      # Build the content-hashed Tailwind CSS file that app/main.py requires at
+      # startup.  Mirrors Dockerfile stage 1 exactly: same binary version,
+      # same sha256 hash scheme, same --minify flag.  Without this step
+      # app.main raises RuntimeError("Tailwind CSS missing...") and the
+      # app fixture skips — producing hollow-green results that SNOB_CI=1
+      # is designed to prevent.
+      - name: Build Tailwind CSS
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64" \
+            -o /usr/local/bin/tailwindcss
+          chmod +x /usr/local/bin/tailwindcss
+          HASH="$(sha256sum app/static/css/tailwind.src.css | cut -c1-8)"
+          tailwindcss \
+            -i app/static/css/tailwind.src.css \
+            -o "app/static/css/tailwind.${HASH}.css" \
+            --minify
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Pytest full suite
+        env:
+          DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/snobbery
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: snobbery
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY || 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }}
+          APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789a=' }}
+          SNOB_CI: "1"
+        run: python -m pytest tests/ -rs --tb=short --ignore=tests/e2e
