@@ -25,7 +25,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 9 | 6/6 | Complete   | 2026-05-21 |
 | 10 | 3/3 | Complete   | 2026-05-22 |
 | 11 | 5/5 | Complete    | 2026-05-23 |
-| 12 | 5/7 | In Progress|  |
+| 12 | 7/7 | Complete   | 2026-05-24 |
 
 **Total mapped requirements:** 116/116
 
@@ -45,7 +45,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
  (completed 2026-05-21)
 - [x] **Phase 10: Global Search** â€” FTS-vs-trigram decision at plan time, Postgres-based cross-entity search with per-user session-note scoping, debounced HTMX live results (completed 2026-05-22)
 - [x] **Phase 11: PWA + Mobile Polish** â€” Manifest from `/manifest.json`, `/sw.js` at root with `Service-Worker-Allowed: /`, dual theme-color metas, maskable icons, iOS install banner, bottom/top nav, card-list collapse, Guided Brew Mode with wake-lock fallback, aesthetic + dark mode + branding (completed 2026-05-23)
-- [ ] **Phase 12: Hardening + Tests** â€” Pytest smoke (happy path), `respx`-backed AI service tests, encryption round-trip + rotation test, analytics-query tests, CSRF tests, Playwright responsive smoke at 375Ã—667 and 390Ã—844, CSP audit, `|safe` grep test
+- [x] **Phase 12: Hardening + Tests** â€” Pytest smoke (happy path), `respx`-backed AI service tests, encryption round-trip + rotation test, analytics-query tests, CSRF tests, Playwright responsive smoke at 375Ã—667 and 390Ã—844, CSP audit, `|safe` grep test (completed 2026-05-24)
 
 ## Phase Details
 
@@ -343,7 +343,7 @@ Plans:
   3. Playwright responsive smoke runs at 375Ã—667 and 390Ã—844 and asserts: bottom nav present and functional, brew session form usable without horizontal scroll, photo upload control present, home page analytics cards stack vertically and remain readable, no form input triggers iOS focus zoom (computed font-size â‰¥16px on every input/select/textarea).
   4. CI grep test fails the build if `|safe` appears anywhere under `templates/pages/`; a CSP audit (manual or scripted) confirms every `<script>` and `<style>` carries a nonce and no `'unsafe-eval'` or `'unsafe-inline'` is present outside the documented trade-off in `docs/decisions/`.
   5. README is publishable: documents the NGINX server block (including `proxy_set_header X-Forwarded-Proto $scheme`, the `Strict-Transport-Security` line, and `Cache-Control: no-cache` on `/sw.js`), the `.env.example` generation hints, the single-uvicorn-worker requirement (re-stated), the backup restore runbook (per CLAUDE.md), and the iOS Wake-Lock-fallback caveat.
-**Plans:** 5/7 plans executed
+**Plans:** 7/7 plans complete
 Plans:
 **Wave 1** *(parallel — disjoint files; the D-01/D-02 conftest spine + the independent grep tests)*
 - [x] 12-01-PLAN.md — D-01 full-suite isolation teardown (FK-safe catalog TRUNCATE + settings _cache.clear) + D-02 SNOB_CI skip-enforcement + addopts -x drop
@@ -357,10 +357,10 @@ Plans:
 - [x] 12-05-PLAN.md — D-03 Dockerfile dev/test stage + compose test profile + playwright pin (prod image stays pytest-free)
 
 **Wave 4** *(blocked on 12-05 — needs the baked chromium dev image)*
-- [ ] 12-06-PLAN.md — TEST-06 Playwright responsive smoke at 375x667 + 390x844 (tests/e2e/, local-only D-06) + pre-deploy human-verify
+- [x] 12-06-PLAN.md — TEST-06 Playwright responsive smoke at 375x667 + 390x844 (tests/e2e/, local-only D-06) + pre-deploy human-verify
 
 **Wave 5** *(blocked on 12-01, 12-02, 12-05)*
-- [ ] 12-07-PLAN.md — D-04 GitHub Actions CI (ruff + grep + full pytest vs Postgres 16, SNOB_CI=1, e2e excluded) + D-08 README gap-fill (iOS Wake-Lock caveat + G-01 chown note)
+- [x] 12-07-PLAN.md — D-04 GitHub Actions CI (ruff + grep + full pytest vs Postgres 16, SNOB_CI=1, e2e excluded) + D-08 README gap-fill (iOS Wake-Lock caveat + G-01 chown note)
 **Notes:** Carries HX-6 (|safe grep), SEC-1 (CSP audit), MX-1 (Playwright zoom), SEC-6 (model_dump grep). Final ship gate; if any item slips, the project does not deploy. AUDIT + GAP-FILL phase: TEST-02..05 are verify-and-extend (Plan 04), not rebuilds. Net-new: TEST-01 smoke, TEST-06 Playwright, D-01/D-02 isolation+skip spine, D-07 grep tests, D-03 dev image + compose test profile, D-04 CI. Out of scope: full per-router coverage, new features, the G-01 VPS chown deploy fix (README note only, D-08).
 
 ## Progress
