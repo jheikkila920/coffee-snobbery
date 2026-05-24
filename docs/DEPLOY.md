@@ -54,18 +54,36 @@ cd coffee-snobbery
 cp .env.example .env
 ```
 
-Generate each secret and paste it into `.env`:
+Generate each secret and paste it into `.env`. These use only `openssl` (present on
+every Linux VPS) so they work before the app image is built and do not depend on the
+host Python having the app's libraries installed:
 
 ```bash
 # POSTGRES_PASSWORD
 openssl rand -hex 32
 
 # APP_SECRET_KEY
-python -c "import secrets; print(secrets.token_urlsafe(64))"
+openssl rand -hex 64
 
 # APP_ENCRYPTION_KEY  (Fernet key; comma-separated list, first = primary)
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Fernet requires url-safe base64 of 32 bytes; the tr step converts +/ to -_.
+openssl rand -base64 32 | tr '+/' '-_'
 ```
+
+> The Fernet key MUST be url-safe base64 — do not use a bare `openssl rand -base64 32`
+> (its `+`/`/` characters are rejected by Fernet). The `tr '+/' '-_'` step is required.
+>
+> Alternatively, once the image is built (step 4), generate the key with the app's own
+> `cryptography` (the canonical method) — no host Python needed:
+>
+> ```bash
+> docker run --rm coffee-snobbery:latest \
+>   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+> ```
+>
+> Do NOT run `python -c "from cryptography.fernet import Fernet; ..."` directly on the
+> host unless `cryptography` is installed there — a fresh host Python will raise
+> `ModuleNotFoundError: No module named 'cryptography'`.
 
 Then review the rest:
 

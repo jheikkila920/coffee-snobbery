@@ -104,7 +104,12 @@
       "Bash(git -C C:/Claude/Coffee-Snobbery/.claude/worktrees/agent-a1f84687c554b8628 rev-parse --abbrev-ref HEAD)",
       "Bash(git -C C:/Claude/Coffee-Snobbery/.claude/worktrees/agent-a1f84687c554b8628 log --oneline 6e352e0..HEAD)",
       "Bash(grep -nA2 \"ports:\" docker-compose.yml)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(echo \"use_worktrees: $\\(gsd-sdk query config-get workflow.use_worktrees 2>/dev/null || echo unset\\)\")",
+      "Bash(echo \"commit_docs: $\\(gsd-sdk query config-get commit_docs 2>/dev/null || echo unset\\)\")",
+      "Bash(docker version *)",
+      "Bash(git -C C:/Claude/Coffee-Snobbery show 60482d0 --stat)",
+      "Bash(git -C C:/Claude/Coffee-Snobbery show 60482d0 -- app/main.py)"
     ]
   }
 }
