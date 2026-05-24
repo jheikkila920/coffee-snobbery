@@ -143,6 +143,16 @@ docker compose logs -f coffee-snobbery   # confirm healthy startup + migrations
 
 Migrations run automatically on container start via `entrypoint.sh` (`alembic upgrade head` precedes `exec uvicorn`).
 
+#### One-time: fix root-owned volumes on an existing VPS deployment (G-01)
+
+Volumes created before the Phase 8 Dockerfile fix are owned by `root`, which blocks the `app` user (UID 1000) from writing backups and photo uploads. Fresh deploys do not need this step — the Dockerfile creates `app`-owned mountpoints for new volumes.
+
+If you deployed before Phase 8 and backups or photo uploads fail with permission errors:
+
+```bash
+docker compose run --rm -u root coffee-snobbery chown -R app:app /app/data
+```
+
 ### TRUSTED_PROXY_IPS
 
 The default `TRUSTED_PROXY_IPS=127.0.0.1` aligns with the recommended deployment shape: NGINX runs on the same host, proxies to the compose-exposed `127.0.0.1:8080`, and the X-Forwarded-* headers from NGINX are honored.
@@ -217,6 +227,14 @@ tar -xzf /app/data/backups/photos_YYYY-MM-DD.tar.gz -C /app/data/photos
 **Migrations didn't run on startup.** Look for `Running upgrade ... -> 0001_initial` in `docker compose logs coffee-snobbery`. If you see the line, migrations ran. If you don't, the container is likely in a restart loop — inspect the logs for the alembic error (a duplicate-table conflict means someone ran the migration manually against a populated DB; clean-state recovery is to drop the volume and start over).
 
 **`pg_dump` version mismatch in backups.** The image installs `postgresql-client-16` from the PGDG apt repo specifically because the `python:3.12-slim` default is `postgresql-client-15`, which silently truncates v16-only column types. If a future image bump changes this, `make smoke` will catch it (it asserts `pg_dump --version` reports a `16.x` line).
+
+## Known caveats
+
+### iOS Wake Lock — silent-audio fallback
+
+Guided Brew Mode requests the [Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) (`navigator.wakeLock.request("screen")`) to keep the screen on during a brew timer. iOS Safari has incomplete Wake Lock support (the API exists but is unreliable across iOS versions and low-power mode). When the native API fails or is unavailable, the app falls back to a silent-audio-loop technique (a looped, inaudible audio element) inspired by NoSleep.js to suppress sleep.
+
+The lock is re-acquired on `visibilitychange → visible` (e.g., after the user switches back to the browser tab). A visible on-screen indicator shows whether the screen-stay-on is active. On iOS, test on a real device — simulator behavior does not match.
 
 ## Project history
 
