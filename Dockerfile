@@ -124,3 +124,32 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/healthz || exit 1
 
 ENTRYPOINT ["./entrypoint.sh"]
+
+# --- Stage 3: Dev/test — extends runtime with pytest + playwright ------------
+#
+# Inherits the compiled Tailwind CSS from `runtime` (via COPY --from=tailwind-builder
+# above), so the conftest `app` fixture does not skip with "Tailwind CSS missing"
+# (RESEARCH.md Pitfall 2). The prod `runtime` stage is untouched — no test tooling
+# leaks into production images (CLAUDE.md invariant / T-12-10).
+#
+# One-command gate: docker compose run --rm coffee-snobbery-test
+FROM runtime AS dev
+
+USER root
+
+# Install dev deps (pytest, ruff, mypy, respx, playwright Python bindings, etc.)
+COPY requirements-dev.txt ./
+RUN pip install -r requirements-dev.txt
+
+# Install Chromium browser binary + OS-level deps for bookworm-slim
+# (libglib2.0-0, libfontconfig, libx11-6, etc.).
+# --with-deps handles all system library requirements automatically.
+RUN playwright install chromium --with-deps
+
+USER app
+
+# Override entrypoint for test invocations.
+# Full gate: docker compose run --rm coffee-snobbery-test
+# E2e only:  docker compose run --rm coffee-snobbery-test tests/e2e/ -rs
+ENTRYPOINT ["python", "-m", "pytest"]
+CMD ["tests/", "-rs", "--tb=short", "--ignore=tests/e2e"]
