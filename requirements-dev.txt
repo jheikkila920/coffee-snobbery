@@ -9,4 +9,5 @@ pytest>=9.0,<10
 pytest-asyncio
 pytest-cov
 respx
+playwright>=1.59,<2
 # httpx is already in requirements.txt; FastAPI TestClient depends on it.
