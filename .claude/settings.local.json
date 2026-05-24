@@ -103,7 +103,8 @@
       "Bash(curl *)",
       "Bash(git -C C:/Claude/Coffee-Snobbery/.claude/worktrees/agent-a1f84687c554b8628 rev-parse --abbrev-ref HEAD)",
       "Bash(git -C C:/Claude/Coffee-Snobbery/.claude/worktrees/agent-a1f84687c554b8628 log --oneline 6e352e0..HEAD)",
-      "Bash(grep -nA2 \"ports:\" docker-compose.yml)"
+      "Bash(grep -nA2 \"ports:\" docker-compose.yml)",
+      "PowerShell(Get-Command *)"
     ]
   }
 }

@@ -133,8 +133,10 @@ def admin_system(
         app_version = pkg_version("coffee-snobbery")
     except PackageNotFoundError:
         # Fallback when the package is not installed (e.g., running tests
-        # directly in the container without pip install -e).
-        _pyproject = Path("/app/pyproject.toml")
+        # directly against the source tree without pip install). Resolve
+        # pyproject.toml from the repo root relative to this file so it works
+        # both in the container (/app) and on CI (checkout dir), not just /app.
+        _pyproject = Path(__file__).resolve().parents[3] / "pyproject.toml"
         if _pyproject.exists():
             with _pyproject.open("rb") as _f:
                 app_version = tomllib.load(_f).get("project", {}).get("version", "unknown")
