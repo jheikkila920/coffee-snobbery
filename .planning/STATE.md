@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-16)
 Phase: 12
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-05-24
+Last activity: 2026-05-24 -- Completed quick task 260524-hg6: redirect unauthenticated requests to /login
 
 Progress: [██████████] 96%
 
@@ -144,6 +144,7 @@ Three plan-phase research flags carried forward:
 | 260519-ql9 | Codex review bucket-A fixes (duplicate-name 500→inline error, stale Makefile smoke head, CSRF docstring) | 2026-05-20 | e37cdf3, e9184c2, 9678787 | [260519-ql9-codex-bucket-a-fixes](./quick/260519-ql9-codex-bucket-a-fixes/) |
 | 260520-ite | Harden Phase 5 audit findings: W-01 CSV upload Content-Length pre-check, W-02 widen Jinja safety test to all templates | 2026-05-20 | e4f1cf5, ccf98f3 | [260520-ite-harden-phase-5-security-audit-findings-w](./quick/260520-ite-harden-phase-5-security-audit-findings-w/) |
 | 260520-qov | Brighten brew-rating stars from dark espresso to amber-400 (home cards + sessions list) | 2026-05-20 | 5c96ec8 | [260520-qov-brighten-rating-stars-amber](./quick/260520-qov-brighten-rating-stars-amber/) |
+| 260524-hg6 | Redirect unauthenticated browser requests to /login instead of JSON 401 (HTMX -> HX-Redirect; JSON client unchanged) | 2026-05-24 | 60482d0, 1b8c648 | [260524-hg6-redirect-unauthenticated-requests-to-log](./quick/260524-hg6-redirect-unauthenticated-requests-to-log/) |
 
 ## Deferred Items
 
