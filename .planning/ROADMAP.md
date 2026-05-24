@@ -25,7 +25,7 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 | 9 | 6/6 | Complete   | 2026-05-21 |
 | 10 | 3/3 | Complete   | 2026-05-22 |
 | 11 | 5/5 | Complete    | 2026-05-23 |
-| 12 | 2/7 | In Progress|  |
+| 12 | 5/7 | In Progress|  |
 
 **Total mapped requirements:** 116/116
 
@@ -343,18 +343,18 @@ Plans:
   3. Playwright responsive smoke runs at 375Ã—667 and 390Ã—844 and asserts: bottom nav present and functional, brew session form usable without horizontal scroll, photo upload control present, home page analytics cards stack vertically and remain readable, no form input triggers iOS focus zoom (computed font-size â‰¥16px on every input/select/textarea).
   4. CI grep test fails the build if `|safe` appears anywhere under `templates/pages/`; a CSP audit (manual or scripted) confirms every `<script>` and `<style>` carries a nonce and no `'unsafe-eval'` or `'unsafe-inline'` is present outside the documented trade-off in `docs/decisions/`.
   5. README is publishable: documents the NGINX server block (including `proxy_set_header X-Forwarded-Proto $scheme`, the `Strict-Transport-Security` line, and `Cache-Control: no-cache` on `/sw.js`), the `.env.example` generation hints, the single-uvicorn-worker requirement (re-stated), the backup restore runbook (per CLAUDE.md), and the iOS Wake-Lock-fallback caveat.
-**Plans:** 2/7 plans executed
+**Plans:** 5/7 plans executed
 Plans:
 **Wave 1** *(parallel — disjoint files; the D-01/D-02 conftest spine + the independent grep tests)*
 - [x] 12-01-PLAN.md — D-01 full-suite isolation teardown (FK-safe catalog TRUNCATE + settings _cache.clear) + D-02 SNOB_CI skip-enforcement + addopts -x drop
 - [x] 12-02-PLAN.md — D-07a CSP nonce/unsafe-* template grep + D-07b SEC-6 model_dump-on-ApiCredential grep (tests/ci/)
 
 **Wave 2** *(blocked on 12-01 — needs corrected fixtures + skip gate)*
-- [ ] 12-03-PLAN.md — TEST-01 full happy-path smoke (setup → coffee → equipment → recipe → session → home), hard test under SNOB_CI
-- [ ] 12-04-PLAN.md — TEST-02..05 VERIFY-AND-EXTEND (ai_service / encryption / analytics / CSRF coverage mapping; gap-closers only)
+- [x] 12-03-PLAN.md — TEST-01 full happy-path smoke (setup → coffee → equipment → recipe → session → home), hard test under SNOB_CI
+- [x] 12-04-PLAN.md — TEST-02..05 VERIFY-AND-EXTEND (ai_service / encryption / analytics / CSRF coverage mapping; gap-closers only)
 
 **Wave 3** *(blocked on 12-01)*
-- [ ] 12-05-PLAN.md — D-03 Dockerfile dev/test stage + compose test profile + playwright pin (prod image stays pytest-free)
+- [x] 12-05-PLAN.md — D-03 Dockerfile dev/test stage + compose test profile + playwright pin (prod image stays pytest-free)
 
 **Wave 4** *(blocked on 12-05 — needs the baked chromium dev image)*
 - [ ] 12-06-PLAN.md — TEST-06 Playwright responsive smoke at 375x667 + 390x844 (tests/e2e/, local-only D-06) + pre-deploy human-verify
