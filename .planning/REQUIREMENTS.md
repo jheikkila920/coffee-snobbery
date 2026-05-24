@@ -156,12 +156,12 @@
 
 ### Testing (TEST)
 
-- [ ] **TEST-01**: Pytest smoke test covers the acceptance-criteria happy path: create user → create coffee → create equipment → create recipe → log session → view home page renders
-- [ ] **TEST-02**: Unit tests for `services/ai_service.py` signature computation + provider fallback logic (using `respx` for HTTP fixtures)
-- [ ] **TEST-03**: Unit tests for `services/encryption.py` round-trip + MultiFernet key rotation
-- [ ] **TEST-04**: Unit tests for `services/analytics.py` queries against a seeded test DB (top coffees, preference profile, sweet spots, roast freshness)
-- [ ] **TEST-05**: Unit tests for CSRF middleware (positive + negative)
-- [ ] **TEST-06**: Playwright responsive smoke at 375×667 and 390×844 viewports
+- [x] **TEST-01**: Pytest smoke test covers the acceptance-criteria happy path: create user → create coffee → create equipment → create recipe → log session → view home page renders
+- [x] **TEST-02**: Unit tests for `services/ai_service.py` signature computation + provider fallback logic (using `respx` for HTTP fixtures)
+- [x] **TEST-03**: Unit tests for `services/encryption.py` round-trip + MultiFernet key rotation
+- [x] **TEST-04**: Unit tests for `services/analytics.py` queries against a seeded test DB (top coffees, preference profile, sweet spots, roast freshness)
+- [x] **TEST-05**: Unit tests for CSRF middleware (positive + negative)
+- [x] **TEST-06**: Playwright responsive smoke at 375×667 and 390×844 viewports
 
 ---
 
@@ -310,12 +310,12 @@ Every v1 REQ-ID is mapped to exactly one phase. Coverage: **116/116**.
 | UX-02 | Phase 11 — PWA + Mobile Polish | Complete |
 | UX-03 | Phase 11 — PWA + Mobile Polish | Complete |
 | UX-04 | Phase 11 — PWA + Mobile Polish | Complete |
-| TEST-01 | Phase 12 — Hardening + Tests | Pending |
-| TEST-02 | Phase 12 — Hardening + Tests | Pending |
-| TEST-03 | Phase 12 — Hardening + Tests | Pending |
-| TEST-04 | Phase 12 — Hardening + Tests | Pending |
-| TEST-05 | Phase 12 — Hardening + Tests | Pending |
-| TEST-06 | Phase 12 — Hardening + Tests | Pending |
+| TEST-01 | Phase 12 — Hardening + Tests | Complete |
+| TEST-02 | Phase 12 — Hardening + Tests | Complete |
+| TEST-03 | Phase 12 — Hardening + Tests | Complete |
+| TEST-04 | Phase 12 — Hardening + Tests | Complete |
+| TEST-05 | Phase 12 — Hardening + Tests | Complete |
+| TEST-06 | Phase 12 — Hardening + Tests | Complete |
 
 ### Phase Coverage Summary
 
