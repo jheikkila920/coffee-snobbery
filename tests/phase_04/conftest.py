@@ -50,7 +50,6 @@ from typing import Any
 import pytest
 from PIL import Image
 
-
 # --------------------------------------------------------------------------- #
 # Auth-aware TestClient fixtures                                              #
 # --------------------------------------------------------------------------- #
@@ -139,6 +138,7 @@ def synthetic_jpeg() -> Callable[..., bytes]:
     the payload directly instead of asking this fixture for one. The
     parameter is accepted to keep the call site readable.
     """
+
     def _factory(
         size_bytes: int | None = None,  # noqa: ARG001 — see docstring
         dimensions: tuple[int, int] = (800, 600),
@@ -185,6 +185,7 @@ def exif_jpeg() -> Callable[..., bytes]:
     ``getexif()`` — guaranteeing the EXIF-strip test has a meaningful
     baseline.
     """
+
     def _factory(gps_lat: float = 37.0, gps_lon: float = -122.0) -> bytes:
         buf = io.BytesIO()
         img = Image.new("RGB", (640, 480), color=(50, 50, 50))

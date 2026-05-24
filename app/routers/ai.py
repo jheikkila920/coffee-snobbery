@@ -276,9 +276,7 @@ async def post_ai_equipment(
     Returns a 200 with the equipment result region (or a state message).
     """
     user_id = user.id
-    status, _row = await ai_service.generate_equipment_rec(
-        user_id, "manual_refresh", db=db
-    )
+    status, _row = await ai_service.generate_equipment_rec(user_id, "manual_refresh", db=db)
 
     ctx: dict = {"status": status, "row": _row}
     if _row is not None and _row.response_json:

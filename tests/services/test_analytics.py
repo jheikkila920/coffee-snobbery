@@ -12,11 +12,10 @@ fixture that wipes test rows before and after each test.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-
 
 # --------------------------------------------------------------------------- #
 # Skip gates                                                                   #
@@ -190,7 +189,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     fn_ids_primary = [flavor_notes[0].id, flavor_notes[1].id, flavor_notes[2].id]
     fn_ids_all = [fn.id for fn in flavor_notes]
 
-    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc)
+    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=UTC)
 
     # 4 rated sessions for coffee1 (Ethiopia/washed/light) via bag1 (0-3 days fresh)
     # Satisfies HOME-01 (>=2), HOME-02 origin+process+roaster+roast_level,
@@ -275,7 +274,7 @@ def _seed_cold_start(db, *, username: str) -> int:
         water_grams_actual=Decimal("250"),
         rating=None,
         flavor_note_ids_observed=fn_ids,  # only 2 distinct notes
-        brewed_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
+        brewed_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
     )
     db.add(session)
     db.flush()
@@ -317,7 +316,7 @@ def _seed_all_unrated(db, *, username: str) -> int:
         fn_ids.append(fn.id)
 
     # 3 sessions, all rating=None — gate passes on count+notes, but no rated rows
-    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc)
+    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=UTC)
     for _ in range(3):
         session = BrewSession(
             user_id=uid,
@@ -359,9 +358,7 @@ def clean_analytics() -> Iterator[None]:
                 )
             )
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'analyticstest-%'"))
-            conn.execute(
-                text("DELETE FROM equipment WHERE brand = 'Hario' AND model = 'V60'")
-            )
+            conn.execute(text("DELETE FROM equipment WHERE brand = 'Hario' AND model = 'V60'"))
             conn.execute(text("DELETE FROM recipes WHERE name LIKE 'analyticstest-%'"))
             conn.execute(text("DELETE FROM flavor_notes WHERE name LIKE 'analyticstest-%'"))
             conn.execute(text("DELETE FROM roasters WHERE name LIKE 'analyticstest-%'"))
@@ -574,7 +571,13 @@ def test_cold_start_counts(clean_analytics: None) -> None:
     with SessionLocal() as db:
         counts = analytics.get_cold_start_counts(db, cold_uid)
 
-    assert set(counts.keys()) >= {"sessions", "distinct_notes", "gate_open", "sessions_needed", "notes_needed"}
+    assert set(counts.keys()) >= {
+        "sessions",
+        "distinct_notes",
+        "gate_open",
+        "sessions_needed",
+        "notes_needed",
+    }
     assert counts["gate_open"] is False
     assert counts["sessions"] == 1
     assert counts["sessions_needed"] == 2  # needs 2 more to reach the 3 threshold
@@ -587,7 +590,7 @@ def test_cold_start_counts(clean_analytics: None) -> None:
         gate_counts = analytics.get_cold_start_counts(db, gate_uid)
 
     assert gate_counts["gate_open"] is True
-    assert gate_counts["sessions"] >= 3   # 6 sessions seeded
+    assert gate_counts["sessions"] >= 3  # 6 sessions seeded
     assert gate_counts["distinct_notes"] >= 5  # 6 distinct notes seeded
     assert gate_counts["sessions_needed"] == 0
     assert gate_counts["notes_needed"] == 0
@@ -706,7 +709,7 @@ def test_signature_excludes_unrated_sessions(clean_analytics: None) -> None:
             water_grams_actual=Decimal("250"),
             rating=None,  # D-09: unrated → excluded from the signature
             flavor_note_ids_observed=[],
-            brewed_at=datetime(2026, 3, 11, 10, 0, 0, tzinfo=timezone.utc),
+            brewed_at=datetime(2026, 3, 11, 10, 0, 0, tzinfo=UTC),
         )
         db.add(unrated)
         db.flush()
@@ -724,9 +727,7 @@ def test_signature_excludes_unrated_sessions(clean_analytics: None) -> None:
     # 5. Rate that same session.
     with SessionLocal() as db:
         db.execute(
-            update(BrewSession)
-            .where(BrewSession.id == unrated_id)
-            .values(rating=Decimal("4.0"))
+            update(BrewSession).where(BrewSession.id == unrated_id).values(rating=Decimal("4.0"))
         )
         db.commit()
 
@@ -735,7 +736,8 @@ def test_signature_excludes_unrated_sessions(clean_analytics: None) -> None:
         sig_after_rating = analytics.compute_input_signature(db, uid)
 
     assert sig_after_rating != sig_baseline, (
-        "Rating a previously-unrated session MUST change the signature (D-09: it is now an AI-input row)"
+        "Rating a previously-unrated session MUST change the signature "
+        "(D-09: it is now an AI-input row)"
     )
 
 
@@ -774,9 +776,7 @@ def test_signature_excludes_free_text(clean_analytics: None) -> None:
     # Change rating (included in signature per D-08)
     with SessionLocal() as db:
         db.execute(
-            update(BrewSession)
-            .where(BrewSession.user_id == uid)
-            .values(rating=Decimal("3.0"))
+            update(BrewSession).where(BrewSession.user_id == uid).values(rating=Decimal("3.0"))
         )
         db.commit()
 

@@ -42,9 +42,7 @@ class RecipeSuggestionSchema(BaseModel):
     recipe_name: str | None = Field(
         None, description="Name of the matched recipe, or null if none match"
     )
-    summary: str = Field(
-        description="Why this recipe suits the recommended coffee (1-2 sentences)"
-    )
+    summary: str = Field(description="Why this recipe suits the recommended coffee (1-2 sentences)")
     no_match: bool = Field(
         description="True when no existing recipe is a good fit; the user should experiment"
     )

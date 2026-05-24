@@ -184,7 +184,7 @@ def _seed_1000_sessions(db, *, username: str) -> int:
         recipe_id = recipe.id if has_equipment else None
 
         # 4-note subsets cycling through the 8-note pool
-        note_start = (i % 5)
+        note_start = i % 5
         note_ids = fn_ids[note_start : note_start + 4] or fn_ids[:4]
 
         # Vary brewed_at (spread over 90 days for freshness variation)
@@ -249,9 +249,7 @@ def clean_analytics_perf() -> Iterator[None]:
                 )
             )
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'perftest-%'"))
-            conn.execute(
-                text("DELETE FROM equipment WHERE brand = 'Hario' AND model = 'V60Perf'")
-            )
+            conn.execute(text("DELETE FROM equipment WHERE brand = 'Hario' AND model = 'V60Perf'"))
             conn.execute(text("DELETE FROM recipes WHERE name LIKE 'perftest-%'"))
             conn.execute(text("DELETE FROM flavor_notes WHERE name LIKE 'perftest-%'"))
             conn.execute(text("DELETE FROM roasters WHERE name LIKE 'perftest-%'"))
@@ -327,9 +325,7 @@ def test_analytics_query_latency(clean_analytics_perf: None) -> None:
         for fn_name, fn in checks:
             median = _median_ms(fn, db, uid)
             if median >= BUDGET_MS:
-                failures.append(
-                    f"{fn_name}: {median:.1f}ms (budget: {BUDGET_MS}ms)"
-                )
+                failures.append(f"{fn_name}: {median:.1f}ms (budget: {BUDGET_MS}ms)")
 
     if failures:
         pytest.fail(

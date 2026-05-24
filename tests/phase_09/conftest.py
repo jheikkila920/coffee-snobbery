@@ -28,7 +28,6 @@ import pytest
 
 from tests.conftest import _seed_user
 
-
 # ---------------------------------------------------------------------------
 # Cookie-ready session fixtures — thin wrappers around root fixtures
 # ---------------------------------------------------------------------------

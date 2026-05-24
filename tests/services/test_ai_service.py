@@ -571,6 +571,7 @@ def test_three_tier_fallback() -> None:
                 prompt="Recommend a coffee matching Light roast profile",
             )
             from app.services.ai_schemas import CoffeeRecSchema
+
             rec = CoffeeRecSchema.model_validate(raw)
             assert rec.search_tier == "characteristics_only", (
                 f"Expected 'characteristics_only', got {rec.search_tier!r}"
@@ -662,6 +663,7 @@ def test_openai_coffee_call_no_json_schema() -> None:
         captured_kwargs.update(kwargs)
         # Return a minimal response structure
         import types
+
         json_text = (
             '{"coffee_name":"test","roaster_name":"r","origin":"Ethiopia",'
             '"process":"Washed","roast_level":"Light","search_tier":"primary",'
@@ -695,8 +697,7 @@ def test_openai_coffee_call_no_json_schema() -> None:
     call_all_kwargs = ca[1] if ca else {}
     text_format = call_all_kwargs.get("text", {})
     uses_json_schema = (
-        isinstance(text_format, dict)
-        and text_format.get("format", {}).get("type") == "json_schema"
+        isinstance(text_format, dict) and text_format.get("format", {}).get("type") == "json_schema"
     )
     assert not uses_json_schema, (
         "_openai_coffee_call must NOT use text.format.json_schema (Pitfall 2)"
@@ -759,7 +760,9 @@ async def test_force_regenerates() -> None:
         patch.object(ai_service, "get_latest_recommendation", return_value=existing_row),
         patch.object(ai_service, "_try_advisory_lock", return_value=True),
         patch.object(
-            ai_service, "_generate_coffee_rec", new_callable=AsyncMock,
+            ai_service,
+            "_generate_coffee_rec",
+            new_callable=AsyncMock,
             return_value=("generated", generated_row),
         ),
         patch.object(
@@ -792,7 +795,9 @@ async def test_not_configured() -> None:
         patch.object(ai_service, "get_latest_recommendation", return_value=None),
         patch.object(ai_service, "_try_advisory_lock", return_value=True),
         patch.object(
-            ai_service, "_generate_coffee_rec", new_callable=AsyncMock,
+            ai_service,
+            "_generate_coffee_rec",
+            new_callable=AsyncMock,
             return_value=("not_configured", None),
         ),
     ):
@@ -880,9 +885,7 @@ async def test_equipment_rec_not_configured() -> None:
     db = MagicMock()
 
     with (
-        patch.object(
-            ai_service.credentials_service, "get_provider_credential", return_value=None
-        ),
+        patch.object(ai_service.credentials_service, "get_provider_credential", return_value=None),
     ):
         status, row = await ai_service.generate_equipment_rec(1, "user", db=db)
 
@@ -911,9 +914,7 @@ async def test_equipment_rec_no_web_search_tool() -> None:
         "recommendation": "Upgrade to a Comandante C40 for better grind consistency.",
         "summary_prose": "Your setup is solid but your grinder is the limiting factor.",
     }
-    tool_use_block = types.SimpleNamespace(
-        type="tool_use", name="structure_output", input=rec_dict
-    )
+    tool_use_block = types.SimpleNamespace(type="tool_use", name="structure_output", input=rec_dict)
     usage = types.SimpleNamespace(input_tokens=100, output_tokens=50)
     fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
 
@@ -935,9 +936,7 @@ async def test_equipment_rec_no_web_search_tool() -> None:
             "get_preference_profile",
             return_value={},
         ),
-        patch.object(
-            ai_service, "_build_anthropic_client", return_value=mock_client
-        ),
+        patch.object(ai_service, "_build_anthropic_client", return_value=mock_client),
         patch.object(ai_service, "_write_recommendation_row", return_value=MagicMock()),
         patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
@@ -948,7 +947,8 @@ async def test_equipment_rec_no_web_search_tool() -> None:
     assert status == "generated"
     # Verify no web_search-type tool was passed
     web_search_tools = [
-        t for t in captured_tools
+        t
+        for t in captured_tools
         if isinstance(t, dict) and t.get("type", "").startswith("web_search")
     ]
     assert web_search_tools == [], (
@@ -976,9 +976,7 @@ async def test_equipment_rec_no_changes() -> None:
         "recommendation": None,
         "summary_prose": "Your setup is well-matched — no upgrade needed right now.",
     }
-    tool_use_block = types.SimpleNamespace(
-        type="tool_use", name="structure_output", input=rec_dict
-    )
+    tool_use_block = types.SimpleNamespace(type="tool_use", name="structure_output", input=rec_dict)
     usage = types.SimpleNamespace(input_tokens=80, output_tokens=40)
     fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
 
@@ -1024,9 +1022,7 @@ async def test_equipment_rec_weakest_link() -> None:
         "recommendation": "Upgrade to a Comandante C40.",
         "summary_prose": "Your grinder is the bottleneck for a cleaner cup.",
     }
-    tool_use_block = types.SimpleNamespace(
-        type="tool_use", name="structure_output", input=rec_dict
-    )
+    tool_use_block = types.SimpleNamespace(type="tool_use", name="structure_output", input=rec_dict)
     usage = types.SimpleNamespace(input_tokens=90, output_tokens=45)
     fake_response = types.SimpleNamespace(content=[tool_use_block], usage=usage)
 
@@ -1180,8 +1176,7 @@ async def test_paste_rank_top3() -> None:
         patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
         status, result = await ai_service.rank_pasted_coffees(
-            1, "user", db=db,
-            raw_input="Yirgacheffe\nColombia Huila\nKenya AA"
+            1, "user", db=db, raw_input="Yirgacheffe\nColombia Huila\nKenya AA"
         )
 
     assert status == "generated"
@@ -1236,9 +1231,7 @@ async def test_paste_rank_never_cached() -> None:
         patch.object(ai_service, "_write_recommendation_row", side_effect=capture_write),
         patch.object(ai_service.settings_service, "get_str", return_value="web_search_20250305"),
     ):
-        await ai_service.rank_pasted_coffees(
-            1, "user", db=db, raw_input="Test Coffee description"
-        )
+        await ai_service.rank_pasted_coffees(1, "user", db=db, raw_input="Test Coffee description")
 
     assert "paste_rank" in written_rec_types, (
         f"rank_pasted_coffees must write rec_type='paste_rank'; got {written_rec_types}"
@@ -1246,6 +1239,7 @@ async def test_paste_rank_never_cached() -> None:
 
     # Verify regenerate() does not call rank_pasted_coffees
     import inspect
+
     regen_source = inspect.getsource(regenerate)
     assert "rank_pasted_coffees" not in regen_source, (
         "regenerate() must not call rank_pasted_coffees (never cached/scheduled)"

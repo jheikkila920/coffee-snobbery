@@ -39,9 +39,7 @@ def _get_build_hash() -> str:
     bumps the service worker cache name, triggering cache purge on next visit.
     """
     css_dir = Path("app/static/css")
-    candidates = sorted(
-        p for p in css_dir.glob("tailwind.*.css") if p.name != "tailwind.src.css"
-    )
+    candidates = sorted(p for p in css_dir.glob("tailwind.*.css") if p.name != "tailwind.src.css")
     if candidates:
         # "tailwind.XXXXXXXX.css" → split stem on "." → second token is the hash
         return candidates[0].stem.split(".", 1)[1]

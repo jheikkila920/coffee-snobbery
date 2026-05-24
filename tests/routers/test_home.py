@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from datetime import UTC
 from decimal import Decimal
 from typing import Any
 
 import pytest
-
 
 # --------------------------------------------------------------------------- #
 # Skip gates                                                                   #
@@ -126,7 +126,12 @@ def clean_home_router() -> Iterator[None]:
     def _reset() -> None:
         with engine.begin() as conn:
             conn.execute(text("DELETE FROM brew_sessions"))
-            conn.execute(text("DELETE FROM bags WHERE coffee_id IN (SELECT id FROM coffees WHERE name LIKE 'analyticstest-%')"))
+            conn.execute(
+                text(
+                    "DELETE FROM bags WHERE coffee_id IN "
+                    "(SELECT id FROM coffees WHERE name LIKE 'analyticstest-%')"
+                )
+            )
             conn.execute(text("DELETE FROM flavor_notes WHERE name LIKE 'analyticstest-%'"))
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'analyticstest-%'"))
             conn.execute(text("DELETE FROM roasters WHERE name LIKE 'analyticstest-%'"))
@@ -145,7 +150,9 @@ def clean_home_router() -> Iterator[None]:
 # --------------------------------------------------------------------------- #
 
 
-def test_home_shell_authenticated(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
+def test_home_shell_authenticated(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
     """GET / with a valid session returns 200 and the home page shell."""
     _require_postgres()
     _require_analytics_tables()
@@ -170,7 +177,9 @@ def test_home_unauthenticated_returns_401(app: Any, clean_home_router: None) -> 
     assert resp.status_code == 401
 
 
-def test_recent_brews_fragment_headers(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
+def test_recent_brews_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
     """GET /home/cards/recent-brews with HX-Request returns cache control headers."""
     _require_postgres()
     _require_analytics_tables()
@@ -182,7 +191,9 @@ def test_recent_brews_fragment_headers(app: Any, seeded_regular_user: dict, clea
     assert "HX-Request" in resp.headers.get("vary", "")
 
 
-def test_unrated_coffees_fragment_headers(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
+def test_unrated_coffees_fragment_headers(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
     """GET /home/cards/unrated-coffees with HX-Request returns cache control headers."""
     _require_postgres()
     _require_analytics_tables()
@@ -206,7 +217,9 @@ def test_unrated_coffees_fragment_requires_auth(app: Any, clean_home_router: Non
     assert resp.status_code == 401
 
 
-def test_cold_start_branch_renders_meter(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
+def test_cold_start_branch_renders_meter(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
     """A user with 0 sessions sees the cold-start progress meter (gate-closed branch)."""
     _require_postgres()
     _require_analytics_tables()
@@ -219,7 +232,9 @@ def test_cold_start_branch_renders_meter(app: Any, seeded_regular_user: dict, cl
     assert 'role="progressbar"' in resp.text
 
 
-def test_ai_slot_placeholder_present(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
+def test_ai_slot_placeholder_present(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
     """Gate-open user renders the aggregate slots and the AI hero slot (D-01).
 
     Phase 7 (plan 07-06) replaced the Jinja comment placeholder with a real
@@ -233,8 +248,8 @@ def test_ai_slot_placeholder_present(app: Any, seeded_regular_user: dict, clean_
     _require_analytics_tables()
 
     # Import and reuse the gate-cleared fixture from Plan 06-01 tests
-    from tests.services.test_analytics import _seed_analytics_scenario
     from app.db import SessionLocal
+    from tests.services.test_analytics import _seed_analytics_scenario
 
     uid: int
     with SessionLocal() as db:
@@ -243,10 +258,11 @@ def test_ai_slot_placeholder_present(app: Any, seeded_regular_user: dict, clean_
         )
 
     # Build an authed client for this seeded user (not seeded_regular_user)
+    import asyncio
+
+    from app.main import async_session_factory
     from app.services.sessions import regenerate_session
     from app.signing import sign_session_id
-    import asyncio
-    from app.main import async_session_factory
 
     async def _make_session() -> str:
         async with async_session_factory() as db:
@@ -315,8 +331,7 @@ def _seed_gate_cleared_no_sweet_spots(db: Any, *, username: str) -> int:
     (origin × process × brewer × recipe) combination reaches the min-3 threshold.
     The gate is open (3 sessions, 5 distinct notes).
     """
-    from decimal import Decimal
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
@@ -357,7 +372,7 @@ def _seed_gate_cleared_no_sweet_spots(db: Any, *, username: str) -> int:
     db.add(recipe)
     db.flush()
 
-    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc)
+    brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=UTC)
 
     # 3 sessions on 3 different coffees (different origins) — no combo reaches min-3
     for i, origin in enumerate(["Ethiopia", "Colombia", "Kenya"]):
@@ -499,9 +514,7 @@ def test_sweet_spots_sparse_hint(app: Any, clean_home_router: None) -> None:
     from app.db import SessionLocal
 
     with SessionLocal() as db:
-        uid = _seed_gate_cleared_no_sweet_spots(
-            db, username="hometest-sparse-sweet-spots"
-        )
+        uid = _seed_gate_cleared_no_sweet_spots(db, username="hometest-sparse-sweet-spots")
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/home/cards/sweet-spots", headers={"HX-Request": "true"})
@@ -517,8 +530,8 @@ def test_top_coffees_all_unrated_nudge(app: Any, clean_home_router: None) -> Non
     _require_postgres()
     _require_analytics_tables()
 
-    from tests.services.test_analytics import _seed_all_unrated
     from app.db import SessionLocal
+    from tests.services.test_analytics import _seed_all_unrated
 
     with SessionLocal() as db:
         uid = _seed_all_unrated(db, username="hometest-all-unrated-top")
@@ -567,13 +580,11 @@ def test_home_shell_staggered_lazy_load(app: Any, clean_home_router: None) -> No
     _require_postgres()
     _require_analytics_tables()
 
-    from tests.services.test_analytics import _seed_analytics_scenario
     from app.db import SessionLocal
+    from tests.services.test_analytics import _seed_analytics_scenario
 
     with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(
-            db, username="analyticstest-hometest-stagger"
-        )
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-stagger")
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/")
@@ -665,9 +676,7 @@ def _make_mock_rec(*, url_verified: bool | None = None) -> Any:
     return rec
 
 
-def test_ai_card_cold_start(
-    app: Any, seeded_regular_user: dict, clean_home_router: None
-) -> None:
+def test_ai_card_cold_start(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
     """GET /home/cards/ai-recommendation when gate is closed → cold-start fragment.
 
     Monkeypatches analytics.get_cold_start_counts to return a gate-closed dict.
@@ -709,9 +718,7 @@ def test_ai_card_not_configured(
         patch.object(
             home_module.analytics, "get_cold_start_counts", return_value=_make_gate_open()
         ),
-        patch.object(
-            home_module.credentials_service, "get_provider_credential", return_value=None
-        ),
+        patch.object(home_module.credentials_service, "get_provider_credential", return_value=None),
         patch.object(home_module.ai_service, "in_flight", return_value=False),
     ):
         resp = client.get("/home/cards/ai-recommendation", headers={"HX-Request": "true"})
@@ -720,9 +727,7 @@ def test_ai_card_not_configured(
     assert "not configured" in resp.text.lower()
 
 
-def test_ai_card_in_flight(
-    app: Any, seeded_regular_user: dict, clean_home_router: None
-) -> None:
+def test_ai_card_in_flight(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
     """in_flight lock held → in-flight fragment carries hx-trigger for polling (AI-14)."""
     _require_postgres()
     _require_analytics_tables()
@@ -753,9 +758,7 @@ def test_ai_card_in_flight(
     assert 'hx-trigger="every 2s"' in resp.text
 
 
-def test_ai_card_hero(
-    app: Any, seeded_regular_user: dict, clean_home_router: None
-) -> None:
+def test_ai_card_hero(app: Any, seeded_regular_user: dict, clean_home_router: None) -> None:
     """Rec present → hero card rendered; no hx-trigger on root (polling stops, Pattern 8)."""
     _require_postgres()
     _require_analytics_tables()
@@ -779,9 +782,7 @@ def test_ai_card_hero(
             return_value=mock_cred,
         ),
         patch.object(home_module.ai_service, "in_flight", return_value=False),
-        patch.object(
-            home_module.ai_service, "get_latest_recommendation", return_value=mock_rec
-        ),
+        patch.object(home_module.ai_service, "get_latest_recommendation", return_value=mock_rec),
         patch.object(home_module.ai_service, "is_stale", return_value=False),
     ):
         resp = client.get("/home/cards/ai-recommendation", headers={"HX-Request": "true"})
@@ -810,9 +811,7 @@ def test_sweet_spots_prose_in_context(
     client = _authed_client(app, seeded_regular_user["signed_cookie"])
 
     mock_ss_row = MagicMock()
-    mock_ss_row.response_json = {
-        "summary_prose": "Your best sweet spot is Ethiopia washed light."
-    }
+    mock_ss_row.response_json = {"summary_prose": "Your best sweet spot is Ethiopia washed light."}
 
     with patch.object(
         home_module.ai_service, "get_latest_recommendation", return_value=mock_ss_row
@@ -837,9 +836,7 @@ def test_home_links_to_ai_pages(app: Any, clean_home_router: None) -> None:
     from tests.services.test_analytics import _seed_analytics_scenario
 
     with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(
-            db, username="analyticstest-hometest-links"
-        )
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-links")
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/")
@@ -863,18 +860,14 @@ def test_home_has_equipment_button(app: Any, clean_home_router: None) -> None:
     from tests.services.test_analytics import _seed_analytics_scenario
 
     with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(
-            db, username="analyticstest-hometest-equipment"
-        )
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-equipment")
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/")
     assert resp.status_code == 200
 
     body = resp.text
-    assert 'hx-post="/ai/equipment"' in body, (
-        "Home page must have equipment hx-post button (D-05)"
-    )
+    assert 'hx-post="/ai/equipment"' in body, "Home page must have equipment hx-post button (D-05)"
     assert 'id="equipment-rec-result"' in body, (
         "Home page must have #equipment-rec-result target div"
     )

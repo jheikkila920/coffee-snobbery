@@ -42,9 +42,5 @@ def test_autoescape_enabled() -> None:
         # or as the raw Environment directly. Probe for the attribute.
         env = getattr(templates, "env", templates)
     rendered = env.from_string("{{ value }}").render(value="<script>")
-    assert "&lt;script&gt;" in rendered, (
-        f"autoescape disabled: rendered={rendered!r}"
-    )
-    assert "<script>" not in rendered, (
-        f"raw HTML leaked through Jinja: rendered={rendered!r}"
-    )
+    assert "&lt;script&gt;" in rendered, f"autoescape disabled: rendered={rendered!r}"
+    assert "<script>" not in rendered, f"raw HTML leaked through Jinja: rendered={rendered!r}"

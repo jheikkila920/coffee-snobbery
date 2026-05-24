@@ -93,9 +93,7 @@ def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
     if leftovers:
         existing = normalized.get("_form")
         combined = (
-            "; ".join(leftovers)
-            if existing is None
-            else f"{existing}; {'; '.join(leftovers)}"
+            "; ".join(leftovers) if existing is None else f"{existing}; {'; '.join(leftovers)}"
         )
         normalized["_form"] = combined
     return normalized
@@ -121,9 +119,7 @@ def list_equipment(
     on a flat list. Chose server-side dict to keep the template simple
     and the group ordering explicit.
     """
-    groups = equipment_service.list_equipment_grouped_by_type(
-        db, include_archived=include_archived
-    )
+    groups = equipment_service.list_equipment_grouped_by_type(db, include_archived=include_archived)
     if request.headers.get("HX-Request") == "true":
         return templates.TemplateResponse(
             request=request,
@@ -326,9 +322,7 @@ def archive_equipment_handler(
     existing = equipment_service.get_equipment(db, equipment_id=equipment_id)
     if existing is None:
         raise HTTPException(status_code=404)
-    equipment_service.archive_equipment(
-        db, equipment_id=equipment_id, by_user_id=user.id
-    )
+    equipment_service.archive_equipment(db, equipment_id=equipment_id, by_user_id=user.id)
     equipment = equipment_service.get_equipment(db, equipment_id=equipment_id)
     return templates.TemplateResponse(
         request=request,

@@ -164,10 +164,7 @@ def build_session_cookie(signed_value: str, *, max_age: int = SESSION_MAX_AGE_SE
     The returned string is the *value* — ASGI middleware adds the
     ``Set-Cookie:`` header name when injecting the header tuple.
     """
-    return (
-        f"session_id={signed_value}; Path=/; HttpOnly; Secure; "
-        f"SameSite=Lax; Max-Age={max_age}"
-    )
+    return f"session_id={signed_value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age={max_age}"
 
 
 def build_session_clear_cookie() -> str:

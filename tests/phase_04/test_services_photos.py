@@ -25,8 +25,8 @@ exists.
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import pytest
 from PIL import Image
@@ -74,9 +74,7 @@ def test_exif_strip(photo_volume: Path, exif_jpeg: Callable[..., bytes]) -> None
         # is present. Different Pillow paths surface emptiness as either
         # ``len(...) == 0`` or a falsy Exif object — both are accepted.
         exif = img.getexif()
-        assert not exif or len(exif) == 0, (
-            f"EXIF leaked into saved photo: {dict(exif)!r}"
-        )
+        assert not exif or len(exif) == 0, f"EXIF leaked into saved photo: {dict(exif)!r}"
 
 
 # --------------------------------------------------------------------------- #
@@ -148,9 +146,7 @@ def test_decompression_bomb_rejected(
 # --------------------------------------------------------------------------- #
 
 
-def test_jpeg_round_trip(
-    photo_volume: Path, synthetic_jpeg: Callable[..., bytes]
-) -> None:
+def test_jpeg_round_trip(photo_volume: Path, synthetic_jpeg: Callable[..., bytes]) -> None:
     """Valid JPEG produces a UUID-named main + thumb pair on disk."""
     _require_photos_service()
     from app.services.photos import process_and_save
@@ -178,9 +174,7 @@ def test_jpeg_round_trip(
 # --------------------------------------------------------------------------- #
 
 
-def test_replace_unlinks_old(
-    photo_volume: Path, synthetic_jpeg: Callable[..., bytes]
-) -> None:
+def test_replace_unlinks_old(photo_volume: Path, synthetic_jpeg: Callable[..., bytes]) -> None:
     """``replace_photo(old, new)`` unlinks both old files; new pair survives."""
     _require_photos_service()
     from app.services.photos import process_and_save, replace_photo
@@ -233,9 +227,7 @@ def test_replace_photo_with_none_is_noop(
 # once the column exists.
 
 
-def test_sweep_orphans(
-    photo_volume: Path, synthetic_jpeg: Callable[..., bytes]
-) -> None:
+def test_sweep_orphans(photo_volume: Path, synthetic_jpeg: Callable[..., bytes]) -> None:
     """Files not referenced are unlinked; referenced files survive.
 
     Calls the internal ``_sweep_unreferenced`` helper because the
@@ -327,9 +319,7 @@ def test_safe_filename_regex() -> None:
     assert not _is_safe_photo_filename("A1B2C3D4E5F60718293A4B5C6D7E8F90.jpg")
     assert not _is_safe_photo_filename("a1b2c3d4e5f60718293a4b5c6d7e8f90.png")
     assert not _is_safe_photo_filename("")
-    assert not _is_safe_photo_filename(
-        "a1b2c3d4e5f60718293a4b5c6d7e8f90/../passwd.jpg"
-    )
+    assert not _is_safe_photo_filename("a1b2c3d4e5f60718293a4b5c6d7e8f90/../passwd.jpg")
 
 
 # --------------------------------------------------------------------------- #

@@ -51,17 +51,19 @@ def add_to_wishlist(
 
 def list_wishlist(db: Session, *, by_user_id: int) -> list[WishlistEntry]:
     """Return all wishlist entries for *by_user_id*, newest first."""
-    rows = db.execute(
-        select(WishlistEntry)
-        .where(WishlistEntry.user_id == by_user_id)
-        .order_by(WishlistEntry.added_at.desc())
-    ).scalars().all()
+    rows = (
+        db.execute(
+            select(WishlistEntry)
+            .where(WishlistEntry.user_id == by_user_id)
+            .order_by(WishlistEntry.added_at.desc())
+        )
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
-def get_wishlist_entry(
-    db: Session, *, entry_id: int, by_user_id: int
-) -> WishlistEntry | None:
+def get_wishlist_entry(db: Session, *, entry_id: int, by_user_id: int) -> WishlistEntry | None:
     """Return the entry if it belongs to *by_user_id*; else None (IDOR sentinel).
 
     Cross-user ids return None — the router maps this to 404 so entry existence
@@ -75,9 +77,7 @@ def get_wishlist_entry(
     ).scalar_one_or_none()
 
 
-def mark_purchased(
-    db: Session, *, entry_id: int, by_user_id: int
-) -> WishlistEntry | None:
+def mark_purchased(db: Session, *, entry_id: int, by_user_id: int) -> WishlistEntry | None:
     """Set ``purchased_at`` and return the updated entry.
 
     Returns None without modifying the DB if *entry_id* does not belong to

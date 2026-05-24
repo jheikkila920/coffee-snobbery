@@ -28,7 +28,8 @@ extend-select = ["E", "F", "I", "B", "UP", "S"]
 # S110: try-except-pass is intentional in e2e fixtures (bag creation can fail on
 # a pre-seeded stack; the test gracefully skips).
 # S310: urllib.request to a localhost test target is not an SSRF risk.
-"tests/**/*.py" = ["S101", "S105", "S106", "S110", "S310"]
+# S608: cleanup fixtures build DELETE statements from test-only constants, not user input.
+"tests/**/*.py" = ["S101", "S105", "S106", "S110", "S310", "S608"]
 
 [tool.mypy]
 python_version = "3.12"

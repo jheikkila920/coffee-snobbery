@@ -26,7 +26,6 @@ from app.schemas.recipe import RecipeCreate, StepSchema
 from app.schemas.roaster import RoasterCreate
 from app.services.form_validation import errors_by_field
 
-
 # --------------------------------------------------------------------------- #
 # CoffeeCreate                                                                #
 # --------------------------------------------------------------------------- #
@@ -145,8 +144,15 @@ def test_roaster_create_rejects_extra_field() -> None:
 def test_flavor_note_valid() -> None:
     """All 9 categories from CAT-02 should be accepted."""
     for category in (
-        "fruit", "floral", "sweet", "chocolate", "nutty",
-        "spice", "savory", "fermented", "other",
+        "fruit",
+        "floral",
+        "sweet",
+        "chocolate",
+        "nutty",
+        "spice",
+        "savory",
+        "fermented",
+        "other",
     ):
         note = FlavorNoteCreate(name=f"note-{category}", category=category)
         assert note.category == category
@@ -242,7 +248,10 @@ def test_recipe_rejects_water_temp_over_100() -> None:
     """SEC-06 le=100 on water_temp_c — matches ROADMAP success #5 verbatim."""
     with pytest.raises(ValidationError):
         RecipeCreate(
-            name="x", dose_grams=18, water_grams=288, water_temp_c=101,
+            name="x",
+            dose_grams=18,
+            water_grams=288,
+            water_temp_c=101,
         )
 
 
@@ -250,7 +259,10 @@ def test_recipe_rejects_negative_dose() -> None:
     """SEC-06 ge=1 on dose_grams (zero forbidden)."""
     with pytest.raises(ValidationError):
         RecipeCreate(
-            name="x", dose_grams=0, water_grams=288, water_temp_c=94,
+            name="x",
+            dose_grams=0,
+            water_grams=288,
+            water_temp_c=94,
         )
 
 
@@ -264,13 +276,15 @@ def test_recipe_step_loc_carries_index_and_field() -> None:
     """A bad step inside the steps array reports loc=(steps, 0, <field>)."""
     with pytest.raises(ValidationError) as exc_info:
         RecipeCreate(
-            name="x", dose_grams=18, water_grams=288, water_temp_c=94,
+            name="x",
+            dose_grams=18,
+            water_grams=288,
+            water_temp_c=94,
             steps=[{"water_grams": 99999, "time_seconds": 10}],  # type: ignore[list-item]
         )
     errs = exc_info.value.errors()
     assert any(
-        err["loc"][0] == "steps" and err["loc"][1] == 0
-        and err["loc"][-1] == "water_grams"
+        err["loc"][0] == "steps" and err["loc"][1] == 0 and err["loc"][-1] == "water_grams"
         for err in errs
     )
 
@@ -341,7 +355,10 @@ def test_errors_by_field_handles_nested_loc() -> None:
     """A step error at loc=(steps, 0, water_grams) → key 'water_grams'."""
     try:
         RecipeCreate(
-            name="x", dose_grams=18, water_grams=288, water_temp_c=94,
+            name="x",
+            dose_grams=18,
+            water_grams=288,
+            water_temp_c=94,
             steps=[{"water_grams": 99999, "time_seconds": 10}],  # type: ignore[list-item]
         )
     except ValidationError as exc:

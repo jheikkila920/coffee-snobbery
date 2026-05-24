@@ -104,14 +104,10 @@ def create_equipment(
 
 def get_equipment(db: Session, *, equipment_id: int) -> Equipment | None:
     """Return the equipment row with *equipment_id*, or ``None`` if missing."""
-    return db.execute(
-        select(Equipment).where(Equipment.id == equipment_id)
-    ).scalar_one_or_none()
+    return db.execute(select(Equipment).where(Equipment.id == equipment_id)).scalar_one_or_none()
 
 
-def list_equipment(
-    db: Session, *, include_archived: bool = False
-) -> list[Equipment]:
+def list_equipment(db: Session, *, include_archived: bool = False) -> list[Equipment]:
     """Return equipment ordered by ``(type, brand, model)``.
 
     Archived rows filtered out by default. The ``type`` sort key is what
@@ -119,9 +115,7 @@ def list_equipment(
     the rows already grouped by type and the helper just walks them
     once into an ordered dict.
     """
-    stmt = select(Equipment).order_by(
-        Equipment.type, Equipment.brand, Equipment.model
-    )
+    stmt = select(Equipment).order_by(Equipment.type, Equipment.brand, Equipment.model)
     if not include_archived:
         stmt = stmt.where(Equipment.archived.is_(False))
     return list(db.execute(stmt).scalars().all())
@@ -129,7 +123,7 @@ def list_equipment(
 
 def list_equipment_grouped_by_type(
     db: Session, *, include_archived: bool = False
-) -> "OrderedDict[str, list[Equipment]]":
+) -> OrderedDict[str, list[Equipment]]:
     """Return an ordered ``{type: [Equipment, ...]}`` mapping.
 
     Keys appear in the order their rows first surface from the
@@ -175,9 +169,7 @@ def update_equipment(
         )
     )
     db.commit()
-    equipment = db.execute(
-        select(Equipment).where(Equipment.id == equipment_id)
-    ).scalar_one()
+    equipment = db.execute(select(Equipment).where(Equipment.id == equipment_id)).scalar_one()
     log.info(
         CATALOG_EQUIPMENT_UPDATED,
         equipment_id=equipment_id,
@@ -189,9 +181,7 @@ def update_equipment(
     return equipment
 
 
-def archive_equipment(
-    db: Session, *, equipment_id: int, by_user_id: int
-) -> None:
+def archive_equipment(db: Session, *, equipment_id: int, by_user_id: int) -> None:
     """Soft-delete equipment (``archived=True``) and emit the event.
 
     Phase 4 ships archive-only — hard-delete is reserved per CONTEXT

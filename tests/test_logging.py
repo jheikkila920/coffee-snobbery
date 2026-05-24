@@ -190,12 +190,8 @@ def test_redactor_scrubs_sensitive_keys() -> None:
     )
     console_out = buf2.getvalue()
     assert "***REDACTED***" in console_out
-    assert "secret123" not in console_out, (
-        "redactor leaked password value into console output"
-    )
-    assert "sk-abc" not in console_out, (
-        "redactor leaked api_key value into console output"
-    )
+    assert "secret123" not in console_out, "redactor leaked password value into console output"
+    assert "sk-abc" not in console_out, "redactor leaked api_key value into console output"
     # Case-insensitivity check — uppercase key names should also be scrubbed.
     buf3, _ = _attach_capture_handler()
     structlog.get_logger("test").info("upper", PASSWORD="UPPER-SECRET")
@@ -256,18 +252,14 @@ def test_login_failed_no_username_on_user_not_found(client) -> None:
     assert record["event"] == "auth.login_failed"
     assert record["reason"] == "user_not_found"
     assert "user_id" not in record, (
-        "D-15: user_not_found branch must NOT log user_id; "
-        f"got record: {record!r}"
+        f"D-15: user_not_found branch must NOT log user_id; got record: {record!r}"
     )
     assert "attempted_username" not in record, (
-        "D-15: never log attempted_username; "
-        f"got record: {record!r}"
+        f"D-15: never log attempted_username; got record: {record!r}"
     )
 
 
-def test_login_failed_includes_user_id_on_bad_password(
-    client, seeded_regular_user
-) -> None:
+def test_login_failed_includes_user_id_on_bad_password(client, seeded_regular_user) -> None:
     """D-15: ``reason=bad_password`` DOES include ``user_id`` (NO ``attempted_username``)."""
     try:
         from app.routers.auth import router  # noqa: F401
@@ -302,6 +294,5 @@ def test_login_failed_includes_user_id_on_bad_password(
         f"D-15: bad_password branch must log user_id; got record: {record!r}"
     )
     assert "attempted_username" not in record, (
-        "D-15: never log attempted_username; "
-        f"got record: {record!r}"
+        f"D-15: never log attempted_username; got record: {record!r}"
     )

@@ -185,9 +185,7 @@ def upgrade() -> None:
         sa.Column("brand", sa.Text, nullable=False),
         sa.Column("model", sa.Text, nullable=False),
         sa.Column("notes", sa.Text, nullable=False, server_default=""),
-        sa.Column(
-            "usage_count", sa.Integer, nullable=False, server_default=sa.text("0")
-        ),
+        sa.Column("usage_count", sa.Integer, nullable=False, server_default=sa.text("0")),
         sa.Column("archived", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column(
             "created_at",

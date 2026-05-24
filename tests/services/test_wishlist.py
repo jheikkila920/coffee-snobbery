@@ -22,7 +22,6 @@ from collections.abc import Iterator
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Skip gates (mirror tests/services/test_brew_sessions_service.py)            #
 # --------------------------------------------------------------------------- #
@@ -111,9 +110,27 @@ def test_add_and_list_scoped_to_user(clean_wishlist: None) -> None:
         uid_a, uid_b = user_a.id, user_b.id
 
     with SessionLocal() as db:
-        svc.add_to_wishlist(db, by_user_id=uid_a, coffee_name="Kenya AA", roaster_name="Blue Bottle", source_url=None)
-        svc.add_to_wishlist(db, by_user_id=uid_a, coffee_name="Ethiopia Yirgacheffe", roaster_name=None, source_url=None)
-        svc.add_to_wishlist(db, by_user_id=uid_b, coffee_name="Colombia Huila", roaster_name="Stumptown", source_url=None)
+        svc.add_to_wishlist(
+            db,
+            by_user_id=uid_a,
+            coffee_name="Kenya AA",
+            roaster_name="Blue Bottle",
+            source_url=None,
+        )
+        svc.add_to_wishlist(
+            db,
+            by_user_id=uid_a,
+            coffee_name="Ethiopia Yirgacheffe",
+            roaster_name=None,
+            source_url=None,
+        )
+        svc.add_to_wishlist(
+            db,
+            by_user_id=uid_b,
+            coffee_name="Colombia Huila",
+            roaster_name="Stumptown",
+            source_url=None,
+        )
 
     with SessionLocal() as db:
         entries_a = svc.list_wishlist(db, by_user_id=uid_a)
@@ -142,13 +159,19 @@ def test_list_order_newest_first(clean_wishlist: None) -> None:
 
     # Insert with tiny sleeps to guarantee distinct added_at timestamps
     with SessionLocal() as db:
-        svc.add_to_wishlist(db, by_user_id=uid, coffee_name="First", roaster_name=None, source_url=None)
+        svc.add_to_wishlist(
+            db, by_user_id=uid, coffee_name="First", roaster_name=None, source_url=None
+        )
     time.sleep(0.05)
     with SessionLocal() as db:
-        svc.add_to_wishlist(db, by_user_id=uid, coffee_name="Second", roaster_name=None, source_url=None)
+        svc.add_to_wishlist(
+            db, by_user_id=uid, coffee_name="Second", roaster_name=None, source_url=None
+        )
     time.sleep(0.05)
     with SessionLocal() as db:
-        svc.add_to_wishlist(db, by_user_id=uid, coffee_name="Third", roaster_name=None, source_url=None)
+        svc.add_to_wishlist(
+            db, by_user_id=uid, coffee_name="Third", roaster_name=None, source_url=None
+        )
 
     with SessionLocal() as db:
         entries = svc.list_wishlist(db, by_user_id=uid)
@@ -169,7 +192,9 @@ def test_add_defaults_source_ai_recommendation(clean_wishlist: None) -> None:
         uid = user.id
 
     with SessionLocal() as db:
-        entry = svc.add_to_wishlist(db, by_user_id=uid, coffee_name="Sumatra", roaster_name=None, source_url=None)
+        entry = svc.add_to_wishlist(
+            db, by_user_id=uid, coffee_name="Sumatra", roaster_name=None, source_url=None
+        )
         eid = entry.id
 
     with SessionLocal() as db:
@@ -192,7 +217,9 @@ def test_get_wishlist_entry_cross_user_returns_none(clean_wishlist: None) -> Non
         uid_a, uid_b = user_a.id, user_b.id
 
     with SessionLocal() as db:
-        entry = svc.add_to_wishlist(db, by_user_id=uid_a, coffee_name="Burundi", roaster_name=None, source_url=None)
+        entry = svc.add_to_wishlist(
+            db, by_user_id=uid_a, coffee_name="Burundi", roaster_name=None, source_url=None
+        )
         eid = entry.id
 
     with SessionLocal() as db:
@@ -219,7 +246,9 @@ def test_mark_purchased_sets_timestamp(clean_wishlist: None) -> None:
         uid = user.id
 
     with SessionLocal() as db:
-        entry = svc.add_to_wishlist(db, by_user_id=uid, coffee_name="Panama Geisha", roaster_name=None, source_url=None)
+        entry = svc.add_to_wishlist(
+            db, by_user_id=uid, coffee_name="Panama Geisha", roaster_name=None, source_url=None
+        )
         eid = entry.id
 
     with SessionLocal() as db:
@@ -242,7 +271,9 @@ def test_mark_purchased_cross_user_none(clean_wishlist: None) -> None:
         uid_a, uid_b = user_a.id, user_b.id
 
     with SessionLocal() as db:
-        entry = svc.add_to_wishlist(db, by_user_id=uid_a, coffee_name="Rwanda", roaster_name=None, source_url=None)
+        entry = svc.add_to_wishlist(
+            db, by_user_id=uid_a, coffee_name="Rwanda", roaster_name=None, source_url=None
+        )
         eid = entry.id
 
     with SessionLocal() as db:
@@ -271,7 +302,13 @@ def test_remove_cross_user_false_keeps_row(clean_wishlist: None) -> None:
         uid_a, uid_b = user_a.id, user_b.id
 
     with SessionLocal() as db:
-        entry = svc.add_to_wishlist(db, by_user_id=uid_a, coffee_name="Tanzania Peaberry", roaster_name=None, source_url=None)
+        entry = svc.add_to_wishlist(
+            db,
+            by_user_id=uid_a,
+            coffee_name="Tanzania Peaberry",
+            roaster_name=None,
+            source_url=None,
+        )
         eid = entry.id
 
     with SessionLocal() as db:
@@ -296,7 +333,9 @@ def test_remove_owner_true(clean_wishlist: None) -> None:
         uid = user.id
 
     with SessionLocal() as db:
-        entry = svc.add_to_wishlist(db, by_user_id=uid, coffee_name="Costa Rica", roaster_name=None, source_url=None)
+        entry = svc.add_to_wishlist(
+            db, by_user_id=uid, coffee_name="Costa Rica", roaster_name=None, source_url=None
+        )
         eid = entry.id
 
     with SessionLocal() as db:

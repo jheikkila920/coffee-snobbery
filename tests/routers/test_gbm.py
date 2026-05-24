@@ -14,7 +14,6 @@ tests/routers/test_brew_router.py.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -103,8 +102,8 @@ def clean_gbm() -> Iterator[None]:
 
     def _reset() -> None:
         with engine.begin() as conn:
-            conn.execute(text(f"DELETE FROM brew_sessions"))
-            conn.execute(text(f"DELETE FROM brew_drafts"))
+            conn.execute(text("DELETE FROM brew_sessions"))
+            conn.execute(text("DELETE FROM brew_drafts"))
             conn.execute(text(f"DELETE FROM recipes WHERE name LIKE '{_RECIPE_PREFIX}%'"))
             conn.execute(text("DELETE FROM coffees WHERE name LIKE 'GBMCoffee%'"))
 
@@ -155,7 +154,7 @@ def test_gbm_200_with_steps(app: Any, seeded_regular_user: Any, clean_gbm: Any) 
     r = client.get(f"/brew/guided?recipe_id={rid}")
     assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:300]}"
     assert 'x-data="guidedBrewMode"' in r.text, (
-        "Expected Alpine x-data=\"guidedBrewMode\" in response body"
+        'Expected Alpine x-data="guidedBrewMode" in response body'
     )
     assert "data-steps=" in r.text, "Expected data-steps attribute in response body"
 
@@ -208,9 +207,7 @@ def test_gbm_200_stepless_recipe(app: Any, seeded_regular_user: Any, clean_gbm: 
     )
 
 
-def test_brew_time_seconds_persisted(
-    app: Any, seeded_regular_user: Any, clean_gbm: Any
-) -> None:
+def test_brew_time_seconds_persisted(app: Any, seeded_regular_user: Any, clean_gbm: Any) -> None:
     """POST /brew with brew_time_seconds=300 → the persisted session has brew_time_seconds=300."""
     _require_postgres()
     _require_brew_sessions_table()

@@ -24,9 +24,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_admin_users._prime_csrf)
 # ---------------------------------------------------------------------------
@@ -140,9 +137,7 @@ class TestSetCredentialMasked:
                 "X-CSRF-Token": client.headers.get("X-CSRF-Token", ""),
             },
         )
-        assert resp.status_code == 404, (
-            f"Expected 404 for unknown provider, got {resp.status_code}"
-        )
+        assert resp.status_code == 404, f"Expected 404 for unknown provider, got {resp.status_code}"
 
 
 class TestProviderToggleModel:
@@ -193,10 +188,12 @@ class TestProviderToggleModel:
         )
 
         # Step 3: verify the DB state directly
+        import asyncio
+
+        from sqlalchemy import select
+
         from app.main import async_session_factory
         from app.models.api_credential import ApiCredential
-        from sqlalchemy import select
-        import asyncio
 
         async def _check() -> dict:
             async with async_session_factory() as db:
@@ -256,10 +253,12 @@ class TestProviderToggleModel:
             f"Expected 200 on re-enable, got {enable_resp.status_code}"
         )
 
+        import asyncio
+
+        from sqlalchemy import select
+
         from app.main import async_session_factory
         from app.models.api_credential import ApiCredential
-        from sqlalchemy import select
-        import asyncio
 
         async def _check() -> bool | None:
             async with async_session_factory() as db:

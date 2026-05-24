@@ -132,23 +132,17 @@ def create_coffee(
 
 def get_coffee(db: Session, *, coffee_id: int) -> Coffee | None:
     """Return the coffee with *coffee_id*, or ``None`` if missing."""
-    return db.execute(
-        select(Coffee).where(Coffee.id == coffee_id)
-    ).scalar_one_or_none()
+    return db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one_or_none()
 
 
-def get_coffee_with_bags(
-    db: Session, *, coffee_id: int
-) -> tuple[Coffee, list[Bag]] | None:
+def get_coffee_with_bags(db: Session, *, coffee_id: int) -> tuple[Coffee, list[Bag]] | None:
     """Return ``(Coffee, list[Bag])`` for the detail page, or ``None``.
 
     Bags ordered by ``opened_at DESC NULLS LAST, created_at DESC`` so the
     most-recently-opened bag tops the list while never-opened bags fall
     to the end (Postgres ``NULLS LAST`` ordering hint).
     """
-    coffee = db.execute(
-        select(Coffee).where(Coffee.id == coffee_id)
-    ).scalar_one_or_none()
+    coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one_or_none()
     if coffee is None:
         return None
     bags = list(
@@ -242,9 +236,7 @@ def update_coffee(
         )
     )
     db.commit()
-    coffee = db.execute(
-        select(Coffee).where(Coffee.id == coffee_id)
-    ).scalar_one()
+    coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one()
     log.info(
         CATALOG_COFFEE_UPDATED,
         coffee_id=coffee_id,
@@ -257,9 +249,7 @@ def update_coffee(
 def archive_coffee(db: Session, *, coffee_id: int, by_user_id: int) -> None:
     """Soft-delete a coffee (``archived=True``) and emit the event."""
     db.execute(
-        update(Coffee)
-        .where(Coffee.id == coffee_id)
-        .values(archived=True, updated_at=func.now())
+        update(Coffee).where(Coffee.id == coffee_id).values(archived=True, updated_at=func.now())
     )
     db.commit()
     log.info(
@@ -277,10 +267,7 @@ def list_distinct_countries(db: Session) -> list[str]:
     ``GET /filters-panel`` endpoint reuses this for a partial refresh.
     """
     stmt = (
-        select(Coffee.country)
-        .where(Coffee.country.isnot(None))
-        .distinct()
-        .order_by(Coffee.country)
+        select(Coffee.country).where(Coffee.country.isnot(None)).distinct().order_by(Coffee.country)
     )
     return [row for row in db.execute(stmt).scalars().all() if row]
 
@@ -290,9 +277,7 @@ def list_distinct_processes() -> tuple[str, ...]:
     return COFFEE_PROCESSES
 
 
-def flavor_note_name_map(
-    db: Session, *, ids: list[int]
-) -> dict[int, str]:
+def flavor_note_name_map(db: Session, *, ids: list[int]) -> dict[int, str]:
     """Return ``{flavor_note_id: name}`` for the given ids.
 
     Used by the list template to render advertised-flavor-note pills.

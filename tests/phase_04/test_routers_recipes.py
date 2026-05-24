@@ -110,9 +110,7 @@ def _seed_recipe(**kwargs: Any) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def test_list_recipes_renders_page(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_list_recipes_renders_page(authed_client: Any, clean_recipes: None) -> None:
     """Authed GET /recipes → 200 + page HTML with h1 + Add recipe button."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -142,9 +140,7 @@ def test_create_recipe_valid(authed_client: Any, clean_recipes: None) -> None:
             "water_grams": "250",
             "water_temp_c": "92",
             "grind_setting": "medium-fine",
-            "steps": json.dumps(
-                [{"water_grams": 50, "time_seconds": 30, "label": "Bloom"}]
-            ),
+            "steps": json.dumps([{"water_grams": 50, "time_seconds": 30, "label": "Bloom"}]),
         },
     )
     assert resp.status_code == 200, resp.text
@@ -153,9 +149,7 @@ def test_create_recipe_valid(authed_client: Any, clean_recipes: None) -> None:
     assert "recipe-form-mount" in resp.text
 
 
-def test_create_recipe_rejects_water_temp_over_100(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_create_recipe_rejects_water_temp_over_100(authed_client: Any, clean_recipes: None) -> None:
     """temp=101 → 200 + form re-render with the water_temp_c error.
 
     Locks ROADMAP Phase 4 success criterion #5 ("temp 0-100°C").
@@ -178,9 +172,7 @@ def test_create_recipe_rejects_water_temp_over_100(
     assert "text-red-700" in resp.text
 
 
-def test_create_recipe_rejects_negative_dose(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_create_recipe_rejects_negative_dose(authed_client: Any, clean_recipes: None) -> None:
     """dose=0 → 200 + form re-render with dose_grams error."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -273,9 +265,7 @@ def test_create_recipe_step_water_over_2000_rejected(
             "water_grams": "250",
             "water_temp_c": "92",
             "grind_setting": "",
-            "steps": json.dumps(
-                [{"water_grams": 2001, "time_seconds": 30, "label": ""}]
-            ),
+            "steps": json.dumps([{"water_grams": 2001, "time_seconds": 30, "label": ""}]),
         },
     )
     assert resp.status_code == 200
@@ -285,9 +275,7 @@ def test_create_recipe_step_water_over_2000_rejected(
     assert "text-red-700" in resp.text
 
 
-def test_create_recipe_extra_field_rejected(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_create_recipe_extra_field_rejected(authed_client: Any, clean_recipes: None) -> None:
     """Extra form field → 200 + form re-render (T-04-MASS via extra='forbid')."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -313,9 +301,7 @@ def test_create_recipe_extra_field_rejected(
 # --------------------------------------------------------------------------- #
 
 
-def test_edit_pre_populates_steps_json(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_edit_pre_populates_steps_json(authed_client: Any, clean_recipes: None) -> None:
     """GET /{id}/edit → body contains data-initial-steps with the recipe's steps."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -335,9 +321,7 @@ def test_edit_pre_populates_steps_json(
     assert "Pour" in body
 
 
-def test_update_persists_steps_change(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_update_persists_steps_change(authed_client: Any, clean_recipes: None) -> None:
     """POST /{id} with new steps → fetch reflects."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -376,9 +360,7 @@ def test_update_persists_steps_change(
 # --------------------------------------------------------------------------- #
 
 
-def test_duplicate_emits_hx_redirect(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_duplicate_emits_hx_redirect(authed_client: Any, clean_recipes: None) -> None:
     """POST /{id}/duplicate → 200 + HX-Redirect: /recipes/{new_id}/edit."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -397,9 +379,7 @@ def test_duplicate_emits_hx_redirect(
     assert new_id != rid
 
 
-def test_duplicate_404_unknown_id(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_duplicate_404_unknown_id(authed_client: Any, clean_recipes: None) -> None:
     """POST /99999/duplicate → 404."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -413,9 +393,7 @@ def test_duplicate_404_unknown_id(
 # --------------------------------------------------------------------------- #
 
 
-def test_archive_recipe_marks_archived(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_archive_recipe_marks_archived(authed_client: Any, clean_recipes: None) -> None:
     """POST /{id}/archive → DB row.archived=True."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -438,9 +416,7 @@ def test_archive_recipe_marks_archived(
 # --------------------------------------------------------------------------- #
 
 
-def test_csrf_missing_returns_403(
-    csrf_client: Any, clean_recipes: None
-) -> None:
+def test_csrf_missing_returns_403(csrf_client: Any, clean_recipes: None) -> None:
     """POST /recipes with mismatched CSRF → 403 from CSRFMiddleware."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -453,9 +429,7 @@ def test_csrf_missing_returns_403(
 # --------------------------------------------------------------------------- #
 
 
-def test_recipe_list_shows_duplicate_button(
-    authed_client: Any, clean_recipes: None
-) -> None:
+def test_recipe_list_shows_duplicate_button(authed_client: Any, clean_recipes: None) -> None:
     """List row HTML contains hx-post="/recipes/<id>/duplicate" — UI-SPEC lock."""
     _require_postgres()
     _require_p4_migration_applied()

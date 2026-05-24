@@ -412,7 +412,7 @@ def _postgres_reachable() -> bool:
     try:
         with socket.create_connection((host, port), timeout=0.5):
             return True
-    except (OSError, socket.timeout):
+    except (TimeoutError, OSError):
         return False
 
 

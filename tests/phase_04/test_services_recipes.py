@@ -164,9 +164,7 @@ def test_duplicate_recipe_clones_fields(clean_recipes: None) -> None:
         src_id = src.id
 
     with SessionLocal() as db:
-        copy = recipes_service.duplicate_recipe(
-            db, source_id=src_id, by_user_id=0
-        )
+        copy = recipes_service.duplicate_recipe(db, source_id=src_id, by_user_id=0)
         copy_id = copy.id
         copy_name = copy.name
         copy_dose = copy.dose_grams
@@ -208,9 +206,7 @@ def test_duplicate_recipe_steps_independent(clean_recipes: None) -> None:
         src_id = src.id
 
     with SessionLocal() as db:
-        copy = recipes_service.duplicate_recipe(
-            db, source_id=src_id, by_user_id=0
-        )
+        copy = recipes_service.duplicate_recipe(db, source_id=src_id, by_user_id=0)
         copy_id = copy.id
 
     # Now mutate source's steps via update_recipe.

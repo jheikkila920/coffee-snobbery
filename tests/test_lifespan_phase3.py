@@ -35,8 +35,7 @@ def _require_lifespan_deps() -> None:
         from app.services.settings import prewarm_cache  # noqa: F401
     except ImportError:
         pytest.skip(
-            "Phase 3 lifespan dependencies not yet present "
-            "(Plans 03-02 / 03-03 / 03-04 / 03-05)"
+            "Phase 3 lifespan dependencies not yet present (Plans 03-02 / 03-03 / 03-04 / 03-05)"
         )
 
 
@@ -224,8 +223,7 @@ def test_prewarm_cache_populated_after_lifespan(
 
     # Phase 0 seeded 19 rows + Plan 03-01 added the 20th.
     assert len(settings_service._cache) >= 19, (
-        f"after lifespan, settings._cache must hold >=19 rows; "
-        f"got {len(settings_service._cache)}"
+        f"after lifespan, settings._cache must hold >=19 rows; got {len(settings_service._cache)}"
     )
     assert "recommendation_region" in settings_service._cache, (
         "seeded key 'recommendation_region' must be in the post-lifespan cache"

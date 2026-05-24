@@ -21,9 +21,6 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -63,13 +60,9 @@ class TestListUsers:
         """GET /admin/users returns 200 and contains the seeded admin username."""
         _prime_csrf(client, admin_session["session_id"])
         resp = client.get("/admin/users")
-        assert resp.status_code == 200, (
-            f"Expected 200 on GET /admin/users, got {resp.status_code}"
-        )
+        assert resp.status_code == 200, f"Expected 200 on GET /admin/users, got {resp.status_code}"
         username = seeded_admin_user["user"].username
-        assert username in resp.text, (
-            f"Expected '{username}' in /admin/users response body"
-        )
+        assert username in resp.text, f"Expected '{username}' in /admin/users response body"
 
     def test_list_users_non_admin_403(
         self,
@@ -141,22 +134,20 @@ class TestCreateUser:
             f"Expected 200 (row fragment) on user create, got {resp.status_code}"
         )
         # The new username should appear in the response fragment
-        assert username in resp.text, (
-            f"Expected new username '{username}' in create response"
-        )
+        assert username in resp.text, f"Expected new username '{username}' in create response"
         # The plaintext password must NOT appear in the response
         assert "validpassword12" not in resp.text, (
             "Plaintext password must not appear in the response body"
         )
 
         # Verify hash is stored as argon2id
+        from sqlalchemy import select
+
         from app.db import SessionLocal
         from app.models.user import User
-        from sqlalchemy import select
+
         with SessionLocal() as db:
-            user = db.execute(
-                select(User).where(User.username == username)
-            ).scalar_one_or_none()
+            user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         assert user is not None, f"User '{username}' not found in DB after create"
         assert user.password_hash.startswith("$argon2id$"), (
             f"Expected argon2id hash, got: {user.password_hash[:20]}"
@@ -182,13 +173,13 @@ class TestDeleteUserGuards:
             f"Expected 409 or 200 error fragment for D-15 block, got {resp.status_code}"
         )
         # The user must still exist in the DB
+        from sqlalchemy import select
+
         from app.db import SessionLocal
         from app.models.user import User
-        from sqlalchemy import select
+
         with SessionLocal() as db:
-            user = db.execute(
-                select(User).where(User.id == target_id)
-            ).scalar_one_or_none()
+            user = db.execute(select(User).where(User.id == target_id)).scalar_one_or_none()
         assert user is not None, (
             f"D-15: User {target_id} was deleted despite having brew_sessions — MUST be blocked"
         )
@@ -204,17 +195,15 @@ class TestDeleteUserGuards:
         target_id = user_no_brews["user_id"]
 
         resp = client.post(f"/admin/users/{target_id}/delete")
-        assert resp.status_code == 200, (
-            f"Expected 200 on successful delete, got {resp.status_code}"
-        )
+        assert resp.status_code == 200, f"Expected 200 on successful delete, got {resp.status_code}"
         # The user must be gone from the DB
+        from sqlalchemy import select
+
         from app.db import SessionLocal
         from app.models.user import User
-        from sqlalchemy import select
+
         with SessionLocal() as db:
-            user = db.execute(
-                select(User).where(User.id == target_id)
-            ).scalar_one_or_none()
+            user = db.execute(select(User).where(User.id == target_id)).scalar_one_or_none()
         assert user is None, (
             f"Expected user {target_id} to be deleted (no brew_sessions), but row still exists"
         )
@@ -234,19 +223,15 @@ class TestDeleteUserGuards:
             f"Expected refusal response for last-admin delete, got {resp.status_code}"
         )
         # The admin user must still exist
+        from sqlalchemy import select
+
         from app.db import SessionLocal
         from app.models.user import User
-        from sqlalchemy import select
+
         with SessionLocal() as db:
-            user = db.execute(
-                select(User).where(User.id == target_id)
-            ).scalar_one_or_none()
-        assert user is not None, (
-            "D-16: Last admin was deleted — must be blocked"
-        )
-        assert user.is_admin is True, (
-            "D-16: Last admin's is_admin was cleared — must be blocked"
-        )
+            user = db.execute(select(User).where(User.id == target_id)).scalar_one_or_none()
+        assert user is not None, "D-16: Last admin was deleted — must be blocked"
+        assert user.is_admin is True, "D-16: Last admin's is_admin was cleared — must be blocked"
 
     def test_self_demote_blocked(
         self,
@@ -257,15 +242,15 @@ class TestDeleteUserGuards:
         admin1_id = two_admins["admin1_id"]
         _prime_csrf(client, two_admins["admin1_cookie"])
 
-        resp = client.post(f"/admin/users/{admin1_id}/deactivate")
+        client.post(f"/admin/users/{admin1_id}/deactivate")
         # The user must NOT be deactivated
+        from sqlalchemy import select
+
         from app.db import SessionLocal
         from app.models.user import User
-        from sqlalchemy import select
+
         with SessionLocal() as db:
-            user = db.execute(
-                select(User).where(User.id == admin1_id)
-            ).scalar_one_or_none()
+            user = db.execute(select(User).where(User.id == admin1_id)).scalar_one_or_none()
         assert user is not None, "D-16: Self-deactivation should not delete the user"
         assert user.is_active is True, (
             "D-16: Admin was allowed to deactivate themselves — must be blocked"
@@ -282,9 +267,10 @@ class TestToggleAdmin:
         user_with_sessions: dict[str, Any],
     ) -> None:
         """POST /admin/users/{id}/toggle-admin deletes all target's sessions."""
+        from sqlalchemy import func, select
+
         from app.db import SessionLocal
         from app.models.session import Session as SessionModel
-        from sqlalchemy import func, select
 
         target_id = user_with_sessions["user_id"]
         _prime_csrf(client, admin_session["session_id"])
@@ -292,23 +278,21 @@ class TestToggleAdmin:
         # Verify there are sessions before toggle
         with SessionLocal() as db:
             pre_count = db.execute(
-                select(func.count()).select_from(SessionModel).where(
-                    SessionModel.user_id == target_id
-                )
+                select(func.count())
+                .select_from(SessionModel)
+                .where(SessionModel.user_id == target_id)
             ).scalar_one()
         assert pre_count >= 1, f"Expected >=1 session before toggle, got {pre_count}"
 
         resp = client.post(f"/admin/users/{target_id}/toggle-admin")
-        assert resp.status_code == 200, (
-            f"Expected 200 on toggle-admin, got {resp.status_code}"
-        )
+        assert resp.status_code == 200, f"Expected 200 on toggle-admin, got {resp.status_code}"
 
         # After toggle: all sessions for target_id must be deleted
         with SessionLocal() as db:
             post_count = db.execute(
-                select(func.count()).select_from(SessionModel).where(
-                    SessionModel.user_id == target_id
-                )
+                select(func.count())
+                .select_from(SessionModel)
+                .where(SessionModel.user_id == target_id)
             ).scalar_one()
         assert post_count == 0, (
             f"Expected 0 sessions after toggle-admin, got {post_count} (T-09-04)"
@@ -347,15 +331,15 @@ class TestDeactivateRequiresCsrf:
         )
 
         # Sessions for target must be deleted
+        from sqlalchemy import func, select
+
         from app.db import SessionLocal
         from app.models.session import Session as SessionModel
-        from sqlalchemy import func, select
+
         with SessionLocal() as db:
             count = db.execute(
-                select(func.count()).select_from(SessionModel).where(
-                    SessionModel.user_id == target_id
-                )
+                select(func.count())
+                .select_from(SessionModel)
+                .where(SessionModel.user_id == target_id)
             ).scalar_one()
-        assert count == 0, (
-            f"Expected 0 sessions after deactivate, got {count} (T-09-04)"
-        )
+        assert count == 0, f"Expected 0 sessions after deactivate, got {count} (T-09-04)"

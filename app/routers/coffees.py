@@ -55,7 +55,6 @@ from app.dependencies.db import get_session
 from app.models.user import User
 from app.schemas.coffee import CoffeeCreate
 from app.services import coffees as coffees_service
-from app.services import flavor_notes as flavor_notes_service
 from app.services import roasters as roasters_service
 from app.services.coffees import COFFEE_PROCESSES, COFFEE_ROAST_LEVELS
 from app.services.form_validation import errors_by_field
@@ -117,9 +116,7 @@ def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
     if leftovers:
         existing = normalized.get("_form")
         combined = (
-            "; ".join(leftovers)
-            if existing is None
-            else f"{existing}; {'; '.join(leftovers)}"
+            "; ".join(leftovers) if existing is None else f"{existing}; {'; '.join(leftovers)}"
         )
         normalized["_form"] = combined
     return normalized
@@ -524,9 +521,7 @@ def edit_coffee_form(
         "roast_level": coffee.roast_level or "",
         "varietal": coffee.varietal or "",
         "notes": coffee.notes or "",
-        "advertised_flavor_note_ids": [
-            str(i) for i in (coffee.advertised_flavor_note_ids or [])
-        ],
+        "advertised_flavor_note_ids": [str(i) for i in (coffee.advertised_flavor_note_ids or [])],
     }
     context = _hydrate_form_context(
         db,
@@ -622,9 +617,11 @@ def archive_coffee_handler(
     coffees_service.archive_coffee(db, coffee_id=coffee_id, by_user_id=user.id)
     coffee = coffees_service.get_coffee(db, coffee_id=coffee_id)
 
-    flavor_note_names = coffees_service.flavor_note_name_map(
-        db, ids=coffee.advertised_flavor_note_ids or []
-    ) if coffee else {}
+    flavor_note_names = (
+        coffees_service.flavor_note_name_map(db, ids=coffee.advertised_flavor_note_ids or [])
+        if coffee
+        else {}
+    )
     roaster_name_map: dict[int, str] = {}
     if coffee and coffee.roaster_id is not None:
         roaster = roasters_service.get_roaster(db, roaster_id=coffee.roaster_id)

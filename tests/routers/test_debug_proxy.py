@@ -81,9 +81,7 @@ def test_https_via_proxy_header(client, seeded_admin_user, forwarded_headers) ->
     )
 
 
-def test_debug_proxy_admin_only(
-    client, seeded_admin_user, seeded_regular_user
-) -> None:
+def test_debug_proxy_admin_only(client, seeded_admin_user, seeded_regular_user) -> None:
     """D-14 / AUTH-09: /debug/proxy is admin-gated.
 
     Three states:
@@ -94,17 +92,13 @@ def test_debug_proxy_admin_only(
     _require_debug_proxy()
     # Anon
     r_anon = client.get("/debug/proxy")
-    assert r_anon.status_code in (401, 403), (
-        f"anon must be 401/403, got {r_anon.status_code}"
-    )
+    assert r_anon.status_code in (401, 403), f"anon must be 401/403, got {r_anon.status_code}"
     # Non-admin
     r_user = client.get(
         "/debug/proxy",
         cookies={"session_id": seeded_regular_user["signed_cookie"]},
     )
-    assert r_user.status_code == 403, (
-        f"non-admin must be 403, got {r_user.status_code}"
-    )
+    assert r_user.status_code == 403, f"non-admin must be 403, got {r_user.status_code}"
     # Admin
     r_admin = client.get(
         "/debug/proxy",

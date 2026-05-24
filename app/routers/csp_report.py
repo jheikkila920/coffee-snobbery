@@ -84,14 +84,10 @@ def _log_csp_violation(payload: dict[str, Any], ip: str) -> None:
     # older, more widely-tested key set.
     blocked_uri = payload.get("blocked-uri") or payload.get("blockedURL") or ""
     violated_directive = (
-        payload.get("violated-directive")
-        or payload.get("effectiveDirective")
-        or ""
+        payload.get("violated-directive") or payload.get("effectiveDirective") or ""
     )
     line = payload.get("line-number") or payload.get("lineNumber") or 0
-    source_file = (
-        payload.get("source-file") or payload.get("sourceFile") or ""
-    )
+    source_file = payload.get("source-file") or payload.get("sourceFile") or ""
 
     log.warning(
         CSP_VIOLATION,

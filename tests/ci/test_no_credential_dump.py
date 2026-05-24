@@ -93,7 +93,7 @@ def test_no_api_credential_model_dump(source_path: Path) -> None:
     assert not match, (
         f"{source_path}: model_dump() called in a file that references ApiCredential "
         f"(SEC-6 / D-07b). "
-        f"Line: {src[:match.start()].count(chr(10)) + 1}. "
+        f"Line: {src[: match.start()].count(chr(10)) + 1}. "
         f"Fix: keep the decrypted key in a frozen dataclass (ProviderCredential), "
         f"never in a Pydantic model that can be serialized via model_dump(). "
         f"Never loosen this test."

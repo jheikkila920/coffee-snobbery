@@ -19,6 +19,7 @@ def _require_nav_wired() -> None:
         from app.routers.config_hub import router  # noqa: F401
     except ImportError as exc:
         import pytest
+
         pytest.skip(f"config_hub router not wired: {exc}")
 
 
@@ -34,8 +35,7 @@ def test_config_hub_returns_200_for_authenticated_user(
         cookies={"session_id": signed_cookie},
     )
     assert r.status_code == 200, (
-        f"GET /config must return 200 for authenticated user; got {r.status_code}: "
-        f"{r.text[:300]}"
+        f"GET /config must return 200 for authenticated user; got {r.status_code}: {r.text[:300]}"
     )
     # Config hub page should contain catalog links
     assert "/coffees" in r.text
@@ -87,7 +87,7 @@ def test_non_admin_home_has_no_admin_link(
     # We check specifically for the nav Admin link, not any other admin reference.
     # The link pattern in base.html is href="/admin" within the nav frame.
     assert 'href="/admin"' not in r.text, (
-        "Non-admin user's home page must NOT contain href=\"/admin\" in the nav (MOB-02)"
+        'Non-admin user\'s home page must NOT contain href="/admin" in the nav (MOB-02)'
     )
 
 
@@ -104,7 +104,7 @@ def test_admin_home_has_admin_link(
     )
     assert r.status_code == 200
     assert 'href="/admin"' in r.text, (
-        "Admin user's home page must contain href=\"/admin\" in the nav"
+        'Admin user\'s home page must contain href="/admin" in the nav'
     )
 
 
@@ -121,5 +121,5 @@ def test_authenticated_home_has_nav_bar_component(
     )
     assert r.status_code == 200
     assert 'x-data="navBar"' in r.text, (
-        "Authenticated home page must contain x-data=\"navBar\" (persistent nav frame present)"
+        'Authenticated home page must contain x-data="navBar" (persistent nav frame present)'
     )

@@ -77,7 +77,7 @@ def test_script_style_tags_have_nonce(template_path: Path) -> None:
     assert not match, (
         f"{template_path}: <script>/<style> tag is missing nonce= attribute (SEC-02 / D-07a). "
         f"(matched: {match.group(0)!r})  "
-        f"Fix: add nonce=\"{{{{ csp_nonce(request) }}}}\" to the tag. "
+        f'Fix: add nonce="{{{{ csp_nonce(request) }}}}" to the tag. '
         f"Never loosen this test."
     )
 

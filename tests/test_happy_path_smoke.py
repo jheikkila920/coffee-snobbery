@@ -63,10 +63,7 @@ def _extract_id_from_html(html: str, prefix: str) -> int:
     Returns the integer id or raises AssertionError if not found.
     """
     m = re.search(rf'id="{re.escape(prefix)}-(\d+)"', html)
-    assert m, (
-        f"Expected id=\"{prefix}-<N>\" in response HTML; "
-        f"got: {html[:400]}"
-    )
+    assert m, f'Expected id="{prefix}-<N>" in response HTML; got: {html[:400]}'
     return int(m.group(1))
 
 
@@ -95,8 +92,7 @@ def test_happy_path_full_chain(client) -> None:
     # ------------------------------------------------------------------ #
     r_setup_get = client.get("/setup")
     assert r_setup_get.status_code == 200, (
-        f"GET /setup must 200 on fresh DB; got {r_setup_get.status_code}: "
-        f"{r_setup_get.text[:200]}"
+        f"GET /setup must 200 on fresh DB; got {r_setup_get.status_code}: {r_setup_get.text[:200]}"
     )
     token = r_setup_get.cookies.get("csrftoken")
     assert token, "starlette-csrf must set csrftoken cookie on GET /setup"
@@ -117,9 +113,7 @@ def test_happy_path_full_chain(client) -> None:
         f"POST /setup must 303; got {r_setup.status_code}: {r_setup.text[:300]}"
     )
     set_cookie = r_setup.headers.get("set-cookie", "")
-    assert "session_id=" in set_cookie, (
-        f"auto-login must set session_id; got: {set_cookie!r}"
-    )
+    assert "session_id=" in set_cookie, f"auto-login must set session_id; got: {set_cookie!r}"
 
     m = re.search(r"session_id=([^;]+)", set_cookie)
     assert m, f"could not extract session_id: {set_cookie}"
@@ -143,8 +137,7 @@ def test_happy_path_full_chain(client) -> None:
     )
     # Success → 200 + row fragment (not a 30x redirect)
     assert r_roaster.status_code == 200, (
-        f"POST /roasters must 200 on success; got {r_roaster.status_code}: "
-        f"{r_roaster.text[:300]}"
+        f"POST /roasters must 200 on success; got {r_roaster.status_code}: {r_roaster.text[:300]}"
     )
     roaster_id = _extract_id_from_html(r_roaster.text, "roaster")
     token = r_roaster.cookies.get("csrftoken", token)
@@ -167,8 +160,7 @@ def test_happy_path_full_chain(client) -> None:
         follow_redirects=False,
     )
     assert r_coffee.status_code == 200, (
-        f"POST /coffees must 200 on success; got {r_coffee.status_code}: "
-        f"{r_coffee.text[:300]}"
+        f"POST /coffees must 200 on success; got {r_coffee.status_code}: {r_coffee.text[:300]}"
     )
     coffee_id = _extract_id_from_html(r_coffee.text, "coffee")
     token = r_coffee.cookies.get("csrftoken", token)
@@ -189,8 +181,7 @@ def test_happy_path_full_chain(client) -> None:
         follow_redirects=False,
     )
     assert r_brewer.status_code == 200, (
-        f"POST /equipment (brewer) must 200; got {r_brewer.status_code}: "
-        f"{r_brewer.text[:300]}"
+        f"POST /equipment (brewer) must 200; got {r_brewer.status_code}: {r_brewer.text[:300]}"
     )
     brewer_id = _extract_id_from_html(r_brewer.text, "equipment")
     token = r_brewer.cookies.get("csrftoken", token)
@@ -211,8 +202,7 @@ def test_happy_path_full_chain(client) -> None:
         follow_redirects=False,
     )
     assert r_grinder.status_code == 200, (
-        f"POST /equipment (grinder) must 200; got {r_grinder.status_code}: "
-        f"{r_grinder.text[:300]}"
+        f"POST /equipment (grinder) must 200; got {r_grinder.status_code}: {r_grinder.text[:300]}"
     )
     grinder_id = _extract_id_from_html(r_grinder.text, "equipment")
     token = r_grinder.cookies.get("csrftoken", token)
@@ -233,8 +223,7 @@ def test_happy_path_full_chain(client) -> None:
         follow_redirects=False,
     )
     assert r_kettle.status_code == 200, (
-        f"POST /equipment (kettle) must 200; got {r_kettle.status_code}: "
-        f"{r_kettle.text[:300]}"
+        f"POST /equipment (kettle) must 200; got {r_kettle.status_code}: {r_kettle.text[:300]}"
     )
     kettle_id = _extract_id_from_html(r_kettle.text, "equipment")
     token = r_kettle.cookies.get("csrftoken", token)
@@ -243,10 +232,12 @@ def test_happy_path_full_chain(client) -> None:
     # Step 7: POST /recipes                                               #
     # steps is a JSON-stringified array per the router (json.loads path)  #
     # ------------------------------------------------------------------ #
-    steps_json = json.dumps([
-        {"water_grams": 50, "time_seconds": 30, "label": "bloom"},
-        {"water_grams": 200, "time_seconds": 120, "label": "main pour"},
-    ])
+    steps_json = json.dumps(
+        [
+            {"water_grams": 50, "time_seconds": 30, "label": "bloom"},
+            {"water_grams": 200, "time_seconds": 120, "label": "main pour"},
+        ]
+    )
     r_recipe = client.post(
         "/recipes",
         data={
@@ -263,8 +254,7 @@ def test_happy_path_full_chain(client) -> None:
         follow_redirects=False,
     )
     assert r_recipe.status_code == 200, (
-        f"POST /recipes must 200 on success; got {r_recipe.status_code}: "
-        f"{r_recipe.text[:300]}"
+        f"POST /recipes must 200 on success; got {r_recipe.status_code}: {r_recipe.text[:300]}"
     )
     recipe_id = _extract_id_from_html(r_recipe.text, "recipe")
     token = r_recipe.cookies.get("csrftoken", token)
@@ -293,13 +283,10 @@ def test_happy_path_full_chain(client) -> None:
         follow_redirects=False,
     )
     assert r_brew.status_code == 204, (
-        f"POST /brew must 204 on success (not 200); got {r_brew.status_code}: "
-        f"{r_brew.text[:300]}"
+        f"POST /brew must 204 on success (not 200); got {r_brew.status_code}: {r_brew.text[:300]}"
     )
     hx_redirect = r_brew.headers.get("HX-Redirect", "")
-    assert hx_redirect == "/brew", (
-        f"POST /brew must set HX-Redirect: /brew; got {hx_redirect!r}"
-    )
+    assert hx_redirect == "/brew", f"POST /brew must set HX-Redirect: /brew; got {hx_redirect!r}"
     token = r_brew.cookies.get("csrftoken", token)
 
     # ------------------------------------------------------------------ #
@@ -308,14 +295,12 @@ def test_happy_path_full_chain(client) -> None:
     # ------------------------------------------------------------------ #
     r_home = client.get("/", cookies=_cookies())
     assert r_home.status_code == 200, (
-        f"GET / must 200 for authenticated user; got {r_home.status_code}: "
-        f"{r_home.text[:300]}"
+        f"GET / must 200 for authenticated user; got {r_home.status_code}: {r_home.text[:300]}"
     )
 
     # "Recent brews" is always-on regardless of cold-start gate (D-01, HOME-07).
     assert "Recent brews" in r_home.text, (
-        "home shell must always render the 'Recent brews' section; "
-        f"got: {r_home.text[:500]}"
+        f"home shell must always render the 'Recent brews' section; got: {r_home.text[:500]}"
     )
 
     # The cold-start gate check: we just logged 1 session (< 3 needed).

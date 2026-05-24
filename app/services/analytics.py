@@ -327,10 +327,7 @@ def get_cold_start_counts(db: Session, user_id: int) -> dict[str, Any]:
     gate_open = sessions >= 3 AND distinct_notes >= 5.
     """
     session_count: int = (
-        db.scalar(
-            select(func.count(BrewSession.id)).where(BrewSession.user_id == user_id)
-        )
-        or 0
+        db.scalar(select(func.count(BrewSession.id)).where(BrewSession.user_id == user_id)) or 0
     )
 
     # Use raw SQL for unnest — column_valued() lateral join is not supported

@@ -30,9 +30,6 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Module-level import probe — surfaces the RED state clearly.
 # The try/except does NOT skip; it lets tests that call the service fail with
@@ -40,6 +37,7 @@ import pytest
 # ---------------------------------------------------------------------------
 try:
     from app.services import search as search_service  # noqa: F401
+
     _SEARCH_SERVICE_AVAILABLE = True
 except ImportError:
     search_service = None  # type: ignore[assignment]
@@ -289,7 +287,7 @@ def test_search_equipment(
     model = catalog["equipment_model"]  # "V60-02"
 
     # Full brand+model concat
-    resp_full = client.get(f"/search?q=Hario+V60", cookies=cookies)
+    resp_full = client.get("/search?q=Hario+V60", cookies=cookies)
     assert resp_full.status_code == 200
     assert brand in resp_full.text or model in resp_full.text, (
         f"Equipment '{brand} {model}' not found via full brand+model query"
@@ -298,16 +296,12 @@ def test_search_equipment(
     # Brand alone
     resp_brand = client.get("/search?q=Hario", cookies=cookies)
     assert resp_brand.status_code == 200
-    assert brand in resp_brand.text, (
-        f"Equipment brand '{brand}' not found in search results"
-    )
+    assert brand in resp_brand.text, f"Equipment brand '{brand}' not found in search results"
 
     # Model alone
     resp_model = client.get("/search?q=V60", cookies=cookies)
     assert resp_model.status_code == 200
-    assert model in resp_model.text, (
-        f"Equipment model '{model}' not found in search results"
-    )
+    assert model in resp_model.text, f"Equipment model '{model}' not found in search results"
 
 
 def test_search_flavor_notes(
@@ -543,15 +537,11 @@ def test_shared_catalog_visible(
 
     resp = client.get("/search?q=Ethiopia", cookies=cookies)
     assert resp.status_code == 200
-    assert coffee_name in resp.text, (
-        f"Shared coffee '{coffee_name}' not visible to User A"
-    )
+    assert coffee_name in resp.text, f"Shared coffee '{coffee_name}' not visible to User A"
 
     resp2 = client.get("/search?q=Equinox", cookies=cookies)
     assert resp2.status_code == 200
-    assert roaster_name in resp2.text, (
-        f"Shared roaster '{roaster_name}' not visible to User A"
-    )
+    assert roaster_name in resp2.text, f"Shared roaster '{roaster_name}' not visible to User A"
 
 
 # ---------------------------------------------------------------------------
@@ -569,9 +559,7 @@ def test_highlight_xss_safe() -> None:
 
     This test is a unit test — it calls search_service.highlight() directly.
     """
-    assert search_service is not None, (
-        "app.services.search not importable — Plan 02 not yet built"
-    )
+    assert search_service is not None, "app.services.search not importable — Plan 02 not yet built"
     result = search_service.highlight(
         text="<script>alert(1)</script> beans",
         query="beans",
@@ -589,9 +577,7 @@ def test_highlight_xss_safe() -> None:
     )
 
     # The matched word must be wrapped in <strong
-    assert "<strong" in result_str, (
-        f"Expected <strong> wrapper for matched text in: {result_str!r}"
-    )
+    assert "<strong" in result_str, f"Expected <strong> wrapper for matched text in: {result_str!r}"
 
 
 def test_highlight_markup() -> None:
@@ -600,18 +586,14 @@ def test_highlight_markup() -> None:
     The matching substring must be wrapped and the surrounding text must remain
     intact and correctly split.
     """
-    assert search_service is not None, (
-        "app.services.search not importable — Plan 02 not yet built"
-    )
+    assert search_service is not None, "app.services.search not importable — Plan 02 not yet built"
     result = search_service.highlight("Ethiopia", "thio")
     result_str = str(result)
 
     # The matched portion must be inside <strong class='font-semibold'>
     assert "<strong class='font-semibold'>thio</strong>" in result_str or (
         "<strong" in result_str and "thio" in result_str
-    ), (
-        f"Match 'thio' not wrapped in <strong class='font-semibold'> in: {result_str!r}"
-    )
+    ), f"Match 'thio' not wrapped in <strong class='font-semibold'> in: {result_str!r}"
 
     # Per D-06: "thio" matches at index 1 of "Ethiopia", so the prefix is "E"
     # (split from "thio" by the <strong> tag) and the suffix is "pia".
@@ -701,32 +683,38 @@ def test_archived_scope(
             db.add(Coffee(name=f"{arc_prefix} ArchivedCoffee", notes="", archived=True))
 
             # Archived equipment — SHOULD appear with "Archived" badge
-            db.add(Equipment(
-                brand=f"{arc_prefix} ArchivedBrand",
-                model="ArchivedModel",
-                type="brewer",
-                archived=True,
-            ))
+            db.add(
+                Equipment(
+                    brand=f"{arc_prefix} ArchivedBrand",
+                    model="ArchivedModel",
+                    type="brewer",
+                    archived=True,
+                )
+            )
 
             # Archived roaster — must NOT appear
             db.add(Roaster(name=f"{arc_prefix} ArchivedRoaster", archived=True))
 
             # Archived recipe — must NOT appear
-            db.add(Recipe(
-                name=f"{arc_prefix} ArchivedRecipe",
-                grind_setting="medium",
-                dose_grams=18,
-                water_grams=300,
-                water_temp_c=94,
-                archived=True,
-            ))
+            db.add(
+                Recipe(
+                    name=f"{arc_prefix} ArchivedRecipe",
+                    grind_setting="medium",
+                    dose_grams=18,
+                    water_grams=300,
+                    water_temp_c=94,
+                    archived=True,
+                )
+            )
 
             # Archived flavor note — must NOT appear
-            db.add(FlavorNote(
-                name=f"{arc_prefix} ArchivedFlavor",
-                category="floral",
-                archived=True,
-            ))
+            db.add(
+                FlavorNote(
+                    name=f"{arc_prefix} ArchivedFlavor",
+                    category="floral",
+                    archived=True,
+                )
+            )
 
             await db.commit()
 
@@ -743,8 +731,6 @@ def test_archived_scope(
     )
 
     # Archived coffee must have "Archived" badge
-    # The badge and coffee name are expected to be near each other in the HTML
-    coffee_pos = html.find(f"{arc_prefix} ArchivedCoffee")
     archived_badge_pos = html.find("Archived")
     assert archived_badge_pos != -1, (
         "No 'Archived' badge found in response for archived coffee (D-12)"

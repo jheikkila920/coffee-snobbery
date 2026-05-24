@@ -58,9 +58,7 @@ def _require_p4_migration_applied() -> None:
         pytest.skip("app.db not importable")
     try:
         with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT to_regclass('public.coffees')")
-            ).scalar()
+            row = conn.execute(text("SELECT to_regclass('public.coffees')")).scalar()
     except Exception as exc:  # noqa: BLE001 — defensive skip on any DB error
         pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
     if row is None:
@@ -122,9 +120,7 @@ def test_roaster_round_trip(clean_catalog: None) -> None:
         db.refresh(r)
         inserted_id = r.id
 
-        fetched = db.execute(
-            select(Roaster).where(Roaster.id == inserted_id)
-        ).scalar_one()
+        fetched = db.execute(select(Roaster).where(Roaster.id == inserted_id)).scalar_one()
         assert fetched.name == "Onyx"
         assert fetched.location == "Bentonville, AR"
         # archived defaults to False via server_default.
@@ -196,9 +192,7 @@ def test_coffee_advertised_flavor_note_ids_round_trip(clean_catalog: None) -> No
         db.refresh(c)
         inserted_id = c.id
 
-        fetched = db.execute(
-            select(Coffee).where(Coffee.id == inserted_id)
-        ).scalar_one()
+        fetched = db.execute(select(Coffee).where(Coffee.id == inserted_id)).scalar_one()
         assert fetched.advertised_flavor_note_ids == [1, 2, 3]
         # List-of-ints invariant (Postgres ARRAY -> Python list).
         assert isinstance(fetched.advertised_flavor_note_ids, list)
@@ -268,9 +262,7 @@ def test_equipment_usage_count_defaults_zero(clean_catalog: None) -> None:
         db.refresh(e)
         inserted_id = e.id
 
-        fetched = db.execute(
-            select(Equipment).where(Equipment.id == inserted_id)
-        ).scalar_one()
+        fetched = db.execute(select(Equipment).where(Equipment.id == inserted_id)).scalar_one()
         assert fetched.usage_count == 0
 
 
@@ -306,9 +298,7 @@ def test_recipe_steps_jsonb_round_trip(clean_catalog: None) -> None:
         db.refresh(r)
         inserted_id = r.id
 
-        fetched = db.execute(
-            select(Recipe).where(Recipe.id == inserted_id)
-        ).scalar_one()
+        fetched = db.execute(select(Recipe).where(Recipe.id == inserted_id)).scalar_one()
         # JSONB does NOT preserve key order within an object, but DOES preserve
         # array order — that's the contract the recipe relies on.
         assert len(fetched.steps) == 3

@@ -49,7 +49,9 @@ class Settings(BaseSettings):
     APP_ENCRYPTION_KEY: str
 
     # --- Proxy / runtime defaults ---
-    TRUSTED_PROXY_IPS: str = "127.0.0.1"  # comma-separated; consumed by uvicorn --forwarded-allow-ips
+    TRUSTED_PROXY_IPS: str = (
+        "127.0.0.1"  # comma-separated; consumed by uvicorn --forwarded-allow-ips
+    )
     APP_TIMEZONE: str = "America/Chicago"  # IANA; consumed by APScheduler (Phase 8)
     BACKUP_RETENTION_DAYS: int = 14  # consumed by Phase 8 backup job
 

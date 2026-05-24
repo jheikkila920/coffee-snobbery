@@ -224,12 +224,8 @@ def card_sweet_spots(
     """
     rows = analytics.get_sweet_spots(db, user.id)
     all_unrated = not rows and not _has_rated_sessions(db, user.id)
-    ss_row = ai_service.get_latest_recommendation(
-        db, user_id=user.id, rec_type="sweet_spots"
-    )
-    sweet_spots_prose = (
-        ss_row.response_json.get("summary_prose") if ss_row else None
-    )
+    ss_row = ai_service.get_latest_recommendation(db, user_id=user.id, rec_type="sweet_spots")
+    sweet_spots_prose = ss_row.response_json.get("summary_prose") if ss_row else None
     return templates.TemplateResponse(
         request=request,
         name="fragments/home/sweet_spots.html",

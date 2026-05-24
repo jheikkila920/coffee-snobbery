@@ -81,9 +81,7 @@ def create_recipe(
 
 def get_recipe(db: Session, *, recipe_id: int) -> Recipe | None:
     """Return the recipe with *recipe_id*, or ``None`` if missing."""
-    return db.execute(
-        select(Recipe).where(Recipe.id == recipe_id)
-    ).scalar_one_or_none()
+    return db.execute(select(Recipe).where(Recipe.id == recipe_id)).scalar_one_or_none()
 
 
 def list_recipes(db: Session, *, include_archived: bool = False) -> list[Recipe]:
@@ -127,9 +125,7 @@ def update_recipe(
         )
     )
     db.commit()
-    recipe = db.execute(
-        select(Recipe).where(Recipe.id == recipe_id)
-    ).scalar_one()
+    recipe = db.execute(select(Recipe).where(Recipe.id == recipe_id)).scalar_one()
     log.info(
         CATALOG_RECIPE_UPDATED,
         recipe_id=recipe_id,
@@ -142,9 +138,7 @@ def update_recipe(
 def archive_recipe(db: Session, *, recipe_id: int, by_user_id: int) -> None:
     """Soft-delete a recipe (``archived=True``) and emit the event."""
     db.execute(
-        update(Recipe)
-        .where(Recipe.id == recipe_id)
-        .values(archived=True, updated_at=func.now())
+        update(Recipe).where(Recipe.id == recipe_id).values(archived=True, updated_at=func.now())
     )
     db.commit()
     log.info(
@@ -172,9 +166,7 @@ def duplicate_recipe(db: Session, *, source_id: int, by_user_id: int) -> Recipe:
     so brew sessions logged against the original keep their reference
     intact (D-12 rationale — duplicate-instead-of-version).
     """
-    src = db.execute(
-        select(Recipe).where(Recipe.id == source_id)
-    ).scalar_one_or_none()
+    src = db.execute(select(Recipe).where(Recipe.id == source_id)).scalar_one_or_none()
     if src is None:
         raise RecipeNotFound(f"recipe {source_id} not found")
 

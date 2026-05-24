@@ -26,9 +26,7 @@ def _require_dep() -> None:
     try:
         from app.dependencies.auth import require_admin, require_user  # noqa: F401
     except ImportError:
-        pytest.skip(
-            "Wave 1 dependency: app.dependencies.auth (Plan 02-03 Task 2/3)"
-        )
+        pytest.skip("Wave 1 dependency: app.dependencies.auth (Plan 02-03 Task 2/3)")
 
 
 def _make_request(user: object | None) -> Request:

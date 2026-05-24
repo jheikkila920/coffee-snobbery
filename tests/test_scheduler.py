@@ -76,8 +76,7 @@ def test_lifespan_scheduler_lifecycle() -> None:
         # If we get here the scheduler started and stopped without raising
     except (OperationalError, DBAPIError, ConnectionError, OSError) as exc:
         pytest.skip(
-            f"TestClient startup failed (Postgres unreachable?): "
-            f"{type(exc).__name__}: {exc}"
+            f"TestClient startup failed (Postgres unreachable?): {type(exc).__name__}: {exc}"
         )
 
 
@@ -171,7 +170,6 @@ async def test_ai_run_summary_tally(mock_regenerate: Any) -> None:
     """
     if mock_regenerate is None:
         pytest.skip("mock_regenerate not available")
-
 
     # Wire a per-user status map via the mock_regenerate fixture factory.
     # Status map: user 1 → generated, user 2 → skipped, user 3 → error

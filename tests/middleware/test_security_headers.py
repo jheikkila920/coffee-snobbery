@@ -5,10 +5,10 @@ Covers per-task verification map rows for SEC-02 / SEC-03 from
 
 - ``test_csp_present``         — CSP header carries ``script-src 'self' 'nonce-...'``
 - ``test_nonce_uniqueness``    — two consecutive requests produce different nonces
-- ``test_no_unsafe_eval``      — script-src contains neither ``'unsafe-eval'`` nor ``'unsafe-inline'``
+- ``test_no_unsafe_eval`` — script-src contains neither ``'unsafe-eval'`` nor ``'unsafe-inline'``
 - ``test_all_headers``         — X-Frame-Options DENY, X-Content-Type-Options nosniff,
                                   Referrer-Policy strict-origin-when-cross-origin,
-                                  Permissions-Policy with camera=(self), microphone=(), geolocation=()
+                                  Permissions-Policy: camera=(self), microphone=(), geolocation=()
 
 Each test attempts a sentinel import of the Wave 1 symbol
 ``app.middleware.security_headers:SecurityHeadersMiddleware`` (Plan 03 lands it).
@@ -31,9 +31,7 @@ def _require_security_middleware() -> None:
             SecurityHeadersMiddleware,
         )
     except ImportError:
-        pytest.skip(
-            "Wave 1 dependency: app.middleware.security_headers.SecurityHeadersMiddleware"
-        )
+        pytest.skip("Wave 1 dependency: app.middleware.security_headers.SecurityHeadersMiddleware")
 
 
 def _extract_directive(csp_header: str, directive: str) -> str:
@@ -79,9 +77,7 @@ def test_no_unsafe_eval(client) -> None:
     response = client.get("/")
     csp = response.headers.get("Content-Security-Policy", "")
     script_src = _extract_directive(csp, "script-src")
-    assert "'unsafe-eval'" not in script_src, (
-        f"script-src contains 'unsafe-eval': {script_src!r}"
-    )
+    assert "'unsafe-eval'" not in script_src, f"script-src contains 'unsafe-eval': {script_src!r}"
     assert "'unsafe-inline'" not in script_src, (
         f"script-src contains 'unsafe-inline': {script_src!r}"
     )
@@ -93,9 +89,9 @@ def test_all_headers(client) -> None:
     response = client.get("/")
     assert response.headers.get("X-Frame-Options") == "DENY", response.headers
     assert response.headers.get("X-Content-Type-Options") == "nosniff", response.headers
-    assert (
-        response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
-    ), response.headers
+    assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin", (
+        response.headers
+    )
     permissions = response.headers.get("Permissions-Policy", "")
     assert "camera=(self)" in permissions, f"missing camera=(self): {permissions!r}"
     assert "microphone=()" in permissions, f"missing microphone=(): {permissions!r}"

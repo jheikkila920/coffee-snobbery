@@ -61,6 +61,4 @@ def test_readme_has_proxy_proto_header() -> None:
 def test_readme_has_proxy_buffering_off() -> None:
     """README documents `proxy_buffering off` (Phase 7 SSE pre-bake per RESEARCH §10)."""
     text = _readme_text()
-    assert "proxy_buffering off" in text, (
-        "README missing literal `proxy_buffering off` directive"
-    )
+    assert "proxy_buffering off" in text, "README missing literal `proxy_buffering off` directive"

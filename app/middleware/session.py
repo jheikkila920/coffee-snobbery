@@ -215,9 +215,7 @@ class SessionMiddleware:
                             # Write-throttled sliding refresh
                             # (T-04-06 mitigation) — unchanged from
                             # Phase 1.
-                            elapsed = (
-                                datetime.now(UTC) - session_row.last_seen
-                            ).total_seconds()
+                            elapsed = (datetime.now(UTC) - session_row.last_seen).total_seconds()
                             if elapsed > self.refresh_threshold_seconds:
                                 await refresh_last_seen(db, session_id)
 
@@ -225,9 +223,7 @@ class SessionMiddleware:
             """Inject a clear-cookie Set-Cookie header on the response start."""
             if clear_cookie and message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.append(
-                    (b"set-cookie", build_session_clear_cookie().encode("ascii"))
-                )
+                headers.append((b"set-cookie", build_session_clear_cookie().encode("ascii")))
                 message["headers"] = headers
             await send(message)
 

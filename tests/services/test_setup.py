@@ -87,9 +87,7 @@ async def test_create_first_admin_happy_path() -> None:
         assert len(users) == 1, f"exactly one user row expected; found {len(users)}"
 
         setting = (
-            await db.execute(
-                select(AppSetting).where(AppSetting.key == "setup_completed")
-            )
+            await db.execute(select(AppSetting).where(AppSetting.key == "setup_completed"))
         ).scalar_one()
         assert setting.value == "true", (
             f"setup_completed must be 'true' after success; got {setting.value!r}"
@@ -155,11 +153,7 @@ async def test_for_update_atomic() -> None:
         if "SELECT" in upper and "FOR UPDATE" in upper and "APP_SETTINGS" in upper:
             if select_for_update_idx is None:
                 select_for_update_idx = idx
-        elif (
-            insert_users_idx is None
-            and upper.lstrip().startswith("INSERT")
-            and "USERS" in upper
-        ):
+        elif insert_users_idx is None and upper.lstrip().startswith("INSERT") and "USERS" in upper:
             insert_users_idx = idx
         elif (
             update_settings_idx is None
@@ -176,8 +170,7 @@ async def test_for_update_atomic() -> None:
         f"no INSERT into users observed; statements={[s[:80] for s in statements]}"
     )
     assert update_settings_idx is not None, (
-        f"no UPDATE on app_settings observed; statements="
-        f"{[s[:80] for s in statements]}"
+        f"no UPDATE on app_settings observed; statements={[s[:80] for s in statements]}"
     )
 
     assert insert_users_idx > select_for_update_idx, (
@@ -215,9 +208,7 @@ async def test_create_first_admin_race_lost() -> None:
 
     # Pre-flip the setting to simulate "another concurrent setup already won".
     async with async_session_factory() as db:
-        await db.execute(
-            text("UPDATE app_settings SET value='true' WHERE key='setup_completed'")
-        )
+        await db.execute(text("UPDATE app_settings SET value='true' WHERE key='setup_completed'"))
         await db.commit()
 
     # Now call create_first_admin — should return None and NOT insert.
@@ -257,8 +248,7 @@ async def test_create_first_admin_uses_hashed_password() -> None:
 
     assert user is not None
     assert user.password_hash.startswith("$argon2id$"), (
-        f"password_hash must be argon2id-encoded; got prefix "
-        f"{user.password_hash[:20]!r}"
+        f"password_hash must be argon2id-encoded; got prefix {user.password_hash[:20]!r}"
     )
     # The hash header should contain the AUTH-04 parameter pins.
     assert "m=65536,t=3,p=4" in user.password_hash, (
@@ -292,7 +282,5 @@ async def test_create_first_admin_sets_admin_active() -> None:
         )
 
     assert user is not None
-    assert user.is_admin is True, (
-        "first user must always be admin (service-enforced, not input)"
-    )
+    assert user.is_admin is True, "first user must always be admin (service-enforced, not input)"
     assert user.is_active is True, "first user must always be active"

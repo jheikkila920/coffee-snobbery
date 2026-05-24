@@ -16,7 +16,7 @@ so a future renumbering breaks loudly.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -52,15 +52,12 @@ def test_refresh_throttling() -> None:
             SessionMiddleware,  # noqa: F401
         )
     except ImportError:
-        pytest.skip(
-            "Wave 1 dependency: app.middleware.session.REFRESH_THRESHOLD_SECONDS "
-            "(Plan 04)"
-        )
+        pytest.skip("Wave 1 dependency: app.middleware.session.REFRESH_THRESHOLD_SECONDS (Plan 04)")
     assert REFRESH_THRESHOLD_SECONDS == 300, (
         f"REFRESH_THRESHOLD_SECONDS must be 300 (5 min) per RESEARCH §5, "
         f"got {REFRESH_THRESHOLD_SECONDS}"
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fresh = now - timedelta(seconds=10)  # noqa: F841 — sentinel for the next assertion path
     stale = now - timedelta(seconds=600)  # noqa: F841 — 10 min ago, must refresh
     # The actual helper signature lands in Wave 1; once it does, this test
@@ -82,12 +79,13 @@ def test_invalid_signature_clears_cookie(client) -> None:
     response = client.get("/", cookies={"session_id": "this-is-not-a-valid-signature"})
     # Look at Set-Cookie headers; the middleware must clear the cookie via
     # Max-Age=0 (or expires=Thu, 01 Jan 1970...).
-    set_cookies = response.headers.get_list("set-cookie") if hasattr(
-        response.headers, "get_list"
-    ) else [response.headers.get("set-cookie", "")]
+    set_cookies = (
+        response.headers.get_list("set-cookie")
+        if hasattr(response.headers, "get_list")
+        else [response.headers.get("set-cookie", "")]
+    )
     cleared = any(
-        "session_id=" in c and ("Max-Age=0" in c or "max-age=0" in c)
-        for c in set_cookies
+        "session_id=" in c and ("Max-Age=0" in c or "max-age=0" in c) for c in set_cookies
     )
     if not cleared:
         pytest.xfail(
@@ -152,12 +150,9 @@ async def test_state_user_shape(seeded_admin_user) -> None:
 
     await mw(scope, receive, send)
 
-    assert captured["user"] is not None, (
-        "authenticated request must populate request.state.user"
-    )
+    assert captured["user"] is not None, "authenticated request must populate request.state.user"
     assert isinstance(captured["user"], User), (
-        f"D-09: request.state.user must be a User instance, got "
-        f"{type(captured['user']).__name__}"
+        f"D-09: request.state.user must be a User instance, got {type(captured['user']).__name__}"
     )
     assert captured["user"].username == seeded_admin_user["user"].username
     assert captured["user"].is_admin is True
@@ -229,24 +224,17 @@ async def test_deactivated_user_fail_closed(seeded_regular_user) -> None:
     response_start = next(m for m in sent if m["type"] == "http.response.start")
     set_cookies = [v for n, v in response_start["headers"] if n == b"set-cookie"]
     assert any(
-        b"session_id=" in c and (b"Max-Age=0" in c or b"max-age=0" in c)
-        for c in set_cookies
-    ), (
-        f"D-10 must emit clear-cookie Set-Cookie header; got Set-Cookies: {set_cookies}"
-    )
+        b"session_id=" in c and (b"Max-Age=0" in c or b"max-age=0" in c) for c in set_cookies
+    ), f"D-10 must emit clear-cookie Set-Cookie header; got Set-Cookies: {set_cookies}"
 
     # The orphaned session row was DELETEd
     async with async_session_factory() as db:
         row = (
             await db.execute(
-                select(Session).where(
-                    Session.session_id == seeded_regular_user["session_id"]
-                )
+                select(Session).where(Session.session_id == seeded_regular_user["session_id"])
             )
         ).scalar_one_or_none()
-        assert row is None, (
-            "D-10 must DELETE the session row owned by the deactivated user"
-        )
+        assert row is None, "D-10 must DELETE the session row owned by the deactivated user"
 
 
 @pytest.mark.asyncio

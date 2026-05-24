@@ -31,7 +31,6 @@ import asyncio
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Common helpers                                                              #
 # --------------------------------------------------------------------------- #
@@ -86,9 +85,7 @@ def test_setup_happy_path(client) -> None:
         cookies=cookies,
         follow_redirects=False,
     )
-    assert r2.status_code == 303, (
-        f"expected 303 to /, got {r2.status_code}: {r2.text[:200]}"
-    )
+    assert r2.status_code == 303, f"expected 303 to /, got {r2.status_code}: {r2.text[:200]}"
     assert r2.headers["location"] == "/"
     set_cookie = r2.headers.get("set-cookie", "")
     assert "session_id=" in set_cookie, (
@@ -105,9 +102,7 @@ def test_setup_blocked_after_completion(client) -> None:
     from app.db import engine
 
     with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE app_settings SET value='true' WHERE key='setup_completed'")
-        )
+        conn.execute(text("UPDATE app_settings SET value='true' WHERE key='setup_completed'"))
 
     # GET /setup → 303 to /login
     r = client.get("/setup", follow_redirects=False)
@@ -184,9 +179,7 @@ async def test_setup_concurrent_race(async_client) -> None:
 
     async with async_session_factory() as db:
         users = (await db.execute(select(User))).scalars().all()
-        assert len(users) == 1, (
-            f"AUTH-02: exactly one user row expected, got {len(users)}"
-        )
+        assert len(users) == 1, f"AUTH-02: exactly one user row expected, got {len(users)}"
 
 
 # --------------------------------------------------------------------------- #
@@ -200,9 +193,7 @@ def test_no_register_route(client) -> None:
     r1 = client.get("/register")
     r2 = client.post("/register", data={})
     assert r1.status_code == 404, f"GET /register must 404, got {r1.status_code}"
-    assert r2.status_code in (404, 405), (
-        f"POST /register must 404 or 405, got {r2.status_code}"
-    )
+    assert r2.status_code in (404, 405), f"POST /register must 404 or 405, got {r2.status_code}"
 
 
 def test_login_happy_path(client, seeded_regular_user) -> None:
@@ -275,9 +266,7 @@ def test_session_cookie_attributes(client, seeded_regular_user) -> None:
     else:  # pragma: no cover — older httpx fallback
         raw = r.headers.get("set-cookie", "")
         set_cookies = [raw] if raw else []
-    session_cookie = next(
-        (c for c in set_cookies if c.startswith("session_id=")), ""
-    )
+    session_cookie = next((c for c in set_cookies if c.startswith("session_id=")), "")
     assert session_cookie, (
         f"AUTH-06: no session_id Set-Cookie on login response; got: {set_cookies!r}"
     )
@@ -317,9 +306,7 @@ def test_session_fixation_defense(client, seeded_regular_user) -> None:
     else:  # pragma: no cover
         raw = r.headers.get("set-cookie", "")
         set_cookies = [raw] if raw else []
-    new_session_set_cookie = next(
-        (c for c in set_cookies if c.startswith("session_id=")), ""
-    )
+    new_session_set_cookie = next((c for c in set_cookies if c.startswith("session_id=")), "")
     assert new_session_set_cookie, (
         f"AUTH-07: no session_id Set-Cookie on response; got: {set_cookies!r}"
     )
@@ -340,9 +327,7 @@ def test_session_fixation_defense(client, seeded_regular_user) -> None:
                 await db.execute(select(Session).where(Session.session_id == old_sid))
             ).scalar_one_or_none()
 
-    assert asyncio.run(_check()) is None, (
-        "AUTH-07: old session row must be DELETEd on regeneration"
-    )
+    assert asyncio.run(_check()) is None, "AUTH-07: old session row must be DELETEd on regeneration"
 
 
 def test_preset_cookie_does_not_inherit(client, seeded_regular_user) -> None:
@@ -376,9 +361,7 @@ def test_preset_cookie_does_not_inherit(client, seeded_regular_user) -> None:
     else:  # pragma: no cover
         raw = r.headers.get("set-cookie", "")
         set_cookies = [raw] if raw else []
-    new_session_set_cookie = next(
-        (c for c in set_cookies if c.startswith("session_id=")), ""
-    )
+    new_session_set_cookie = next((c for c in set_cookies if c.startswith("session_id=")), "")
     assert new_session_set_cookie, "no session_id Set-Cookie on response"
     # The attacker's preset value must not be the new session value.
     assert f"session_id={preset_signed}" not in new_session_set_cookie, (
@@ -408,9 +391,7 @@ def test_logout_clears_session(client, seeded_regular_user) -> None:
     else:  # pragma: no cover
         raw = r.headers.get("set-cookie", "")
         set_cookies = [raw] if raw else []
-    clear_cookie = next(
-        (c for c in set_cookies if c.startswith("session_id=")), ""
-    )
+    clear_cookie = next((c for c in set_cookies if c.startswith("session_id=")), "")
     assert clear_cookie, f"logout missing session_id Set-Cookie; got: {set_cookies!r}"
     assert "Max-Age=0" in clear_cookie or "max-age=0" in clear_cookie, (
         f"logout cookie must carry Max-Age=0: {clear_cookie}"

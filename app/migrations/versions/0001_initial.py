@@ -38,7 +38,7 @@ Requirements traceability:
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -46,9 +46,9 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "0001_initial"
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -243,9 +243,7 @@ def upgrade() -> None:
                 "key": "min_sessions_for_ai",
                 "value": "3",
                 "value_type": "int",
-                "description": (
-                    "AI-7 cold-start gate: minimum brew_sessions count per user."
-                ),
+                "description": ("AI-7 cold-start gate: minimum brew_sessions count per user."),
             },
             {
                 "key": "min_flavor_notes_for_ai",
@@ -271,9 +269,7 @@ def upgrade() -> None:
                 "key": "ai_tool_version_anthropic",
                 "value": "web_search_20260209",
                 "value_type": "string",
-                "description": (
-                    "AI-5: Anthropic web-search tool version; editable from admin."
-                ),
+                "description": ("AI-5: Anthropic web-search tool version; editable from admin."),
             },
             {
                 "key": "ai_tool_version_openai",

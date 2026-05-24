@@ -21,9 +21,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -55,9 +52,7 @@ def _get_setting_from_db(key: str) -> Any:
 
     async def _do() -> Any:
         async with async_session_factory() as db:
-            row = await db.execute(
-                select(AppSetting.value).where(AppSetting.key == key)
-            )
+            row = await db.execute(select(AppSetting.value).where(AppSetting.key == key))
             return row.scalar_one_or_none()
 
     return asyncio.run(_do())
@@ -119,9 +114,7 @@ class TestSettingsList:
         assert resp.status_code == 200
         body = resp.text
         # The number input must be present alongside the key
-        assert 'type="number"' in body, (
-            "Expected a number input for int/float settings rows"
-        )
+        assert 'type="number"' in body, "Expected a number input for int/float settings rows"
 
     def test_readonly_row_has_no_save_control(
         self,
@@ -137,10 +130,10 @@ class TestSettingsList:
         assert resp.status_code == 200
         body = resp.text
         # No inline save form for read-only keys
-        assert "hx-post=\"/admin/settings/setup_completed\"" not in body, (
+        assert 'hx-post="/admin/settings/setup_completed"' not in body, (
             "setup_completed should be read-only — no save form expected"
         )
-        assert "hx-post=\"/admin/settings/last_backup_status\"" not in body, (
+        assert 'hx-post="/admin/settings/last_backup_status"' not in body, (
             "last_backup_status should be read-only — no save form expected"
         )
 
@@ -184,9 +177,7 @@ class TestSettingSave:
 
         # Verify DB persistence directly (bypasses cache)
         db_value = _get_setting_from_db("min_sessions_for_ai")
-        assert db_value == "7", (
-            f"Expected DB value '7' for min_sessions_for_ai, got {db_value!r}"
-        )
+        assert db_value == "7", f"Expected DB value '7' for min_sessions_for_ai, got {db_value!r}"
 
     def test_setting_save_cache_invalidated(
         self,
@@ -201,9 +192,7 @@ class TestSettingSave:
         """
         from sqlalchemy.orm import Session
 
-        from app.models.app_setting import AppSetting
-        from app.models.base import Base
-        from app.services.settings import get_int, invalidate, prewarm_cache
+        from app.services.settings import get_int, prewarm_cache
 
         signed_cookie = seeded_admin_user["signed_cookie"]
         token = _prime_csrf(client, signed_cookie)
@@ -226,9 +215,7 @@ class TestSettingSave:
             prewarm_cache(db)
             val = get_int("min_sessions_for_ai")
         engine.dispose()
-        assert val == 9, (
-            f"Expected cached int 9 after prewarm, got {val!r}"
-        )
+        assert val == 9, f"Expected cached int 9 after prewarm, got {val!r}"
 
     def test_setting_save_response_contains_saved_marker(
         self,
@@ -275,9 +262,7 @@ class TestReadonlyRowsRejected:
 
         # Value must not have changed
         after = _get_setting_from_db("setup_completed")
-        assert after == original, (
-            f"setup_completed mutated despite 403: {original!r} -> {after!r}"
-        )
+        assert after == original, f"setup_completed mutated despite 403: {original!r} -> {after!r}"
 
     def test_last_backup_status_rejected(
         self,

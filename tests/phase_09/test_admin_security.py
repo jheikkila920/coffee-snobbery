@@ -50,9 +50,7 @@ class TestRequireAdmin:
     ) -> None:
         """An admin session hitting GET /admin receives 200."""
         resp = client.get("/admin", cookies=admin_session)
-        assert resp.status_code == 200, (
-            f"Expected 200 for admin on /admin, got {resp.status_code}"
-        )
+        assert resp.status_code == 200, f"Expected 200 for admin on /admin, got {resp.status_code}"
 
 
 class TestCsrf:
@@ -75,23 +73,21 @@ class TestCsrf:
         """
         # Discover the first available admin POST route.
         try:
-            from app.main import app as _app
             from fastapi.routing import APIRoute
 
+            from app.main import app as _app
+
             post_routes = [
-                r for r in _app.routes
-                if isinstance(r, APIRoute)
-                and "POST" in r.methods
-                and r.path.startswith("/admin/")
+                r
+                for r in _app.routes
+                if isinstance(r, APIRoute) and "POST" in r.methods and r.path.startswith("/admin/")
             ]
         except Exception:
             pytest.skip("Could not inspect admin routes (app not importable)")
             return
 
         if not post_routes:
-            pytest.skip(
-                "No admin POST routes registered yet (Plans 09-02..09-06 add them)"
-            )
+            pytest.skip("No admin POST routes registered yet (Plans 09-02..09-06 add them)")
 
         # Use the first admin POST route for the CSRF probe.
         route_path = post_routes[0].path
@@ -102,6 +98,5 @@ class TestCsrf:
             data={},  # no X-CSRF-Token field
         )
         assert resp.status_code == 403, (
-            f"Expected CSRF rejection (403) on POST {route_path}, "
-            f"got {resp.status_code}"
+            f"Expected CSRF rejection (403) on POST {route_path}, got {resp.status_code}"
         )

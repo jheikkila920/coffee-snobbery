@@ -88,14 +88,14 @@ from app.routers import bags as bags_router
 from app.routers import brew as brew_router
 from app.routers import brew_guided as brew_guided_router
 from app.routers import coffees as coffees_router
-from app.routers import csp_report as csp_report_router
-from app.routers import pwa as pwa_router
 from app.routers import config_hub as config_hub_router
+from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
 from app.routers import equipment as equipment_router
 from app.routers import flavor_notes as flavor_notes_router
 from app.routers import home as home_router
 from app.routers import photos as photos_router
+from app.routers import pwa as pwa_router
 from app.routers import recipes as recipes_router
 from app.routers import roasters as roasters_router
 from app.routers import search as search_router
@@ -133,9 +133,7 @@ def compute_tailwind_css_path() -> str:
     Plan 04 for the rationale.
     """
     css_dir = Path("app/static/css")
-    candidates = sorted(
-        p for p in css_dir.glob("tailwind.*.css") if p.name != "tailwind.src.css"
-    )
+    candidates = sorted(p for p in css_dir.glob("tailwind.*.css") if p.name != "tailwind.src.css")
     if not candidates:
         raise RuntimeError(
             "Tailwind CSS missing — Dockerfile stage 1 did not produce "
@@ -241,7 +239,9 @@ def create_app() -> FastAPI:
     app.include_router(equipment_router.router)
     app.include_router(recipes_router.router)
     app.include_router(bags_router.router)
-    app.include_router(brew_guided_router.router)  # BEFORE brew_router — /brew/guided must not be captured by /brew/{session_id}
+    app.include_router(
+        brew_guided_router.router
+    )  # BEFORE brew_router — /brew/guided must not be captured by /brew/{session_id}
     app.include_router(brew_router.router)
     app.include_router(home_router.router)
     app.include_router(config_hub_router.router)

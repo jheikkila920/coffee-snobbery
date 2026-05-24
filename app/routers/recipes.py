@@ -72,7 +72,6 @@ from app.dependencies.db import get_session
 from app.models.user import User
 from app.schemas.recipe import RecipeCreate
 from app.services import recipes as recipes_service
-from app.services.form_validation import errors_by_field
 from app.services.recipes import RecipeNotFound
 from app.templates_setup import templates
 
@@ -120,7 +119,6 @@ def _normalize_errors(exc: ValidationError) -> dict[str, str]:
         # highlight is a 04-11 follow-up).
         if loc and loc[0] == "steps":
             # Render index + leaf field if available for diagnostic help.
-            leaf_parts = [str(p) for p in loc[1:] if not isinstance(p, int) or True]
             label = "steps"
             if len(loc) >= 2 and isinstance(loc[1], int):
                 label = f"steps[{loc[1]}]"
@@ -458,9 +456,7 @@ def duplicate_recipe_handler(
     navigation flows triggered from HTMX swaps.
     """
     try:
-        copy = recipes_service.duplicate_recipe(
-            db, source_id=recipe_id, by_user_id=user.id
-        )
+        copy = recipes_service.duplicate_recipe(db, source_id=recipe_id, by_user_id=user.id)
     except RecipeNotFound as exc:
         raise HTTPException(status_code=404) from exc
     return Response(

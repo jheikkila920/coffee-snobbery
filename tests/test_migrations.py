@@ -64,10 +64,7 @@ def pg_session() -> Generator[Connection, None, None]:
 def test_three_extensions_installed(pg_session: Connection) -> None:
     """FOUND-06: citext, pg_trgm, unaccent are installed in the public schema."""
     rows = pg_session.execute(
-        text(
-            "SELECT extname FROM pg_extension "
-            "WHERE extname IN ('citext','pg_trgm','unaccent')"
-        )
+        text("SELECT extname FROM pg_extension WHERE extname IN ('citext','pg_trgm','unaccent')")
     ).all()
     installed = {row[0] for row in rows}
     expected = {"citext", "pg_trgm", "unaccent"}
@@ -117,9 +114,7 @@ def test_bags_columns(pg_session: Connection) -> None:
 
     for col, (dtype, nullable) in expected.items():
         actual_dtype, actual_nullable = cols[col]
-        assert actual_dtype == dtype, (
-            f"bags.{col}: expected type {dtype}, got {actual_dtype}"
-        )
+        assert actual_dtype == dtype, f"bags.{col}: expected type {dtype}, got {actual_dtype}"
         assert actual_nullable == nullable, (
             f"bags.{col}: expected nullable={nullable}, got {actual_nullable}"
         )
@@ -357,9 +352,7 @@ def test_api_credentials_provider_check_constraint(pg_session: Connection) -> No
             "WHERE constraint_name = 'api_credentials_provider_check'"
         )
     ).one_or_none()
-    assert row is not None, (
-        "api_credentials_provider_check CHECK constraint must exist"
-    )
+    assert row is not None, "api_credentials_provider_check CHECK constraint must exist"
     clause = row[0]
     assert "anthropic" in clause, f"CHECK must allow 'anthropic'; got {clause!r}"
     assert "openai" in clause, f"CHECK must allow 'openai'; got {clause!r}"
@@ -408,8 +401,7 @@ def test_app_settings_has_encryption_key_primary_fingerprint_row(
         )
     ).one_or_none()
     assert row is not None, (
-        "encryption_key_primary_fingerprint row must be seeded by "
-        "p3_api_credentials migration"
+        "encryption_key_primary_fingerprint row must be seeded by p3_api_credentials migration"
     )
     # First-deploy shape per the migration. If a previous credentials
     # test has flipped this to ('hex-string', 'string'), the migration
@@ -417,17 +409,14 @@ def test_app_settings_has_encryption_key_primary_fingerprint_row(
     # Accept either the pristine seed shape OR the post-credentials
     # 'string' shape, with a clear diagnostic for the latter.
     if row.value_type == "null":
-        assert row.value is None, (
-            f"value_type='null' rows must have value=NULL; got {row.value!r}"
-        )
+        assert row.value is None, f"value_type='null' rows must have value=NULL; got {row.value!r}"
     else:
         # The credentials suite mutated this row and did not roll back.
         # The migration seed is still the typed-null sentinel; this
         # branch documents that the schema row was correctly seeded
         # at migration time even though a later test wrote to it.
         assert row.value_type == "string", (
-            f"only 'null' (seed) or 'string' (post-rewrap) are valid; "
-            f"got {row.value_type!r}"
+            f"only 'null' (seed) or 'string' (post-rewrap) are valid; got {row.value_type!r}"
         )
 
 
@@ -458,9 +447,7 @@ def test_brew_sessions_has_brew_time_seconds_column(pg_session: Connection) -> N
         "brew_sessions.brew_time_seconds column must exist after p11_brew_time_seconds migration"
     )
     col_name, data_type, is_nullable = rows[0]
-    assert data_type == "integer", (
-        f"brew_time_seconds: expected type 'integer', got {data_type!r}"
-    )
+    assert data_type == "integer", f"brew_time_seconds: expected type 'integer', got {data_type!r}"
     assert is_nullable == "YES", (
         f"brew_time_seconds must be nullable (is_nullable='YES'), got {is_nullable!r}"
     )

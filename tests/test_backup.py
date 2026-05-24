@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # SCHED-04 — Backup service: retention prune
@@ -38,10 +36,10 @@ def test_retention_prune(tmp_path: Any) -> None:
     # Anything with a filename date < 2026-05-07 is deleted.
     today = date(2026, 5, 21)
 
-    old_db = tmp_path / "db_2026-05-01.sql"       # 20 days old — delete
+    old_db = tmp_path / "db_2026-05-01.sql"  # 20 days old — delete
     old_photos = tmp_path / "photos_2026-05-01.tar.gz"  # 20 days old — delete
-    new_db = tmp_path / "db_2026-05-20.sql"        # 1 day old — keep
-    other_file = tmp_path / "other.txt"             # non-backup — keep
+    new_db = tmp_path / "db_2026-05-20.sql"  # 1 day old — keep
+    other_file = tmp_path / "other.txt"  # non-backup — keep
 
     for f in [old_db, old_photos, new_db, other_file]:
         f.write_text("x")
@@ -51,8 +49,8 @@ def test_retention_prune(tmp_path: Any) -> None:
     assert deleted == 2
     assert not old_db.exists()
     assert not old_photos.exists()
-    assert new_db.exists()       # within retention window
-    assert other_file.exists()   # non-backup file untouched
+    assert new_db.exists()  # within retention window
+    assert other_file.exists()  # non-backup file untouched
 
 
 # ---------------------------------------------------------------------------

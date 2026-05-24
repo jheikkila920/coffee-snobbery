@@ -32,7 +32,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Skip gates                                                                  #
 # --------------------------------------------------------------------------- #
@@ -146,9 +145,7 @@ def clean_ai_router() -> Iterator[None]:
 # --------------------------------------------------------------------------- #
 
 
-def test_refresh_triggers_regenerate(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_refresh_triggers_regenerate(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """Authenticated POST /ai/refresh calls regenerate(user.id, 'manual_refresh', force=True)."""
     _require_ai_router()
 
@@ -178,9 +175,7 @@ def test_refresh_triggers_regenerate(
         )
 
 
-def test_throttle_429(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_throttle_429(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """Second POST /ai/refresh within 5-min window returns 429 + HX-Retarget header (AI-14)."""
     _require_ai_router()
 
@@ -205,9 +200,7 @@ def test_throttle_429(
     assert "HX-Retarget" in resp.headers, "429 response must include HX-Retarget header (AI-14)"
 
 
-def test_in_flight_429(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_in_flight_429(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/refresh while in_flight returns 429 (AI-13)."""
     _require_ai_router()
 
@@ -239,9 +232,7 @@ def test_refresh_requires_auth(app: Any) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_equipment_route(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_equipment_route(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/equipment calls generate_equipment_rec and returns 200."""
     _require_ai_router()
 
@@ -257,9 +248,7 @@ def test_equipment_route(
     assert mock_ai.generate_equipment_rec.called
 
 
-def test_paste_rank_route(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_paste_rank_route(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/paste-rank calls rank_pasted_coffees and returns 200."""
     _require_ai_router()
 
@@ -281,9 +270,7 @@ def test_paste_rank_route(
     assert mock_ai.rank_pasted_coffees.called
 
 
-def test_wishlist_add(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_wishlist_add(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """Authenticated POST /ai/wishlist/add creates a user-scoped entry."""
     _require_ai_router()
     _require_postgres()
@@ -314,9 +301,7 @@ def test_wishlist_add(
     assert entries[0].user_id == seeded_regular_user["user"].id
 
 
-def test_wishlist_add_empty_name_422(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_wishlist_add_empty_name_422(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/wishlist/add with a blank coffee_name → 422 (CR-05)."""
     _require_ai_router()
 
@@ -331,9 +316,7 @@ def test_wishlist_add_empty_name_422(
     )
 
 
-def test_wishlist_add_drops_non_https_url(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_wishlist_add_drops_non_https_url(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/wishlist/add with a javascript: source_url stores NULL (CR-01)."""
     _require_ai_router()
     _require_postgres()
@@ -359,9 +342,7 @@ def test_wishlist_add_drops_non_https_url(
         entries = list_wishlist(db, by_user_id=seeded_regular_user["user"].id)
     match = [e for e in entries if e.coffee_name == "Sketchy Coffee"]
     assert len(match) == 1
-    assert match[0].source_url is None, (
-        "non-https source_url must not be stored (CR-01 XSS guard)"
-    )
+    assert match[0].source_url is None, "non-https source_url must not be stored (CR-01 XSS guard)"
 
 
 def test_wishlist_purchase_cross_user_404(
@@ -430,9 +411,7 @@ def test_wishlist_remove_cross_user_404(
     )
 
 
-def test_wishlist_add_requires_csrf(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_wishlist_add_requires_csrf(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/wishlist/add without CSRF token → 403 (T-07-11)."""
     _require_ai_router()
 
@@ -467,11 +446,7 @@ def test_ai_routes_registered(app: Any) -> None:
 
     from fastapi.routing import APIRoute
 
-    route_paths = {
-        getattr(r, "path", None)
-        for r in app.routes
-        if isinstance(r, APIRoute)
-    }
+    route_paths = {getattr(r, "path", None) for r in app.routes if isinstance(r, APIRoute)}
     assert "/ai/refresh" in route_paths, (
         f"/ai/refresh not found in route table. Routes: {sorted(route_paths)}"
     )
@@ -485,9 +460,7 @@ def test_ai_routes_registered(app: Any) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_paste_rank_page_renders(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_paste_rank_page_renders(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """GET /ai/paste-rank returns 200 with the textarea for authenticated users."""
     _require_ai_router()
 
@@ -502,9 +475,7 @@ def test_paste_rank_page_renders(
     )
 
 
-def test_paste_rank_submit_returns_results(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_paste_rank_submit_returns_results(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/paste-rank (HTMX) returns a 3-item results fragment."""
     _require_ai_router()
 
@@ -529,18 +500,14 @@ def test_paste_rank_submit_returns_results(
             headers={"HX-Request": "true"},
         )
 
-    assert resp.status_code == 200, (
-        f"Expected 200, got {resp.status_code}: {resp.text[:300]}"
-    )
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text[:300]}"
     # All 3 coffee names must appear in the results fragment
     assert "Ethiopia Yirgacheffe" in resp.text, "Expected first ranked coffee in fragment"
     assert "Colombia Huila" in resp.text, "Expected second ranked coffee in fragment"
     assert "Kenya AA" in resp.text, "Expected third ranked coffee in fragment"
 
 
-def test_equipment_button_returns_fragment(
-    app: Any, seeded_regular_user: dict[str, Any]
-) -> None:
+def test_equipment_button_returns_fragment(app: Any, seeded_regular_user: dict[str, Any]) -> None:
     """POST /ai/equipment with mocked generate_equipment_rec returns the equipment_rec fragment."""
     _require_ai_router()
 
@@ -559,9 +526,7 @@ def test_equipment_button_returns_fragment(
         client = _authed_client(app, seeded_regular_user["signed_cookie"])
         resp = client.post("/ai/equipment")
 
-    assert resp.status_code == 200, (
-        f"Expected 200, got {resp.status_code}: {resp.text[:300]}"
-    )
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text[:300]}"
     # Equipment result content should appear
     assert "Baratza Encore" in resp.text or "grinder" in resp.text.lower(), (
         f"Expected equipment result content in fragment, got: {resp.text[:300]}"

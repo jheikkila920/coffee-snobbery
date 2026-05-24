@@ -56,8 +56,7 @@ def test_legacy_format(client) -> None:
             headers={"Content-Type": "application/csp-report"},
         )
     assert response.status_code == 204, (
-        f"/csp-report (legacy) expected 204, got {response.status_code}: "
-        f"{response.text}"
+        f"/csp-report (legacy) expected 204, got {response.status_code}: {response.text}"
     )
     events = [r for r in cap if r.get("event") == "csp.violation"]
     assert events, f"no csp.violation event captured; events seen: {cap}"
@@ -96,8 +95,7 @@ def test_reporting_api_format(client) -> None:
             headers={"Content-Type": "application/reports+json"},
         )
     assert response.status_code == 204, (
-        f"/csp-report (reports+json) expected 204, got {response.status_code}: "
-        f"{response.text}"
+        f"/csp-report (reports+json) expected 204, got {response.status_code}: {response.text}"
     )
     events = [r for r in cap if r.get("event") == "csp.violation"]
     assert events, f"no csp.violation event captured; events seen: {cap}"
@@ -120,9 +118,6 @@ def test_rate_limit(client) -> None:
         )
         statuses.append(r.status_code)
     assert all(s == 204 for s in statuses[:30]), (
-        f"first 30 /csp-report calls must be 204, got "
-        f"{[s for s in statuses[:30] if s != 204]}"
+        f"first 30 /csp-report calls must be 204, got {[s for s in statuses[:30] if s != 204]}"
     )
-    assert statuses[30] == 429, (
-        f"31st /csp-report call must be 429, got {statuses[30]}"
-    )
+    assert statuses[30] == 429, f"31st /csp-report call must be 429, got {statuses[30]}"

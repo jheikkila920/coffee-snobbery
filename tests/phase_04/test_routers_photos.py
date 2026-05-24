@@ -103,8 +103,7 @@ def anon_client(app: Any) -> Iterator[Any]:
             yield client
     except (OperationalError, DBAPIError, ConnectionError, OSError) as exc:
         pytest.skip(
-            f"TestClient startup failed (Postgres unreachable?): "
-            f"{type(exc).__name__}: {exc}"
+            f"TestClient startup failed (Postgres unreachable?): {type(exc).__name__}: {exc}"
         )
 
 
@@ -125,9 +124,7 @@ def test_anonymous_returns_404(
     exists, you just can't see it." 404 says neither.
     """
     resp = anon_client.get(f"/photos/{written_main_jpeg}")
-    assert resp.status_code == 404, (
-        f"expected 404, got {resp.status_code}: {resp.text!r}"
-    )
+    assert resp.status_code == 404, f"expected 404, got {resp.status_code}: {resp.text!r}"
 
 
 def test_anonymous_with_existing_file_still_404(
@@ -156,15 +153,11 @@ def test_authed_returns_photo(
     """Authenticated GET → 200 + image/jpeg body."""
     _require_postgres()
     resp = authed_client.get(f"/photos/{written_main_jpeg}")
-    assert resp.status_code == 200, (
-        f"expected 200, got {resp.status_code}: {resp.text!r}"
-    )
+    assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text!r}"
     assert resp.headers["content-type"] == "image/jpeg"
     assert len(resp.content) > 0
     # FileResponse should set the JPEG SOI marker as the first byte pair.
-    assert resp.content.startswith(b"\xff\xd8"), (
-        "served bytes don't start with JPEG SOI marker"
-    )
+    assert resp.content.startswith(b"\xff\xd8"), "served bytes don't start with JPEG SOI marker"
 
 
 def test_authed_response_has_d06_cache_headers(
@@ -178,15 +171,11 @@ def test_authed_response_has_d06_cache_headers(
     assert resp.status_code == 200
 
     cache_control = resp.headers["cache-control"].lower()
-    assert "private" in cache_control, (
-        f"missing 'private' in Cache-Control: {cache_control!r}"
-    )
+    assert "private" in cache_control, f"missing 'private' in Cache-Control: {cache_control!r}"
     assert "max-age=31536000" in cache_control, (
         f"missing 'max-age=31536000' in Cache-Control: {cache_control!r}"
     )
-    assert "immutable" in cache_control, (
-        f"missing 'immutable' in Cache-Control: {cache_control!r}"
-    )
+    assert "immutable" in cache_control, f"missing 'immutable' in Cache-Control: {cache_control!r}"
 
 
 def test_authed_response_has_nosniff_header(
@@ -294,9 +283,7 @@ def test_authed_thumb_variant_serves(
     """``{uuid}-thumb.jpg`` → 200 — regex's ``(-thumb)?`` branch works."""
     _require_postgres()
     resp = authed_client.get(f"/photos/{written_thumb_jpeg}")
-    assert resp.status_code == 200, (
-        f"expected 200, got {resp.status_code}: {resp.text!r}"
-    )
+    assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text!r}"
     assert resp.headers["content-type"] == "image/jpeg"
 
 

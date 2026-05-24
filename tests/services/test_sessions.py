@@ -24,9 +24,7 @@ def test_regenerate(db_session) -> None:
     try:
         from app.services.sessions import regenerate_session
     except ImportError:
-        pytest.skip(
-            "Wave 1 dependency: app.services.sessions.regenerate_session (Plan 04)"
-        )
+        pytest.skip("Wave 1 dependency: app.services.sessions.regenerate_session (Plan 04)")
     # Pre-populate an "old" session row keyed by a known UUID; Wave 1
     # implementation will define the model. We cannot inspect the row shape
     # here without the model, so we exercise the helper end-to-end against

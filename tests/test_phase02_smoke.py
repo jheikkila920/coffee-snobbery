@@ -128,8 +128,7 @@ def test_cold_container_through_login(client) -> None:
     logout_set_cookie = r_logout.headers.get("set-cookie", "")
     assert "session_id=" in logout_set_cookie
     assert "Max-Age=0" in logout_set_cookie or "max-age=0" in logout_set_cookie, (
-        f"logout must emit clear-cookie for session_id (Max-Age=0); "
-        f"got: {logout_set_cookie}"
+        f"logout must emit clear-cookie for session_id (Max-Age=0); got: {logout_set_cookie}"
     )
 
     # ----- Step 7: GET / after logout is rejected by the auth gate -----

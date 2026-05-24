@@ -113,9 +113,7 @@ def _seed_equipment(**kwargs: Any) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def test_list_equipment_renders(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_list_equipment_renders(authed_client: Any, clean_equipment: None) -> None:
     """Authenticated GET /equipment → 200 + page HTML with h1."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -126,9 +124,7 @@ def test_list_equipment_renders(
     assert "Equipment" in body
 
 
-def test_list_equipment_grouped_by_type(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_list_equipment_grouped_by_type(authed_client: Any, clean_equipment: None) -> None:
     """Seed 2 brewers + 1 grinder → list has ≥ 2 type group headings."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -152,9 +148,7 @@ def test_list_equipment_grouped_by_type(
 # --------------------------------------------------------------------------- #
 
 
-def test_create_valid_brewer(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_create_valid_brewer(authed_client: Any, clean_equipment: None) -> None:
     """Valid POST → 200 + row fragment (id="equipment-N")."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -174,9 +168,7 @@ def test_create_valid_brewer(
     assert "equipment-form-mount" in resp.text
 
 
-def test_create_rejects_unknown_type(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_create_rejects_unknown_type(authed_client: Any, clean_equipment: None) -> None:
     """Invalid type value → 200 + form re-render with error styling."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -195,9 +187,7 @@ def test_create_rejects_unknown_type(
     assert "text-red-700" in resp.text
 
 
-def test_create_rejects_blank_brand(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_create_rejects_blank_brand(authed_client: Any, clean_equipment: None) -> None:
     """Blank brand → 200 + form re-render with error class + preserved values."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -223,9 +213,7 @@ def test_create_rejects_blank_brand(
 # --------------------------------------------------------------------------- #
 
 
-def test_edit_pre_populates(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_edit_pre_populates(authed_client: Any, clean_equipment: None) -> None:
     """GET /equipment/{id}/edit → form fragment with existing brand in value=."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -235,9 +223,7 @@ def test_edit_pre_populates(
     assert 'value="Hario"' in resp.text
 
 
-def test_update_persists(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_update_persists(authed_client: Any, clean_equipment: None) -> None:
     """POST /equipment/{id} → DB reflects the new brand."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -269,9 +255,7 @@ def test_update_persists(
 # --------------------------------------------------------------------------- #
 
 
-def test_archive_marks_archived(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_archive_marks_archived(authed_client: Any, clean_equipment: None) -> None:
     """POST /equipment/{id}/archive → DB row.archived=True."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -314,9 +298,7 @@ def test_usage_count_defaults_zero(clean_equipment: None) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_extra_field_rejected(
-    authed_client: Any, clean_equipment: None
-) -> None:
+def test_extra_field_rejected(authed_client: Any, clean_equipment: None) -> None:
     """Extra form field → 200 + form re-render (T-04-MASS via extra='forbid')."""
     _require_postgres()
     _require_p4_migration_applied()
@@ -341,9 +323,7 @@ def test_extra_field_rejected(
 # --------------------------------------------------------------------------- #
 
 
-def test_csrf_missing_returns_403(
-    csrf_client: Any, clean_equipment: None
-) -> None:
+def test_csrf_missing_returns_403(csrf_client: Any, clean_equipment: None) -> None:
     """POST /equipment with mismatched CSRF → 403 from CSRFMiddleware."""
     _require_postgres()
     _require_p4_migration_applied()

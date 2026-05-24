@@ -131,9 +131,7 @@ def test_write_through_invalidate() -> None:
 
         try:
             # Write a new value.
-            settings_service.set_setting(
-                db, "ai_primary_max_searches", 7, by_user_id=None
-            )
+            settings_service.set_setting(db, "ai_primary_max_searches", 7, by_user_id=None)
             # Cache was invalidated — next read forces re-warm OR returns
             # SettingNotFoundError (per the docstring "drop the key so the
             # next accessor call surfaces SettingNotFoundError forcing a
@@ -176,9 +174,7 @@ def test_emits_admin_app_setting_changed_event() -> None:
             with structlog.testing.capture_logs() as captured:
                 # Write back the same value (5) to make the event fire
                 # without ambiguity about what changed.
-                settings_service.set_setting(
-                    db, "ai_primary_max_searches", 5, by_user_id=None
-                )
+                settings_service.set_setting(db, "ai_primary_max_searches", 5, by_user_id=None)
         finally:
             # Restore the seed value if the test changed it (defensive).
             settings_service.set_setting(

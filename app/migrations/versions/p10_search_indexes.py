@@ -74,8 +74,7 @@ def upgrade() -> None:
 
     # coffees.name — CITEXT column; GIN trigram index for ILIKE substring matching
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_search_coffees_name "
-        "ON coffees USING GIN (name gin_trgm_ops)"
+        "CREATE INDEX IF NOT EXISTS ix_search_coffees_name ON coffees USING GIN (name gin_trgm_ops)"
     )
 
     # roasters.name — CITEXT column
@@ -92,8 +91,7 @@ def upgrade() -> None:
 
     # recipes.name — Text column (no description column exists; RESEARCH.md Pitfall 1)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_search_recipes_name "
-        "ON recipes USING GIN (name gin_trgm_ops)"
+        "CREATE INDEX IF NOT EXISTS ix_search_recipes_name ON recipes USING GIN (name gin_trgm_ops)"
     )
 
     # equipment — no name column; expression index on brand || ' ' || model (D-14)

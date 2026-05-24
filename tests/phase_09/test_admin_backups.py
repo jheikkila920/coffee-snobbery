@@ -18,14 +18,11 @@ Security:
 from __future__ import annotations
 
 import inspect
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers — seed real backup files so the list is trustworthy (no skips)
@@ -150,9 +147,7 @@ class TestBackupDownload:
         backup_dir = Path(tmp.name)
         monkeypatch.setattr(backup_mod, "_BACKUP_DIR", backup_dir)
         try:
-            resp = client.get(
-                "/admin/backups/photos_2026-05-21.tar.gz", cookies=admin_session
-            )
+            resp = client.get("/admin/backups/photos_2026-05-21.tar.gz", cookies=admin_session)
         finally:
             tmp.cleanup()
 
@@ -171,9 +166,7 @@ class TestBackupDownload:
         tmp = _make_tmp_backup_dir(["db_2026-05-21.sql"])
         monkeypatch.setattr(backup_mod, "_BACKUP_DIR", Path(tmp.name))
         try:
-            resp = client.get(
-                "/admin/backups/db_2026-05-21.sql", cookies=regular_session
-            )
+            resp = client.get("/admin/backups/db_2026-05-21.sql", cookies=regular_session)
         finally:
             tmp.cleanup()
 
@@ -186,9 +179,7 @@ class TestBackupDownload:
     ) -> None:
         """Percent-encoded path traversal returns 404 (T-09-20)."""
         # %2f is "/" percent-encoded; FastAPI url-decodes path params
-        resp = client.get(
-            "/admin/backups/..%2F..%2Fetc%2Fpasswd", cookies=admin_session
-        )
+        resp = client.get("/admin/backups/..%2F..%2Fetc%2Fpasswd", cookies=admin_session)
         assert resp.status_code == 404
 
     def test_download_path_traversal_raw(
@@ -197,9 +188,7 @@ class TestBackupDownload:
         admin_session: dict[str, str],
     ) -> None:
         """Raw relative path traversal returns 404 (T-09-20)."""
-        resp = client.get(
-            "/admin/backups/../../etc/passwd", cookies=admin_session
-        )
+        resp = client.get("/admin/backups/../../etc/passwd", cookies=admin_session)
         assert resp.status_code == 404
 
     def test_download_invalid_filename_rejected(
@@ -223,9 +212,7 @@ class TestBackupDownload:
         tmp = _make_tmp_backup_dir([])  # empty dir
         monkeypatch.setattr(backup_mod, "_BACKUP_DIR", Path(tmp.name))
         try:
-            resp = client.get(
-                "/admin/backups/db_2026-05-21.sql", cookies=admin_session
-            )
+            resp = client.get("/admin/backups/db_2026-05-21.sql", cookies=admin_session)
         finally:
             tmp.cleanup()
 
@@ -269,9 +256,9 @@ class TestRunBackupNow:
                 break
         assert run_route is not None, "POST /backups/run route not found on router"
         endpoint = run_route.endpoint  # type: ignore[attr-defined]
-        assert not inspect.iscoroutinefunction(
-            endpoint
-        ), "run_backup_now must be sync def (D-07); found async def"
+        assert not inspect.iscoroutinefunction(endpoint), (
+            "run_backup_now must be sync def (D-07); found async def"
+        )
 
     def test_run_backup_non_admin_returns_403(
         self,
@@ -279,7 +266,6 @@ class TestRunBackupNow:
         regular_session: dict[str, str],
     ) -> None:
         """Non-admin POST /admin/backups/run returns 403."""
-        token = regular_session.get("session_id", "")
         resp = client.post(
             "/admin/backups/run",
             data={"X-CSRF-Token": "dummy"},
@@ -300,8 +286,8 @@ class TestRunBackupNow:
         - Fragment contains the BackupResult status ("ok" or "error")
         - Fragment contains both artifact filenames
         """
-        from app.services.backup import ArtifactResult, BackupResult
         import app.routers.admin.backups as backup_mod
+        from app.services.backup import ArtifactResult, BackupResult
 
         fake_result = BackupResult(
             status="ok",
@@ -332,6 +318,7 @@ class TestRunBackupNow:
         # Monkeypatch the backup dir so list_backup_files works (no real /app/data/backups
         # in the test container).
         import tempfile
+
         tmp = tempfile.TemporaryDirectory()
         monkeypatch.setattr(backup_mod, "_BACKUP_DIR", Path(tmp.name))
 

@@ -550,8 +550,7 @@ def _openai_coffee_call(
     """
     schema_hint = json.dumps(CoffeeRecSchema.model_json_schema(), separators=(",", ":"))
     full_prompt = (
-        f"{prompt}\n\n"
-        f"Respond with a JSON object matching this schema exactly:\n{schema_hint}"
+        f"{prompt}\n\nRespond with a JSON object matching this schema exactly:\n{schema_hint}"
     )
     response = client.responses.create(
         model=model,
@@ -643,9 +642,7 @@ async def _generate_sweet_spots_prose(
         # OpenAI path
         oai_client = _build_openai_client(cred)
         schema_hint = json.dumps(SweetSpotsProseSchema.model_json_schema(), separators=(",", ":"))
-        full_prompt = (
-            f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
-        )
+        full_prompt = f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
         response = oai_client.responses.create(
             model=cred.model_name,
             input=[{"role": "user", "content": full_prompt}],
@@ -663,6 +660,7 @@ async def _generate_sweet_spots_prose(
         tool_version = settings_service.get_str("ai_tool_version_openai")
 
     from pydantic import ValidationError as PydanticValidationError
+
     try:
         SweetSpotsProseSchema.model_validate(raw)
     except PydanticValidationError:
@@ -1251,16 +1249,14 @@ async def generate_equipment_rec(
         return "not_configured", None
 
     # Sync reads before any awaited call (Pitfall 5)
-    equipment_rows = db.execute(
-        select(Equipment).where(Equipment.archived.is_(False))
-    ).scalars().all()
+    equipment_rows = (
+        db.execute(select(Equipment).where(Equipment.archived.is_(False))).scalars().all()
+    )
     profile = analytics_service.get_preference_profile(db, user_id)
 
     # Build equipment summary for the prompt
     if equipment_rows:
-        equip_lines = "\n".join(
-            f"- {e.type}: {e.brand} {e.model}" for e in equipment_rows
-        )
+        equip_lines = "\n".join(f"- {e.type}: {e.brand} {e.model}" for e in equipment_rows)
     else:
         equip_lines = "(no equipment logged yet)"
 
@@ -1329,9 +1325,7 @@ async def generate_equipment_rec(
     if raw is None and openai_cred is not None:
         oai_client = _build_openai_client(openai_cred)
         schema_hint = json.dumps(EquipmentRecSchema.model_json_schema(), separators=(",", ":"))
-        full_prompt = (
-            f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
-        )
+        full_prompt = f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
         try:
             response = oai_client.responses.create(
                 model=openai_cred.model_name,
@@ -1628,9 +1622,7 @@ async def rank_pasted_coffees(
     if raw is None and openai_cred is not None:
         oai_client = _build_openai_client(openai_cred)
         schema_hint = json.dumps(PasteRankSchema.model_json_schema(), separators=(",", ":"))
-        full_prompt = (
-            f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
-        )
+        full_prompt = f"{prompt}\n\nRespond with JSON matching this schema:\n{schema_hint}"
         try:
             response = oai_client.responses.create(
                 model=openai_cred.model_name,

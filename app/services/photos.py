@@ -208,9 +208,7 @@ def process_and_save(raw_bytes: bytes) -> str:
         raise PhotoRejected("Photo dimensions too large.") from exc
     except (UnidentifiedImageError, Exception) as exc:
         log.warning("photo.decode_failed", error_class=type(exc).__name__)
-        raise PhotoRejected(
-            "We couldn't read this image. Try a JPEG, PNG, or WebP."
-        ) from exc
+        raise PhotoRejected("We couldn't read this image. Try a JPEG, PNG, or WebP.") from exc
 
     # Step 4: re-open + load (verify() invalidated the previous handle).
     try:
@@ -221,9 +219,7 @@ def process_and_save(raw_bytes: bytes) -> str:
         raise PhotoRejected("Photo dimensions too large.") from exc
     except (UnidentifiedImageError, Exception) as exc:
         log.warning("photo.decode_failed", error_class=type(exc).__name__)
-        raise PhotoRejected(
-            "We couldn't read this image. Try a JPEG, PNG, or WebP."
-        ) from exc
+        raise PhotoRejected("We couldn't read this image. Try a JPEG, PNG, or WebP.") from exc
 
     # Step 5: belt-and-braces EXIF strip. The primary defense is the
     # ``Image.save`` call below WITHOUT the ``exif=`` kwarg (Pillow
@@ -231,7 +227,7 @@ def process_and_save(raw_bytes: bytes) -> str:
     # ``getexif()`` dict here is the second layer.
     try:
         image.getexif().clear()
-    except Exception:  # noqa: BLE001 — not all formats expose getexif()
+    except Exception:  # noqa: BLE001, S110 — not all formats expose getexif()
         pass
 
     # Step 6: normalize mode. PNG with alpha + WebP often come in as
@@ -314,9 +310,7 @@ def unlink_safe(filename: str | None) -> None:
             )
 
 
-def _sweep_unreferenced(
-    on_disk: set[str], referenced_main_filenames: set[str]
-) -> int:
+def _sweep_unreferenced(on_disk: set[str], referenced_main_filenames: set[str]) -> int:
     """Pure diff + unlink helper used by :func:`sweep_orphans`.
 
     Split out so plan 04-01 tests can exercise the FS-first / unlink
@@ -377,9 +371,7 @@ def sweep_orphans(db) -> int:  # type: ignore[no-untyped-def]
         return 0
 
     # Step 1: snapshot filesystem first.
-    on_disk: set[str] = {
-        p.name for p in PHOTOS_DIR.iterdir() if p.is_file() and p.suffix == ".jpg"
-    }
+    on_disk: set[str] = {p.name for p in PHOTOS_DIR.iterdir() if p.is_file() and p.suffix == ".jpg"}
 
     # Step 2: query DB second. Lazy-import to keep the module's import
     # graph minimal (mirrors ``app/dependencies/db.py`` pattern) and to
@@ -390,9 +382,7 @@ def sweep_orphans(db) -> int:  # type: ignore[no-untyped-def]
 
     from app.models.bag import Bag
 
-    rows = db.execute(
-        select(Bag.photo_filename).where(Bag.photo_filename.isnot(None))
-    ).all()
+    rows = db.execute(select(Bag.photo_filename).where(Bag.photo_filename.isnot(None))).all()
     referenced_main: set[str] = {fn for (fn,) in rows if fn is not None}
 
     # Step 3: unlink the diff.

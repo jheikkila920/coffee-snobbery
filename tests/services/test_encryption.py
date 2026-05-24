@@ -48,9 +48,7 @@ def _require_encryption_service() -> None:
         pytest.skip("Phase 3 dependency: app.services.encryption")
 
 
-def _reload_encryption_with_key(
-    monkeypatch: pytest.MonkeyPatch, key_value: str
-):
+def _reload_encryption_with_key(monkeypatch: pytest.MonkeyPatch, key_value: str):
     """Patch ``APP_ENCRYPTION_KEY`` to *key_value* and reload the module.
 
     Returns the freshly reloaded ``app.services.encryption`` module. Used
@@ -75,9 +73,7 @@ def test_encrypt_decrypt_roundtrip(monkeypatched_app_encryption_key: str) -> Non
     assert decrypt(ciphertext) == plaintext
 
 
-def test_rotation_decrypts_old_token(
-    monkeypatch: pytest.MonkeyPatch, fernet_key_str: str
-) -> None:
+def test_rotation_decrypts_old_token(monkeypatch: pytest.MonkeyPatch, fernet_key_str: str) -> None:
     """Row 2 (SEC-08, D-09): a token encrypted under K1 decrypts after rotating to (K2, K1)."""
     _require_encryption_service()
     from cryptography.fernet import Fernet

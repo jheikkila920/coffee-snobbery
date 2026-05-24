@@ -109,12 +109,8 @@ def test_alembic_downgrade_p4_then_upgrade() -> None:
     command.upgrade(cfg, "head")
 
     with engine.connect() as conn:
-        coffees_oid_after = conn.execute(
-            text("SELECT to_regclass('public.coffees')")
-        ).scalar()
-    assert coffees_oid_after is not None, (
-        "coffees table must exist again after upgrade head"
-    )
+        coffees_oid_after = conn.execute(text("SELECT to_regclass('public.coffees')")).scalar()
+    assert coffees_oid_after is not None, "coffees table must exist again after upgrade head"
 
 
 def test_alembic_p4_gin_index_present() -> None:
@@ -133,9 +129,7 @@ def test_alembic_p4_gin_index_present() -> None:
             )
         ).one_or_none()
 
-    assert row is not None, (
-        "ix_coffees_advertised_flavor_note_ids must exist after p4 upgrade"
-    )
+    assert row is not None, "ix_coffees_advertised_flavor_note_ids must exist after p4 upgrade"
     indexdef = row[0]
     # Postgres lower-cases USING GIN -> 'using gin' in pg_indexes.indexdef.
     assert "using gin" in indexdef.lower(), (

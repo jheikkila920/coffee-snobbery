@@ -47,9 +47,9 @@ class SearchResult:
     """A single search hit, ready for the results fragment."""
 
     id: int
-    primary: str | Markup        # Highlighted name (Markup) or plain str
-    context: str | Markup        # Secondary context line — Markup for brew notes
-    link: str                    # Full-page navigation URL (D-11)
+    primary: str | Markup  # Highlighted name (Markup) or plain str
+    context: str | Markup  # Secondary context line — Markup for brew notes
+    link: str  # Full-page navigation URL (D-11)
     archived: bool = False
 
 
@@ -87,7 +87,7 @@ def highlight(text: str, query: str) -> Markup:  # noqa: A002 — intentional sh
     before = escape(text[:idx])
     matched = escape(text[idx : idx + len(query)])
     after = escape(text[idx + len(query) :])
-    return Markup(f"{before}<strong class='font-semibold'>{matched}</strong>{after}")
+    return Markup(f"{before}<strong class='font-semibold'>{matched}</strong>{after}")  # noqa: S704
 
 
 # --------------------------------------------------------------------------- #
@@ -102,7 +102,7 @@ def _brew_snippet(notes: str, query: str, window: int = 40) -> str:
     """
     idx = notes.lower().find(query.lower())
     if idx == -1:
-        return notes[:window * 2]
+        return notes[: window * 2]
     start = max(0, idx - window)
     end = min(len(notes), idx + len(query) + window)
     prefix = "…" if start > 0 else ""
@@ -213,10 +213,14 @@ def run_search(db: Session, query: str, user_id: int) -> SearchResults:
     # ------------------------------------------------------------------ #
     equip_concat = func.concat(Equipment.brand, " ", Equipment.model)
     equip_tokens = query.split()
-    equip_token_conds = [
-        or_(Equipment.brand.ilike(f"%{t}%"), Equipment.model.ilike(f"%{t}%"))
-        for t in equip_tokens
-    ] if equip_tokens else [equip_concat.ilike(pattern)]
+    equip_token_conds = (
+        [
+            or_(Equipment.brand.ilike(f"%{t}%"), Equipment.model.ilike(f"%{t}%"))
+            for t in equip_tokens
+        ]
+        if equip_tokens
+        else [equip_concat.ilike(pattern)]
+    )
     equip_stmt = (
         select(
             Equipment.id,
@@ -288,13 +292,13 @@ def run_search(db: Session, query: str, user_id: int) -> SearchResults:
         snippet_markup = highlight(snippet, query)
         date_str = row.brewed_at.strftime("%Y-%m-%d") if row.brewed_at else ""
         if date_str:
-            context: str | Markup = Markup(f"{escape(date_str)} · {snippet_markup}")
+            context: str | Markup = Markup(f"{escape(date_str)} · {snippet_markup}")  # noqa: S704
         else:
             context = snippet_markup
         results.brew_notes.append(
             SearchResult(
                 id=row.id,
-                primary=Markup(escape(row.coffee_name)),
+                primary=Markup(escape(row.coffee_name)),  # noqa: S704
                 context=context,
                 link=f"/brew/{row.id}/edit",
                 archived=False,

@@ -192,12 +192,8 @@ def aggregate_tokens_since(db: Session, run_start: datetime) -> dict[str, int]:
 
     row = db.execute(
         select(
-            func.coalesce(func.sum(AIRecommendation.tokens_input), 0).label(
-                "tokens_input_total"
-            ),
-            func.coalesce(func.sum(AIRecommendation.tokens_output), 0).label(
-                "tokens_output_total"
-            ),
+            func.coalesce(func.sum(AIRecommendation.tokens_input), 0).label("tokens_input_total"),
+            func.coalesce(func.sum(AIRecommendation.tokens_output), 0).label("tokens_output_total"),
             func.coalesce(func.sum(AIRecommendation.tokens_input_search), 0).label(
                 "tokens_input_search_total"
             ),
@@ -296,9 +292,7 @@ def run_nightly_ai_refresh() -> None:
                 # Bridge sync job body → async regenerate (08-RESEARCH Pattern 3,
                 # <critical_implementation_note>). Each asyncio.run opens a fresh
                 # event loop in this worker thread and tears it down when done.
-                status = asyncio.run(
-                    ai_service.regenerate(uid, "scheduler", db=db, force=False)
-                )
+                status = asyncio.run(ai_service.regenerate(uid, "scheduler", db=db, force=False))
             except Exception as exc:
                 # One user's unexpected raise must not abort the whole run.
                 log.warning(

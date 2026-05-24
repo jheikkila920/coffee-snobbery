@@ -135,19 +135,14 @@ STATIC_HEADERS: tuple[tuple[bytes, bytes], ...] = (
 # survives ``python -O`` (which strips asserts). The constraint is a
 # security invariant, not a developer-only sanity check.
 if "'unsafe-eval'" in CSP_TEMPLATE:
-    raise RuntimeError(
-        "CSP_TEMPLATE must not permit 'unsafe-eval' (SEC-02 / D-02)"
-    )
+    raise RuntimeError("CSP_TEMPLATE must not permit 'unsafe-eval' (SEC-02 / D-02)")
 # 'unsafe-inline' is permitted ONLY in the style-src-attr directive segment.
 # Tokenize on '; ' and check that the only segment containing it begins with
 # 'style-src-attr'.
 for _segment in CSP_TEMPLATE.split("; "):
-    if "'unsafe-inline'" in _segment and not _segment.startswith(
-        "style-src-attr "
-    ):
+    if "'unsafe-inline'" in _segment and not _segment.startswith("style-src-attr "):
         raise RuntimeError(
-            f"'unsafe-inline' may only appear in style-src-attr; found in: "
-            f"{_segment!r}"
+            f"'unsafe-inline' may only appear in style-src-attr; found in: {_segment!r}"
         )
 del _segment  # don't leak the loop variable into the module namespace
 
@@ -174,9 +169,7 @@ class SecurityHeadersMiddleware:
         """Store the downstream ASGI app for later delegation."""
         self.app = app
 
-    async def __call__(
-        self, scope: Scope, receive: Receive, send: Send
-    ) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """ASGI entry point.
 
         For non-HTTP scopes (lifespan, websocket) pass through unchanged.

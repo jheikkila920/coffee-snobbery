@@ -3,7 +3,7 @@
 Covers per-task verification map rows for the fragment-cache decisions from
 ``.planning/phases/01-middleware/01-VALIDATION.md``:
 
-- ``test_full_page``    — GET / without HX-Request → Cache-Control: private, no-cache, must-revalidate
+- ``test_full_page`` — GET / without HX-Request → Cache-Control: private, no-cache, must-revalidate
 - ``test_fragment``     — GET / with HX-Request: true → Cache-Control: no-store + Vary: HX-Request
 - ``test_no_overwrite`` — route-set Cache-Control is preserved
 - ``test_static_bypass`` — /static/ paths untouched by the middleware
@@ -61,8 +61,7 @@ def test_no_overwrite(client) -> None:
     if response.status_code == 404:
         pytest.xfail("/debug/cache-test probe route lands in Plan 06")
     assert response.headers.get("Cache-Control") == "public, max-age=60", (
-        f"middleware overwrote route-set Cache-Control: "
-        f"{response.headers.get('Cache-Control')}"
+        f"middleware overwrote route-set Cache-Control: {response.headers.get('Cache-Control')}"
     )
 
 
