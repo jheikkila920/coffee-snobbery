@@ -63,11 +63,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette_csrf import CSRFMiddleware
 
 from app.config import settings
@@ -181,6 +183,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _async_engine.dispose()
 
 
+async def unauthorized_redirect_handler(request: Request, exc: StarletteHTTPException) -> Response:
+    """Redirect / HX-redirect 401s to /login; delegate everything else.
+
+    Three branches, only on status_code == 401:
+    - HTMX request: 401 + HX-Redirect header (client-side redirect, no DOM swap).
+    - Browser full-page nav (Accept: text/html, no HX-Request): 303 to /login.
+    - JSON/API client (no text/html, not HTMX): default 401 JSON body.
+    Non-401 statuses (403 admin no-leak, 404, 422, …) are untouched.
+    """
+    if exc.status_code != 401:
+        return await http_exception_handler(request, exc)
+    hx_request = request.headers.get("HX-Request") == "true"
+    accepts_html = "text/html" in request.headers.get("accept", "")
+    if hx_request:
+        return Response(status_code=401, headers={"HX-Redirect": "/login"})
+    elif accepts_html:
+        return RedirectResponse(url="/login", status_code=303)
+    else:
+        return await http_exception_handler(request, exc)
+
+
 def create_app() -> FastAPI:
     """Build the FastAPI app, wire middleware + routers, register Phase 1 routes.
 
@@ -204,6 +227,7 @@ def create_app() -> FastAPI:
     )
 
     register_rate_limiter(app)
+    app.add_exception_handler(StarletteHTTPException, unauthorized_redirect_handler)
 
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
