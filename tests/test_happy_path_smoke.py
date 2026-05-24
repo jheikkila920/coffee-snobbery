@@ -48,21 +48,12 @@ def _require_wired(label: str) -> None:
             pytest.skip(f"{label} routers not yet present: {exc}")
 
 
-def _require_postgres_hard(client: object) -> None:
-    """Fail in CI if Postgres is unreachable (cannot enter lifespan TestClient).
-
-    The conftest ``client`` fixture already skips on OperationalError, but
-    that skip is silent. Call this guard at the top of any HARD test so
-    SNOB_CI=1 turns that skip into a failure.
-
-    If ``client`` is a TestClient instance (lifespan started successfully),
-    Postgres is reachable.
-    """
-    # The conftest ``client`` fixture skips on DB errors, so if we're here
-    # the client started OK and Postgres is up.  This function intentionally
-    # does nothing at runtime; its purpose is documentation + a future hook
-    # for custom Postgres-unreachable detection if the fixture changes.
-    pass
+# HARD-test enforcement note: the conftest ``client`` fixture routes its
+# Postgres-unreachable path through ``_require_postgres``, which fails under
+# SNOB_CI=1 (and skips otherwise). So requesting ``client`` is sufficient to
+# make this smoke a HARD failure in CI when the DB is down — no per-test guard
+# needed (a prior no-op ``_require_postgres_hard`` helper was removed as it
+# delivered nothing at runtime; see 12-REVIEW WR-03).
 
 
 def _extract_id_from_html(html: str, prefix: str) -> int:

@@ -111,8 +111,15 @@ def app() -> Any:
     try:
         from app.main import app as _app
     except RuntimeError as exc:
+        # Under SNOB_CI=1 the workflow builds Tailwind before pytest, so a missing
+        # hash here means a broken gate, not "not built yet" — fail, never skip
+        # (D-02: no hollow green). Locally without the build, skip remains correct.
+        if _CI_MODE:
+            pytest.fail(f"SNOB_CI=1 but app.main import failed (Tailwind CSS missing?): {exc}")
         pytest.skip(f"app.main import failed (likely Tailwind CSS missing): {exc}")
     except ImportError as exc:
+        if _CI_MODE:
+            pytest.fail(f"SNOB_CI=1 but app.main not importable: {exc}")
         pytest.skip(f"app.main not importable (Wave 1 dependency missing): {exc}")
     return _app
 
@@ -136,7 +143,10 @@ def client(app: Any) -> Iterator[Any]:
         with TestClient(app) as _client:
             yield _client
     except (OperationalError, DBAPIError, ConnectionError, OSError) as exc:
-        pytest.skip(
+        # _require_postgres fails under SNOB_CI=1 (real gate break) and skips
+        # otherwise — so client-dependent HARD tests (e.g. the happy-path smoke)
+        # cannot go hollow-green in CI when Postgres is down (D-02).
+        _require_postgres(
             f"TestClient startup failed (Postgres unreachable?): {type(exc).__name__}: {exc}"
         )
 

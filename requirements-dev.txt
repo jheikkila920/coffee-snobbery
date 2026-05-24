@@ -6,7 +6,7 @@
 ruff>=0.15.13,<0.16
 mypy>=1.13,<2
 pytest>=9.0,<10
-pytest-asyncio
+pytest-asyncio>=1.2,<2
 pytest-cov
 respx
 playwright>=1.59,<2

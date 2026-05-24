@@ -11,7 +11,7 @@ Snobbery is a self-hosted household coffee log for pour-over enthusiasts who car
 - Python 3.12 + FastAPI ≥0.136
 - PostgreSQL 16
 - SQLAlchemy 2.0 + Alembic + psycopg 3
-- Jinja2 + HTMX 2.x + Tailwind CSS (standalone CLI v4) + Alpine.js (CDN, added in Phase 1)
+- Jinja2 + HTMX 2.x + Tailwind CSS (standalone CLI v3.4.17) + Alpine.js (CDN, added in Phase 1)
 - argon2-cffi + Fernet (`cryptography`) for credentials + API keys
 - structlog 25.x for JSON logging
 - APScheduler in-process (Phase 8)
@@ -20,7 +20,7 @@ Snobbery is a self-hosted household coffee log for pour-over enthusiasts who car
 ## Prerequisites
 
 - Docker + Docker Compose v2 on the host. Nothing else.
-- No Python or Node required on the host — the image bakes Python 3.12, the Tailwind v4 standalone CLI binary, and `postgresql-client-16` from PGDG.
+- No Python or Node required on the host — the image bakes Python 3.12, the Tailwind v3.4.17 standalone CLI binary, and `postgresql-client-16` from PGDG.
 
 ## Quick start
 

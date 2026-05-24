@@ -34,7 +34,10 @@ from pathlib import Path
 
 import pytest
 
-TEMPLATES_DIR = Path("app/templates")
+# Anchor to the repo root (tests/ci/ -> repo root is parents[2]) so the scan is
+# CWD-independent — a relative Path() run from any other directory would silently
+# collect zero cases and look like a clean pass (12-REVIEW WR-05).
+TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "app" / "templates"
 
 # <script> or <style> open tag that lacks a nonce= attribute before the >.
 # Negative lookahead: (?![^>]*\bnonce\s*=) asserts no "nonce=" anywhere
