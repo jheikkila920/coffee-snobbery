@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: milestone
 status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-05-24T00:02:57.532Z"
-last_activity: 2026-05-24 -- Phase 12 planning complete
+last_updated: "2026-05-24T00:12:45.425Z"
+last_activity: 2026-05-24 -- Phase 12 execution started
 progress:
   total_phases: 13
   completed_phases: 12
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-16)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 11 — pwa-mobile-polish
+**Current focus:** Phase 12 — hardening-tests
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-24 -- Phase 12 planning complete
+Phase: 12 (hardening-tests) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 12
+Last activity: 2026-05-24 -- Phase 12 execution started
 
 Progress: [██████████] 96%
 
