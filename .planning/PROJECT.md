@@ -236,4 +236,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-23 — Phase 11 (PWA + mobile polish) complete: installable PWA, persistent nav + sign-out, Guided Brew Mode, mobile responsive sweep. (Validated/Active requirement reconciliation is overdue across all phases — run /gsd-docs-update.)*
+*Last updated: 2026-05-24 — Phase 12 (Hardening + Tests) complete: ship-readiness gate green — happy-path smoke + service/CSRF unit coverage, CSP/credential grep tests, full-suite isolation + SNOB_CI anti-hollow-green gate, reproducible dev/test Docker target + compose profile, Playwright responsive smoke (375x667 + 390x844), GitHub Actions CI, README gap-fill. Canonical gate: 939 passed + 10 e2e. FINAL phase of milestone v1.1 — roadmap complete. (Validated/Active requirement reconciliation is overdue across all phases — run /gsd-docs-update.)*
