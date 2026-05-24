@@ -33,6 +33,26 @@ from urllib.parse import urlparse, urlunparse
 import pytest
 import pytest_asyncio
 
+# D-02: CI skip-enforcement gate.
+# When SNOB_CI=1 (e.g., GitHub Actions, docker-compose test profile),
+# Postgres-dependent fixture skips become hard failures so "green-by-skip"
+# cannot masquerade as a passing gate run.
+_CI_MODE = os.environ.get("SNOB_CI") == "1"
+
+
+def _require_postgres(reason: str) -> None:
+    """Fail in CI (SNOB_CI=1) instead of skipping when Postgres is unreachable.
+
+    Use in critical-path fixtures in place of bare ``pytest.skip(reason)`` so
+    the Phase 12 ship gate surfaces missing Postgres as a real failure rather
+    than hollow green.
+    """
+    if _CI_MODE:
+        pytest.fail(f"SNOB_CI=1 but Postgres unreachable: {reason}")
+    else:
+        pytest.skip(reason)
+
+
 # Wave 0 env-var stubs + dedicated test-database guard.
 #
 # app/config.py evaluates ``settings = Settings()`` at import and app/db.py binds
@@ -116,8 +136,9 @@ def client(app: Any) -> Iterator[Any]:
         with TestClient(app) as _client:
             yield _client
     except (OperationalError, DBAPIError, ConnectionError, OSError) as exc:
-        pytest.skip(f"TestClient startup failed (Postgres unreachable?): "
-                    f"{type(exc).__name__}: {exc}")
+        pytest.skip(
+            f"TestClient startup failed (Postgres unreachable?): {type(exc).__name__}: {exc}"
+        )
 
 
 @pytest.fixture
@@ -166,6 +187,7 @@ def _reset_rate_limiter() -> Iterator[None]:
     yield
     try:
         from app.rate_limit import limiter
+
         limiter.reset()
     except (ImportError, AttributeError):
         # Wave 1 dependency not present (Plan 03 / Plan 07); harmless.
@@ -342,9 +364,7 @@ def fresh_db() -> Iterator[None]:
             conn.execute(text("DELETE FROM sessions"))
             conn.execute(text("DELETE FROM users"))
             conn.execute(text("ALTER SEQUENCE users_id_seq RESTART WITH 1"))
-            conn.execute(
-                text("UPDATE app_settings SET value='false' WHERE key='setup_completed'")
-            )
+            conn.execute(text("UPDATE app_settings SET value='false' WHERE key='setup_completed'"))
     except Exception:
         # Postgres reachable but a table doesn't exist yet (e.g., the
         # initial migration hasn't run in this test DB), or some other
@@ -384,6 +404,71 @@ def _postgres_reachable() -> bool:
             return True
     except (OSError, socket.timeout):
         return False
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _reset_catalog_tables() -> Iterator[None]:
+    """Truncate catalog + brew tables after each test module (D-01).
+
+    Teardown-only (yields first, cleans up after). Scope=module keeps
+    per-test cost near zero while guaranteeing each test module starts
+    with an empty catalog — no cross-module FK pollution.
+
+    FK-safe TRUNCATE order (RESTRICT constraints):
+      brew_sessions.coffee_id / bag_id RESTRICT → coffees / bags
+      bags.coffee_id RESTRICT → coffees
+    So: brew_sessions → bags → coffees → equipment → recipes → roasters → flavor_notes.
+
+    NEVER TRUNCATEs ``users`` — app_settings.updated_by_user_id has
+    ON DELETE SET NULL; a CASCADE on users would wipe the 19-row seed and
+    break test_app_settings_seeded_with_19_rows. ``fresh_db`` owns users/sessions.
+
+    Safety interlock: refuses to TRUNCATE any database whose name does not
+    contain "test" (verbatim from fresh_db, lines 319-332).
+    """
+    yield  # teardown-only; setup is a no-op
+
+    if not _postgres_reachable():
+        return
+
+    # Safety interlock — replicated verbatim from fresh_db.
+    try:
+        from app.config import settings as _s
+
+        _active_db = urlparse(
+            _s.DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
+        ).path.lstrip("/")
+    except Exception:
+        _active_db = ""
+    if "test" not in _active_db.lower():
+        return
+
+    try:
+        from sqlalchemy import text
+
+        from app.db import engine
+
+        with engine.begin() as conn:
+            # FK-safe order: children before parents.
+            conn.execute(text("TRUNCATE brew_sessions RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE bags RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE coffees RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE equipment RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE recipes RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE roasters RESTART IDENTITY CASCADE"))
+            conn.execute(text("TRUNCATE flavor_notes RESTART IDENTITY CASCADE"))
+    except Exception:
+        # Table not yet created (migration not run) or transient error — no-op.
+        pass
+
+    # Clear the in-memory app_settings cache so test_setup_concurrent_race
+    # does not inherit a stale setup_completed=true from a prior module.
+    try:
+        import app.services.settings as _svc
+
+        _svc._cache.clear()  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 
 def _seed_user(*, is_admin: bool) -> dict[str, Any]:
@@ -444,6 +529,8 @@ def seeded_admin_user() -> dict[str, Any]:
     (``app.signing.sign_session_id``) lands in Phase 1 so is not
     probed separately.
     """
+    if not _postgres_reachable():
+        _require_postgres("Postgres not reachable (seeded_admin_user)")
     try:
         from app.services.auth import hash_password  # noqa: F401
     except ImportError:
@@ -462,6 +549,8 @@ def seeded_regular_user() -> dict[str, Any]:
     Same shape as :func:`seeded_admin_user`. Exercises the AUTH-09
     "non-admin → 403" branch of the three-state admin-gate test.
     """
+    if not _postgres_reachable():
+        _require_postgres("Postgres not reachable (seeded_regular_user)")
     try:
         from app.services.auth import hash_password  # noqa: F401
     except ImportError:
@@ -508,9 +597,7 @@ def fernet_key_str(fernet_key: bytes) -> str:
 
 
 @pytest.fixture
-def monkeypatched_app_encryption_key(
-    monkeypatch: pytest.MonkeyPatch, fernet_key_str: str
-) -> str:
+def monkeypatched_app_encryption_key(monkeypatch: pytest.MonkeyPatch, fernet_key_str: str) -> str:
     """Patch ``APP_ENCRYPTION_KEY`` and rebuild encryption's ``_multi_fernet``.
 
     Returns the patched key string so the test can read it back. After the
@@ -564,7 +651,7 @@ def sync_db() -> Iterator[Any]:
         return  # pragma: no cover
 
     if not _postgres_reachable():
-        pytest.skip("Postgres not reachable")
+        _require_postgres("Postgres not reachable (sync_db)")
         return  # pragma: no cover
 
     # Safety interlock: refuse to yield a session against the live DB.
@@ -579,7 +666,7 @@ def sync_db() -> Iterator[Any]:
     except Exception:
         _active_db = ""
     if "test" not in _active_db.lower():
-        pytest.skip("sync_db refuses to connect to a non-test database (T-08-01)")
+        _require_postgres("sync_db refuses to connect to a non-test database (T-08-01)")
         return  # pragma: no cover
 
     with SessionLocal() as session:

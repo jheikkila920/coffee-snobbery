@@ -36,7 +36,9 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-x --tb=short"
+addopts = "--tb=short"
+# Phase 12: -x removed so the ship gate surfaces ALL failures at once.
+# Pass -x explicitly on the CLI for fast dev one-shots (e.g. pytest -x tests/).
 # Phase 1 Plan 01 (Wave 0): warning policy.
 #
 # The plan text proposed `filterwarnings = ["error"]` (treat all warnings as
