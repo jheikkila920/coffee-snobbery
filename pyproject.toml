@@ -25,7 +25,10 @@ extend-select = ["E", "F", "I", "B", "UP", "S"]
 [tool.ruff.lint.per-file-ignores]
 # Test files routinely use `assert` (S101) and may hard-code credentials in
 # fixtures (S105/S106) — these are not security smells in the test domain.
-"tests/**/*.py" = ["S101", "S105", "S106"]
+# S110: try-except-pass is intentional in e2e fixtures (bag creation can fail on
+# a pre-seeded stack; the test gracefully skips).
+# S310: urllib.request to a localhost test target is not an SSRF risk.
+"tests/**/*.py" = ["S101", "S105", "S106", "S110", "S310"]
 
 [tool.mypy]
 python_version = "3.12"
