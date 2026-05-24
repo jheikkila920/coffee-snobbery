@@ -144,7 +144,14 @@ RUN pip install -r requirements-dev.txt
 # Install Chromium browser binary + OS-level deps for bookworm-slim
 # (libglib2.0-0, libfontconfig, libx11-6, etc.).
 # --with-deps handles all system library requirements automatically.
-RUN playwright install chromium --with-deps
+# PLAYWRIGHT_BROWSERS_PATH is set as an ENV (persists to runtime) so the
+# root-time install and the app-user launch resolve the SAME location —
+# the default per-user cache (~/.cache) installs under root but the
+# container runs as `app`, which would then fail to find the browser.
+# chmod a+rx makes the root-installed browser readable by the app user.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install chromium --with-deps \
+    && chmod -R a+rx /ms-playwright
 
 USER app
 

@@ -169,7 +169,10 @@ class TestBrewForm:
     def test_brew_form_no_horizontal_scroll(self, page_at_viewport: Page, base_url: str) -> None:
         """The brew form must not cause horizontal scroll at mobile widths."""
         page_at_viewport.goto(base_url + "/brew/new")
-        page_at_viewport.wait_for_selector("form", timeout=10_000)
+        # Anchor on #brew-form (the page under test, visible at mobile). A bare
+        # "form" selector's first match is the header logout form, which is
+        # hidden at mobile widths, so a visibility wait on it times out.
+        page_at_viewport.wait_for_selector("#brew-form", timeout=10_000)
 
         scroll_width = page_at_viewport.evaluate("document.documentElement.scrollWidth")
         client_width = page_at_viewport.evaluate("document.documentElement.clientWidth")
@@ -186,15 +189,22 @@ class TestBrewForm:
         are rendered and their computed styles are populated (Pitfall 4).
         """
         page_at_viewport.goto(base_url + "/brew/new")
-        # Pitfall 4 guard: wait for at least one input to be present and
-        # rendered before querying computed styles.
-        page_at_viewport.wait_for_selector("input, select, textarea", timeout=10_000)
+        # Pitfall 4 guard: wait for the brew form to render before querying
+        # computed styles. Anchor on #brew-form (visible at mobile) — a bare
+        # "input, select, textarea" selector's first match is the header search
+        # input, which is hidden at mobile widths, so a visibility wait on it
+        # times out.
+        page_at_viewport.wait_for_selector("#brew-form", timeout=10_000)
 
         violations = page_at_viewport.evaluate(
             """() => {
                 const els = document.querySelectorAll('input, select, textarea');
                 const out = [];
                 for (const el of els) {
+                    // Only visible controls can take focus and trigger iOS zoom;
+                    // hidden chrome (e.g. the mobile search input behind its sheet)
+                    // is not a focus-zoom risk.
+                    if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) continue;
                     const fs = parseFloat(getComputedStyle(el).fontSize);
                     if (fs < 16) {
                         out.push({
