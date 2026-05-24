@@ -68,9 +68,7 @@ def test_valid_token(client) -> None:
         headers={"X-CSRF-Token": token},
         cookies={"csrftoken": token},
     )
-    assert response.status_code != 403, (
-        f"valid CSRF rejected with 403: {response.text}"
-    )
+    assert response.status_code != 403, f"valid CSRF rejected with 403: {response.text}"
 
 
 @pytest.mark.xfail(
@@ -103,9 +101,7 @@ def test_no_rotation(client) -> None:
         pytest.skip("CSRF cookie 'csrftoken' not yet set by Wave 1 middleware")
     r2 = client.get("/", headers={"HX-Request": "true"})
     token2 = r2.cookies.get("csrftoken") or token1
-    assert token1 == token2, (
-        f"CSRF cookie rotated across requests: {token1!r} != {token2!r}"
-    )
+    assert token1 == token2, f"CSRF cookie rotated across requests: {token1!r} != {token2!r}"
 
 
 def test_csp_report_exempt(client) -> None:
@@ -120,6 +116,66 @@ def test_csp_report_exempt(client) -> None:
         headers={"Content-Type": "application/csp-report"},
     )
     assert response.status_code != 403, (
-        f"/csp-report rejected with 403 (CSRF middleware should exempt it): "
-        f"{response.text}"
+        f"/csp-report rejected with 403 (CSRF middleware should exempt it): {response.text}"
+    )
+
+
+def test_forged_token_rejected() -> None:
+    """T-12-07: POST with mismatched csrftoken cookie vs X-CSRF-Token header → 403.
+
+    Builds a minimal Starlette app with only CSRFMiddleware wired (no
+    sensitive_cookies restriction — all POST paths enforced) so the forged-token
+    path is exercised directly without needing a live authenticated session.
+
+    This is the negative path complement to test_valid_token: a token present
+    in the cookie but a DIFFERENT value sent in the header must be rejected.
+    """
+    try:
+        from app.csrf import csrf_middleware_kwargs  # noqa: F401 — sentinel
+    except ImportError:
+        pytest.skip("Wave 1 dependency: app.csrf.csrf_middleware_kwargs (Plan 02)")
+
+    from starlette.applications import Starlette
+    from starlette.middleware import Middleware
+    from starlette.requests import Request
+    from starlette.responses import Response
+    from starlette.routing import Route
+    from starlette.testclient import TestClient
+    from starlette_csrf import CSRFMiddleware
+
+    async def _echo(request: Request) -> Response:
+        return Response("ok", status_code=200)
+
+    # Minimal app: enforce CSRF on all POSTs (no sensitive_cookies restriction).
+    # Uses a fixed secret so the HMAC-signed cookie is reproducible.
+    routes = [Route("/action", endpoint=_echo, methods=["POST"])]
+    middleware = [
+        Middleware(
+            CSRFMiddleware,
+            secret="test-secret-for-csrf-forged-token-test",  # noqa: S106
+            cookie_name="csrftoken",
+            header_name="X-CSRF-Token",
+            cookie_secure=False,  # TestClient uses http://testserver
+        )
+    ]
+    app = Starlette(routes=routes, middleware=middleware)
+
+    with TestClient(app, raise_server_exceptions=False) as c:
+        # Seed the csrftoken cookie via a GET (middleware mints it on the first response).
+        primer = c.get("/action")
+        real_token = primer.cookies.get("csrftoken")
+        if not real_token:
+            pytest.skip("CSRFMiddleware did not mint a csrftoken cookie on GET")
+
+        # Send the correct cookie but a FORGED value in the header → must be 403.
+        response = c.post(
+            "/action",
+            data={"field": "value"},
+            headers={"X-CSRF-Token": "forged-invalid-token-value"},
+            cookies={"csrftoken": real_token},
+        )
+
+    assert response.status_code == 403, (
+        f"T-12-07: forged CSRF token must be rejected (403); "
+        f"got {response.status_code}: {response.text[:200]}"
     )
