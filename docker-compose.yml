@@ -45,6 +45,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Pin the prod image to the runtime stage. Without this, an omitted target
+      # builds the LAST Dockerfile stage (`dev`), whose ENTRYPOINT is pytest — so
+      # `up -d` runs the test suite and restart-loops instead of serving uvicorn.
+      target: runtime
     container_name: coffee-snobbery
     restart: unless-stopped
     depends_on:
