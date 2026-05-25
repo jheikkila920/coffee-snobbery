@@ -168,13 +168,19 @@ def test_projector_no_match_raises() -> None:
 @respx.mock
 @pytest.mark.asyncio
 async def test_url_verify_verified() -> None:
+    import socket
+    from unittest.mock import patch
+
     from app.services.ai_service import _verify_buy_url
 
     url = "https://example-roaster.com/yirgacheffe"
     respx.get(url).mock(
         return_value=httpx.Response(200, text="counter culture yirgacheffe buy now")
     )
-    result = await _verify_buy_url(url, "Counter Culture", "Yirgacheffe")
+    # Mock getaddrinfo so _assert_public_host passes; test focuses on HTTP-level logic.
+    mock_public = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_public):
+        result = await _verify_buy_url(url, "Counter Culture", "Yirgacheffe")
     assert result is True
 
 
@@ -213,6 +219,126 @@ async def test_url_verify_ssrf_redirect() -> None:
         )
     )
     result = await _verify_buy_url(url, "Roaster", "Coffee")
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# S1 — SSRF private-IP / DNS gate tests (14-02)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ssrf_private_ipv4_blocked() -> None:
+    """Private IPv4 addresses (RFC 1918) must be rejected before any httpx call."""
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _verify_buy_url
+
+    for private_ip in ("10.0.0.1", "172.16.0.1", "192.168.0.1"):
+        mock_result = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (private_ip, 443))]
+        with patch("socket.getaddrinfo", return_value=mock_result):
+            result = await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee")
+        assert result is False, f"Expected False for private IP {private_ip}"
+
+
+@pytest.mark.asyncio
+async def test_ssrf_loopback_blocked() -> None:
+    """Loopback addresses (127.0.0.1, ::1) must be rejected."""
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _verify_buy_url
+
+    # IPv4 loopback
+    mock_v4 = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_v4):
+        assert await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee") is False
+
+    # IPv6 loopback
+    mock_v6 = [(socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::1", 443, 0, 0))]
+    with patch("socket.getaddrinfo", return_value=mock_v6):
+        assert await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee") is False
+
+
+@pytest.mark.asyncio
+async def test_ssrf_link_local_blocked() -> None:
+    """Link-local addresses including the cloud-metadata endpoint must be rejected."""
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _verify_buy_url
+
+    # Cloud-metadata endpoint 169.254.169.254 (AWS/GCP/Azure IMDS)
+    mock_result = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("169.254.169.254", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_result):
+        result = await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee")
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_ssrf_ipv4_mapped_ipv6_blocked() -> None:
+    """IPv4-mapped IPv6 (::ffff:169.254.169.254) must be normalised then rejected.
+
+    Without ipv4_mapped normalisation the address would appear as a global IPv6
+    and bypass the link-local check entirely — this test proves normalisation works.
+    """
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _verify_buy_url
+
+    mock_result = [
+        (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::ffff:169.254.169.254", 443, 0, 0))
+    ]
+    with patch("socket.getaddrinfo", return_value=mock_result):
+        result = await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee")
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_ssrf_public_url_allowed() -> None:
+    """A public host must not be false-blocked by the gate.
+
+    Calls _assert_public_host directly with a mocked resolution to a known
+    public IP (93.184.216.34 — example.com) so the test is deterministic
+    without making a real network call or needing respx.
+    """
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _assert_public_host
+
+    mock_result = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_result):
+        result = _assert_public_host("https://example.com/coffee")
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_fetch_page_ssrf_private_blocked() -> None:
+    """_fetch_page_text must return '' for a host resolving to a private IP."""
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _fetch_page_text
+
+    mock_result = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_result):
+        result = await _fetch_page_text("https://internal.corp/page")
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_ssrf_dns_failure_blocked() -> None:
+    """DNS resolution failure (socket.gaierror) must be treated as a rejection."""
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _verify_buy_url
+
+    with patch("socket.getaddrinfo", side_effect=socket.gaierror("Name not found")):
+        result = await _verify_buy_url("https://nonexistent.invalid/coffee", "Roaster", "Coffee")
     assert result is False
 
 
@@ -1109,6 +1235,9 @@ async def test_paste_rank_fetch_no_cross_host_redirect() -> None:
 @pytest.mark.asyncio
 async def test_paste_rank_fetch_extracts_text() -> None:
     """_fetch_page_text extracts text from p/h1/h2 tags in valid HTML."""
+    import socket
+    from unittest.mock import patch
+
     from app.services.ai_service import _fetch_page_text
 
     url = "https://roaster.example.com/yirgacheffe"
@@ -1121,7 +1250,10 @@ async def test_paste_rank_fetch_extracts_text() -> None:
         "</body></html>"
     )
     respx.get(url).mock(return_value=httpx.Response(200, text=html))
-    result = await _fetch_page_text(url)
+    # Mock getaddrinfo so _assert_public_host passes; test focuses on HTML extraction.
+    mock_public = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_public):
+        result = await _fetch_page_text(url)
 
     assert "Yirgacheffe Kochere" in result
     assert "Ethiopia Natural" in result
