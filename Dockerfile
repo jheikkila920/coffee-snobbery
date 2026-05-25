@@ -51,13 +51,17 @@ COPY app/templates ./app/templates
 COPY app/static/js ./app/static/js
 
 # Compute SHA-8 of the source CSS and emit the content-hashed output.
+# Also write build_id.txt with a UTC timestamp so the SW CACHE_NAME bumps
+# unconditionally on every build, not only when tailwind.src.css changes (C9).
 RUN set -eux; \
     HASH="$(sha256sum app/static/css/tailwind.src.css | cut -c1-8)"; \
     tailwindcss \
       -i app/static/css/tailwind.src.css \
       -o "app/static/css/tailwind.${HASH}.css" \
       --minify; \
-    echo "Built: app/static/css/tailwind.${HASH}.css"
+    echo "Built: app/static/css/tailwind.${HASH}.css"; \
+    echo "$(date -u +%Y%m%d%H%M%S)" > app/static/build_id.txt; \
+    echo "Build ID: $(cat app/static/build_id.txt)"
 
 # --- Stage 2: Python runtime -------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -102,6 +106,7 @@ COPY --chown=app:app . .
 # tailwind.<sha8>.css; the source tailwind.src.css already lives in the
 # image via the COPY above.
 COPY --from=tailwind-builder --chown=app:app /build/app/static/css/tailwind.*.css ./app/static/css/
+COPY --from=tailwind-builder --chown=app:app /build/app/static/build_id.txt ./app/static/build_id.txt
 
 RUN chmod +x entrypoint.sh
 

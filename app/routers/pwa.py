@@ -28,16 +28,30 @@ log = structlog.get_logger(__name__)
 
 
 def _get_build_hash() -> str:
-    """Return the 8-char build hash from the hashed Tailwind CSS filename.
+    """Return a build identifier for use in the service-worker CACHE_NAME.
 
-    Globs ``app/static/css/tailwind.*.css`` excluding ``tailwind.src.css``,
-    returns the hash segment of the single hashed filename (the second
-    dot-separated token in the stem), or ``"dev"`` if none is found.
+    Priority order (C9 — cache must bump on every docker compose build):
 
-    This reuses the same hash the Tailwind CSS file already carries so that
-    a ``docker compose build`` (which recomputes the CSS hash) automatically
-    bumps the service worker cache name, triggering cache purge on next visit.
+    1. ``app/static/build_id.txt`` — written unconditionally by the Dockerfile
+       stage-1 RUN block on every build (timestamp format: YYYYmmddHHMMSS).
+       Preferred because it changes per build regardless of which source files
+       changed, fixing the root cause where only editing templates or Python
+       files left the CSS hash (and therefore the SW cache key) unchanged.
+       Truncated to 16 chars to keep CACHE_NAME compact.
+
+    2. Hashed Tailwind CSS filename (``tailwind.XXXXXXXX.css``) — used when
+       running from the source tree (no baked build_id.txt) so that a dev
+       rebuild that touches tailwind.src.css still bumps the cache.
+
+    3. ``"dev"`` — fallback for source-tree runs without compiled CSS
+       (CI source-tree checkout, unit-test runs without a Docker build).
+       The SW still registers and operates; cache purge behaviour is not
+       exercised but no exception is raised.
     """
+    build_id_path = Path("app/static/build_id.txt")
+    if build_id_path.exists():
+        return build_id_path.read_text(encoding="utf-8").strip()[:16]
+
     css_dir = Path("app/static/css")
     candidates = sorted(p for p in css_dir.glob("tailwind.*.css") if p.name != "tailwind.src.css")
     if candidates:

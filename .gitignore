@@ -25,3 +25,7 @@ htmlcov/
 # at image build time by the tailwind-builder stage of the Dockerfile.
 app/static/css/tailwind.*.css
 !app/static/css/tailwind.src.css
+
+# Build artifact written by the Dockerfile stage-1 RUN block; generated per build,
+# not stored in the repo (C9 — SW cache versioning).
+app/static/build_id.txt
