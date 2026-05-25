@@ -18,7 +18,11 @@ findings:
   warning: 3
   info: 2
   total: 7
-status: issues_found
+status: resolved
+remediation:
+  resolved: [CR-01, CR-02, WR-01, WR-03]
+  accepted: [WR-02, IN-01, IN-02]
+  fix_commit: d4a6310
 ---
 
 # Phase 14: Code Review Report
@@ -26,7 +30,23 @@ status: issues_found
 **Reviewed:** 2026-05-25
 **Depth:** standard
 **Files Reviewed:** 9
-**Status:** issues_found
+**Status:** resolved (fixes in d4a6310)
+
+## Remediation (2026-05-25)
+
+- **CR-01 resolved** — `_assert_public_host` now adds `not addr.is_global` to the
+  rejection set, blocking CGNAT (100.64.0.0/10) and any other non-globally-routable
+  space. Verified live: `100.64.0.1` now rejected; public IPs still allowed. New
+  regression test `test_ssrf_cgnat_blocked`.
+- **CR-02 resolved** — `test_url_verify_404` now patches `socket.getaddrinfo`, so it
+  exercises the 404 path instead of passing vacuously on DNS failure in CI.
+- **WR-01 resolved** — empty `getaddrinfo` result now returns `False`.
+- **WR-03 resolved** — `test_idempotent_job_registration` docstring corrected to "3 jobs".
+- **WR-02 accepted (not changed)** — reordering the self-demote check before the
+  `_count_active_admins` lock would change error-message precedence for the
+  last-admin-self case (currently "last active admin" wins), which existing guard
+  tests encode. Harmless as-is; left intentionally.
+- **IN-01 / IN-02 accepted** — informational; no behavioral risk.
 
 ## Summary
 
