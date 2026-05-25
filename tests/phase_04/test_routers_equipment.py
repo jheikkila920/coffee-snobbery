@@ -149,7 +149,12 @@ def test_list_equipment_grouped_by_type(authed_client: Any, clean_equipment: Non
 
 
 def test_create_valid_brewer(authed_client: Any, clean_equipment: None) -> None:
-    """Valid POST → 200 + row fragment (id="equipment-N")."""
+    """Valid POST → 200 + full list fragment containing the new equipment row.
+
+    Plan 13-03 (C2/D-03): create now returns equipment_list.html (the full
+    grouped list), not the bare equipment_row.html <tr>. The OOB form-clear
+    is removed; form collapse happens via hx-target="#equipment-list" (D-04).
+    """
     _require_postgres()
     _require_p4_migration_applied()
     _prime_csrf(authed_client)
@@ -164,8 +169,10 @@ def test_create_valid_brewer(authed_client: Any, clean_equipment: None) -> None:
     )
     assert resp.status_code == 200, resp.text
     assert 'id="equipment-' in resp.text
-    # The row also carries the OOB form-clear swap on the create path.
-    assert "equipment-form-mount" in resp.text
+    # Plan 13-03: returns the list fragment — list-container markers must be present.
+    assert "space-y-3" in resp.text or 'class="hidden md:block"' in resp.text
+    # OOB form-clear is removed (C2 — form collapses via list-swap hx-target).
+    assert "equipment-form-mount" not in resp.text
 
 
 def test_create_rejects_unknown_type(authed_client: Any, clean_equipment: None) -> None:

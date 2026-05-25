@@ -200,7 +200,12 @@ def test_list_coffees_includes_responsive_layout_markers(
 
 
 def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) -> None:
-    """POST minimal valid form → 200 + row fragment."""
+    """POST minimal valid form → 200 + full list fragment containing the new coffee.
+
+    Plan 13-03 (C2/D-03): create now returns coffee_list.html (the full list
+    fragment), not the bare coffee_row.html <tr>. The OOB form-clear is removed;
+    form collapse happens via hx-target="#coffee-list" (D-04).
+    """
     _require_postgres()
     _require_p4_migration_applied()
     _prime_csrf(authed_client)
@@ -215,8 +220,10 @@ def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) ->
     )
     assert resp.status_code == 200, resp.text
     assert 'id="coffee-' in resp.text
-    # OOB form-clear hits on create.
-    assert "coffee-form-mount" in resp.text
+    # Plan 13-03: returns the list fragment — list-container markers must be present.
+    assert "space-y-3" in resp.text or 'class="hidden md:block"' in resp.text
+    # OOB form-clear is removed (C2 — form collapses via list-swap hx-target).
+    assert "coffee-form-mount" not in resp.text
 
 
 def test_create_coffee_with_array_round_trip(authed_client: Any, clean_catalog: None) -> None:
