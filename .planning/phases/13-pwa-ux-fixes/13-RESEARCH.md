@@ -303,6 +303,8 @@ Or via a CSS rule in `tailwind.src.css` (outside `@layer` to prevent purge):
 .top-safe-area { padding-top: env(safe-area-inset-top); }
 ```
 
+**Planning decision (locked in Plan 05):** use the arbitrary-value utility `pt-[env(safe-area-inset-top)]` directly on the elements — Tailwind v3 compiles the arbitrary value into the single output, so the separate `.top-safe-area` CSS rule above is NOT used (keeps all CSS in `tailwind.src.css` with no extra rule; MX-1 satisfied).
+
 **The `h-14` height may be too short** once the safe-area padding is added — the strip total height becomes `3.5rem + safe-area-inset-top (~50px on iPhone 14 Pro)`. Either increase the base height (e.g., `h-auto min-h-14`) or use `calc(3.5rem + env(safe-area-inset-top))` for `min-height`.
 
 **Unverified:** The bottom-nav technique (`982c0e6`) is itself unverified on-device (memory `snobbery-safe-area-fix-unverified`). This approach reuses the same pattern — if the bottom fix is confirmed to work, this will too. If neither works, both need a revised approach.
@@ -541,22 +543,25 @@ Nyquist validation is enabled. Map each criterion to test approach.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does login.html extend base.html?**
    - What we know: CONTEXT.md references `base.html` as the template for nav + scripts; login is always-dark.
    - What's unclear: Whether the no-FOUC script fires on login.
    - Recommendation: Planner reads login.html before the C4 plan task. If login extends base.html, the no-FOUC script fires but is visually irrelevant (login is always hardcoded dark). If it's standalone, no change to login.
+   - RESOLVED: login.html extends base.html and hardcodes `bg-espresso-950` (login.html line 7), NOT the `dark:` variant. The no-FOUC script fires on login but is a visual no-op — login stays always-dark by template hardcoding, so D-02 needs no extra handling. Captured in Plan 05 interfaces.
 
 2. **Should `build_id.txt` include the git commit SHA instead of (or in addition to) a timestamp?**
    - What we know: Timestamps are unconditional but non-deterministic across parallel builds. Git SHAs are deterministic but require `git` in the build image.
    - What's unclear: Whether the Dockerfile builder stage has git available.
    - Recommendation: Use timestamp (simple, always available in Debian bookworm-slim stage 1). Can be enhanced to include git SHA later.
+   - RESOLVED: Use the UTC timestamp (`date -u +%Y%m%d%H%M%S`) written unconditionally in the Dockerfile stage-1 RUN. It is always available with no extra build dependency and changes on every build. Git SHA is deferred as a possible later enhancement.
 
 3. **`darkMode: 'class'` vs `'selector'` in tailwind.config.js**
    - What we know: Both work in v3.4.17; `'selector'` is the canonical name since v3.4.1.
    - What's unclear: Whether the standalone CLI binary respects both values identically.
    - Recommendation: Use `'selector'` per official v3 docs. If it doesn't work (rare edge case with the binary), fall back to `'class'`.
+   - RESOLVED: Use `'selector'` (v3.4.1+ canonical). Plan 05 Task 1 carries an explicit `'class'` fallback instruction if the standalone binary misbehaves with `'selector'`, with the chosen value noted in the SUMMARY.
 
 ---
 
@@ -633,3 +638,4 @@ Nyquist validation is enabled. Map each criterion to test approach.
 
 **Research date:** 2026-05-24
 **Valid until:** 2026-06-24 (stable stack; library versions locked)
+</content>
