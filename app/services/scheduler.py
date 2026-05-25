@@ -1,8 +1,9 @@
 """APScheduler integration — owned by Phase 8.
 
-Two nightly jobs:
-- ``nightly_ai_refresh`` @ 00:00 APP_TIMEZONE — SCHED-01/02/03
-- ``nightly_backup``     @ 02:00 APP_TIMEZONE — SCHED-04
+Three nightly jobs:
+- ``nightly_ai_refresh``    @ 00:00 APP_TIMEZONE — SCHED-01/02/03
+- ``nightly_backup``        @ 02:00 APP_TIMEZONE — SCHED-04
+- ``nightly_session_sweep`` @ 03:00 APP_TIMEZONE — B2
 
 APScheduler 3.11 wired with SQLAlchemyJobStore backed by the SYNC engine
 from ``app.db`` (not ``_async_engine`` — that would silently fail at
@@ -101,9 +102,9 @@ scheduler = build_scheduler()
 
 
 def register_jobs(sched: AsyncIOScheduler | None = None) -> None:
-    """Add both nightly jobs with stable IDs + replace_existing=True.
+    """Add all three nightly jobs with stable IDs + replace_existing=True.
 
-    Calling this N times produces exactly 2 rows in apscheduler_jobs — no
+    Calling this N times produces exactly 3 rows in apscheduler_jobs — no
     duplicates. This is the idempotency guarantee (08-RESEARCH.md Pitfall 3,
     T-08-09 threat mitigation).
 
@@ -123,6 +124,12 @@ def register_jobs(sched: AsyncIOScheduler | None = None) -> None:
         run_nightly_backup,
         CronTrigger(hour=2, minute=0, timezone=settings.APP_TIMEZONE),
         id="nightly_backup",
+        replace_existing=True,
+    )
+    target.add_job(
+        run_nightly_session_sweep,
+        CronTrigger(hour=3, minute=0, timezone=settings.APP_TIMEZONE),
+        id="nightly_session_sweep",
         replace_existing=True,
     )
 
@@ -354,6 +361,38 @@ def run_nightly_backup() -> None:
         log.error(
             SCHEDULER_JOB_ERROR,
             job_id="nightly_backup",
+            error_class=type(exc).__name__,
+            error_msg=str(exc),
+        )
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Nightly session sweep job (B2)
+# ---------------------------------------------------------------------------
+
+
+def run_nightly_session_sweep() -> None:
+    """Delete expired sessions. Closes sessions.py:182-185 TODO (B2).
+
+    Runs DELETE FROM sessions WHERE expires_at < now() via an index scan
+    (btree index on expires_at from migration p1_sessions). Lazy-imports
+    SessionModel to mirror the backup job pattern and avoid import-cycle risk.
+    """
+    log.info(SCHEDULER_JOB_START, job_id="nightly_session_sweep")
+    try:
+        from sqlalchemy import delete as sql_delete
+
+        from app.models.session import Session as SessionModel
+
+        with SessionLocal() as db:
+            db.execute(sql_delete(SessionModel).where(SessionModel.expires_at < func.now()))
+            db.commit()
+        log.info(SCHEDULER_JOB_SUCCESS, job_id="nightly_session_sweep")
+    except Exception as exc:
+        log.error(
+            SCHEDULER_JOB_ERROR,
+            job_id="nightly_session_sweep",
             error_class=type(exc).__name__,
             error_msg=str(exc),
         )
