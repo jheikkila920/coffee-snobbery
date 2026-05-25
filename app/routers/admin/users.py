@@ -304,10 +304,6 @@ async def update_user(
         if target_id == admin_user.id:
             return _render_error_fragment(request, "Cannot demote yourself.", 409)
 
-    # Self-lockout guard on is_admin demotion
-    if target.is_admin and not new_is_admin_raw and target_id == admin_user.id:
-        return _render_error_fragment(request, "Cannot demote yourself.", 409)
-
     # Apply changes
     password_changed = False
     target.username = new_username
