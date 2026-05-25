@@ -111,12 +111,15 @@ document.addEventListener('alpine:init', () => {
     // --- start / pause / resume ---
     async start() {
       if (!this.hasSteps || this.isRunning) return;
-      // Both AudioContext unlock AND wake lock MUST run inside this user gesture.
-      this.unlockAudio();
-      await this.requestWakeLock();
+      // Switch to running screen immediately so iOS PWA doesn't show a frozen UI
+      // if unlockAudio or requestWakeLock take time / reject.
       this.isRunning = true;
       this.isPaused = false;
       this._startTimer();
+      // Audio unlock MUST run synchronously inside the user gesture (before any await).
+      try { this.unlockAudio(); } catch (_e) { /* non-fatal */ }
+      // Wake lock is best-effort; failure must not abort the brew.
+      try { await this.requestWakeLock(); } catch (_e) { /* non-fatal */ }
     },
 
     pause() {
@@ -307,6 +310,34 @@ document.addEventListener('alpine:init', () => {
     toggleChime() {
       this.cuePrefs = { ...this.cuePrefs, chime: !this.cuePrefs.chime };
       this._saveCuePrefs();
+    },
+
+    // Idempotent On/Off helpers — CSP-safe alternatives to short-circuit
+    // expressions like `cuePrefs.chime || toggleChime()` in x-on handlers.
+    chimeOn() {
+      if (!this.cuePrefs.chime) this.toggleChime();
+    },
+
+    chimeOff() {
+      if (this.cuePrefs.chime) this.toggleChime();
+    },
+
+    vibrateOn() {
+      if (!this.cuePrefs.vibrate) this.toggleVibrate();
+    },
+
+    vibrateOff() {
+      if (this.cuePrefs.vibrate) this.toggleVibrate();
+    },
+
+    // Computed aria-pressed strings for the "Off" buttons — avoids
+    // `(!cuePrefs.x).toString()` expressions in templates (CSP-unsafe).
+    get chimeOffPressed() {
+      return String(!this.cuePrefs.chime);
+    },
+
+    get vibrateOffPressed() {
+      return String(!this.cuePrefs.vibrate);
     },
 
     toggleVibrate() {

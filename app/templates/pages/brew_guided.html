@@ -55,13 +55,6 @@
       {# === START SCREEN === shown before start() is called #}
       <div x-show="!isRunning && !isDone" class="flex flex-col min-h-screen px-6 py-8 gap-6">
 
-        {# Header row #}
-        <div class="flex items-center justify-between">
-          <a href="/brew" class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
-            Cancel
-          </a>
-        </div>
-
         {# Recipe info #}
         <div class="flex-1 flex flex-col gap-4">
           <h1 class="text-2xl font-semibold">{{ recipe.name }}</h1>
@@ -89,37 +82,38 @@
         </div>
 
         {# Cue toggles — C6: clearly-labeled On/Off buttons replace confusing role=switch pills.
-           toggleChime() / toggleVibrate() and localStorage snobbery:gbm:cues are unchanged. #}
+           CSP-safe: dedicated chimeOn/chimeOff/vibrateOn/vibrateOff methods (no ||/&& in x-on);
+           aria-pressed uses computed getters chimeOffPressed/vibrateOffPressed (no (!x).toString()). #}
         <div class="rounded-lg border border-espresso-200 dark:border-espresso-700 p-4 flex flex-col gap-3">
           <p class="text-sm font-semibold text-espresso-700 dark:text-cream-200">Audio &amp; haptic cues</p>
           <div class="flex items-center justify-between gap-3">
             <span class="text-sm">Chime at each step</span>
             <div class="flex gap-2" role="group" aria-label="Chime setting">
               <button type="button"
-                      x-on:click="cuePrefs.chime || toggleChime()"
+                      x-on:click="chimeOn()"
                       :class="cuePrefs.chime ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 text-espresso-800 dark:border-espresso-700 dark:text-cream-200'"
                       class="rounded px-3 py-1 text-sm min-h-[44px]"
                       :aria-pressed="cuePrefs.chime.toString()">On</button>
               <button type="button"
-                      x-on:click="cuePrefs.chime && toggleChime()"
+                      x-on:click="chimeOff()"
                       :class="!cuePrefs.chime ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 text-espresso-800 dark:border-espresso-700 dark:text-cream-200'"
                       class="rounded px-3 py-1 text-sm min-h-[44px]"
-                      :aria-pressed="(!cuePrefs.chime).toString()">Off</button>
+                      :aria-pressed="chimeOffPressed">Off</button>
             </div>
           </div>
           <div class="flex items-center justify-between gap-3">
             <span class="text-sm">Vibration at each step</span>
             <div class="flex gap-2" role="group" aria-label="Vibration setting">
               <button type="button"
-                      x-on:click="cuePrefs.vibrate || toggleVibrate()"
+                      x-on:click="vibrateOn()"
                       :class="cuePrefs.vibrate ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 text-espresso-800 dark:border-espresso-700 dark:text-cream-200'"
                       class="rounded px-3 py-1 text-sm min-h-[44px]"
                       :aria-pressed="cuePrefs.vibrate.toString()">On</button>
               <button type="button"
-                      x-on:click="cuePrefs.vibrate && toggleVibrate()"
+                      x-on:click="vibrateOff()"
                       :class="!cuePrefs.vibrate ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 text-espresso-800 dark:border-espresso-700 dark:text-cream-200'"
                       class="rounded px-3 py-1 text-sm min-h-[44px]"
-                      :aria-pressed="(!cuePrefs.vibrate).toString()">Off</button>
+                      :aria-pressed="vibrateOffPressed">Off</button>
             </div>
           </div>
         </div>
@@ -131,9 +125,11 @@
           Start guided brew
         </button>
 
-        <p class="text-xs text-espresso-500 dark:text-cream-400 text-center pb-4">
-          Keep your screen on for the full brew.
-        </p>
+        {# Cancel — placed below Start CTA (NEW-12b: moved from top header) #}
+        <a href="/brew"
+           class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center justify-center pb-4">
+          Cancel
+        </a>
       </div>
 
       {# === TIMER SCREEN === shown while isRunning (paused or running) #}
