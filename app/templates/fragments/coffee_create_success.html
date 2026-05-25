@@ -1,0 +1,12 @@
+{# Coffee create success fragment.
+   Swapped into #coffee-form-mount (innerHTML) → collapses the form (body is empty).
+   The OOB div updates #coffee-list with the freshly sorted list.
+
+   CR-01/WR-01 fix: before this template, create success returned coffee_list.html
+   directly, but the form's hx-target was #coffee-list, so validation errors were
+   also swapped into #coffee-list (destroying the list). The form now targets
+   #coffee-form-mount; success uses this template with an OOB list update.
+#}
+<div id="coffee-list" hx-swap-oob="innerHTML">
+  {% include "fragments/coffee_list.html" %}
+</div>

@@ -392,9 +392,10 @@ async def create_coffee(
         by_user_id=user.id,
     )
 
-    # C2/D-03: return the full list fragment so the new coffee appears in correct
-    # sort/filter order and the form collapses implicitly (hx-target is #coffee-list,
-    # so the list swap replaces the list container and the form mount is vacated — D-04).
+    # CR-01/WR-01 fix: form targets #coffee-form-mount (not #coffee-list), so on success
+    # we must (a) empty the form mount and (b) update the list via OOB swap.
+    # The response body lands in #coffee-form-mount (innerHTML) → collapses the form.
+    # The OOB div updates #coffee-list with the freshly ordered list.
     rows = coffees_service.list_coffees(db, roaster_id=None, country=None, process=None, archived=False)
     all_ids: list[int] = []
     for c in rows:
@@ -407,15 +408,16 @@ async def create_coffee(
             if roaster.id in roaster_ids:
                 roaster_name_map[roaster.id] = roaster.name
     filters = {"roaster_id": None, "country": None, "process": None, "archived": False}
+    list_context = {
+        "coffees": rows,
+        "filters": filters,
+        "flavor_note_names": flavor_note_names,
+        "roaster_name_map": roaster_name_map,
+    }
     return templates.TemplateResponse(
         request=request,
-        name="fragments/coffee_list.html",
-        context={
-            "coffees": rows,
-            "filters": filters,
-            "flavor_note_names": flavor_note_names,
-            "roaster_name_map": roaster_name_map,
-        },
+        name="fragments/coffee_create_success.html",
+        context=list_context,
     )
 
 

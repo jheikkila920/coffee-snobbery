@@ -214,14 +214,14 @@ async def create_equipment(
         notes=form.notes,
         by_user_id=user.id,
     )
-    # C2/D-03: return the full list fragment so sort/group order is correct and
-    # the form collapses implicitly (hx-target points at #equipment-list, not
-    # #equipment-form-mount, so the list swap replaces the list container and
-    # the create form simply disappears from view — D-04).
+    # CR-01/WR-01 fix: form targets #equipment-form-mount (not #equipment-list), so on
+    # success we must (a) empty the form mount and (b) update the list via OOB swap.
+    # The response body lands in #equipment-form-mount (innerHTML) → collapses the form.
+    # The OOB div updates #equipment-list with the freshly grouped list.
     groups = equipment_service.list_equipment_grouped_by_type(db, include_archived=False)
     return templates.TemplateResponse(
         request=request,
-        name="fragments/equipment_list.html",
+        name="fragments/equipment_create_success.html",
         context={"groups": groups, "include_archived": False},
     )
 

@@ -1,0 +1,12 @@
+{# Equipment create success fragment.
+   Swapped into #equipment-form-mount (innerHTML) → collapses the form (body is empty).
+   The OOB div updates #equipment-list with the freshly grouped list.
+
+   CR-01/WR-01 fix: before this template, create success returned equipment_list.html
+   directly, but the form's hx-target was #equipment-list, so validation errors were
+   also swapped into #equipment-list (destroying the list). The form now targets
+   #equipment-form-mount; success uses this template with an OOB list update.
+#}
+<div id="equipment-list" hx-swap-oob="innerHTML">
+  {% include "fragments/equipment_list.html" %}
+</div>
