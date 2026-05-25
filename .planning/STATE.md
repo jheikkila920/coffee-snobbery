@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Phase 13 context gathered
-last_updated: "2026-05-25T01:58:23.653Z"
-last_activity: 2026-05-25 -- Phase 13 execution started
+status: completed
+stopped_at: Phase 14 context gathered
+last_updated: "2026-05-25T19:30:53.971Z"
+last_activity: 2026-05-25
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 14
   total_plans: 89
-  completed_plans: 83
+  completed_plans: 89
   percent: 100
 ---
 
@@ -91,6 +91,7 @@ Progress: [██████████] 96%
 ### Roadmap Evolution
 
 - Phase 13 added (2026-05-24): PWA UX Fixes — post-UAT polish (9 success criteria) from John's iOS PWA testing. Sibling bottom-nav-float (`982c0e6`) and guided-brew dead-span (`eafc6e3`) already fixed via /gsd-debug, out of scope.
+- Phase 14 added (2026-05-25): Audit Remediation — 5 verified findings from a Codex audit (independently confirmed vs code + live Postgres + tests). B1 [CRITICAL] `_count_active_admins` FOR-UPDATE-on-aggregate crash (proven live); S1 [HIGH] SSRF private-IP block in `_verify_buy_url`/`_fetch_page_text`; B2 [MED] nightly expired-session sweep; S4 [LOW] `/search` length cap + rate limit; B4 [LOW] dead duplicate self-demote guard. Excluded after verification: login-CSRF (documented accepted risk), app-layer HSTS (NPM handles it), async/sync mixing (Codex overstated — AI call is awaited), `_LOCKS` eviction (negligible).
 
 ### Decisions
 
@@ -160,7 +161,7 @@ Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-25T01:05:37.681Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-pwa-ux-fixes/13-CONTEXT.md
+Last session: 2026-05-25T19:30:53.944Z
+Stopped at: Phase 14 context gathered
+Resume file: .planning/phases/14-audit-remediation/14-CONTEXT.md
 Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).

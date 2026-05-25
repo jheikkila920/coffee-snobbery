@@ -412,3 +412,19 @@ Plans:
 
 **Wave 2** *(blocked on 13-05 — shared config_hub.html)*
 - [x] 13-06-PLAN.md — C5/C8 Guided Brew reach (Home/Log -> /recipes) + recipe_row regression test + Export/Import -> /data-tools (D-05/D-06)
+
+### Phase 14: Audit Remediation
+**Goal:** Fix the verified defects surfaced by a Codex audit (independently confirmed against the code, the live Postgres DB, and the test suite). Correctness + security hardening only; no schema, AI-scheduling, deployment-topology, or feature changes. Five scoped items, ranked by severity.
+**Depends on:** Phase 13 (PWA UX Fixes)
+**Requirements:** Audit-sourced (no formal REQUIREMENT IDs; success criteria below are the contract)
+**Success Criteria** (what must be TRUE):
+  1. **[CRITICAL] Last-admin guard no longer crashes.** `_count_active_admins()` in `app/routers/admin/users.py` no longer issues `SELECT COUNT(*) ... FOR UPDATE` (invalid in PostgreSQL — proven live: `ERROR: FOR UPDATE is not allowed with aggregate functions`). It counts locked rows via a subquery (`SELECT COUNT(*) FROM (SELECT id FROM users WHERE is_admin AND is_active FOR UPDATE) sub`). All 4 call sites (lines ~292/365/416/484 — `update_user`, `toggle_admin`, `deactivate_user`, `delete_user`) work. A new regression test proves admin A demoting/deactivating/deleting admin B with 2+ admins present succeeds (currently 500s — this path is entirely untested because existing tests only exercise the self path, which short-circuits before the query). Existing guard tests still pass.
+  2. **[HIGH] SSRF: private/internal addresses are blocked.** `_verify_buy_url` (~`app/services/ai_service.py:157`) and `_fetch_page_text` (~`:1466`) reject `https://` URLs whose host resolves to a private/loopback/link-local/ULA address (`10/8`, `172.16/12`, `192.168/16`, `127/8`, `169.254/16`, `::1`, `fc00::/7`), in addition to the existing scheme + no-redirect defenses. The fix resolves the hostname and connects to the pinned resolved IP (DNS-rebinding safe). `_fetch_page_text` is reachable by any authenticated user via paste-and-rank. Tests prove internal hosts are refused and public URLs still work.
+  3. **[MEDIUM] Expired sessions are swept.** A nightly APScheduler job in `app/services/scheduler.py` runs `DELETE FROM sessions WHERE expires_at < now()` (closes the deferred TODO at `app/services/sessions.py:182-185`). Stable id (`nightly_session_sweep`), idempotent like the existing 2 jobs (3 total). Test proves expired rows are deleted and unexpired rows retained.
+  4. **[LOW] `/search` is hardened.** `app/routers/search.py` caps `q` length (over-long input short-circuits to empty 200) and carries a slowapi rate limit (new constant in `app/rate_limit.py`, matching the existing per-route pattern).
+  5. **[LOW] Dead code removed.** The unreachable duplicate self-demote guard at `app/routers/admin/users.py:298-300` is deleted (its condition is already fully handled at lines 290-296).
+**Notes:** Verified-and-EXCLUDED items (deliberate, with reasons): login-CSRF on `/login` + `/setup` — documented accepted household-scale risk in `app/csrf.py:46-55`; app-layer HSTS — offloaded to Nginx Proxy Manager by design; async/sync handler mixing in `run_ai_refresh`/`post_ai_refresh`/`_verify_and_persist_url` — Codex overstated it (the AI call is `await`ed on an async client so the loop is NOT blocked for the AI call; only short sync DB ops block) and the area is "ask-first"; `_LOCKS` dict eviction — negligible at household scale (bounded by users × rec-types). Items 1 and 2 touch auth/admin and security ("ask-first" areas per CLAUDE.md) — John approved this scope. Per-item root causes with file:line are already pinned above; planning can lean on them.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 14 to break down)
