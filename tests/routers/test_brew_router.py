@@ -731,7 +731,7 @@ def test_data_tools_requires_auth(app) -> None:
     _require_data_tools_route()
     from fastapi.testclient import TestClient
 
-    client = TestClient(app, allow_redirects=False)
+    client = TestClient(app, follow_redirects=False)
     r = client.get("/data-tools")
     assert r.status_code in (302, 401), (
         f"unauthenticated GET /data-tools must 302 or 401, got {r.status_code}"
