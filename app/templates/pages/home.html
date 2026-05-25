@@ -8,22 +8,27 @@
   <main class="mx-auto max-w-6xl px-6 py-12">
     <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
       <h1 class="text-2xl font-semibold">Home</h1>
+      {# NEW-10: equal-width, equal-height action buttons. Each is flex-1 in a
+         flex row with identical padding + min-height so all three (Admin, Guided
+         Brew, Log Session) render at the same size at 375px and up. Admin is
+         conditionally rendered; the remaining buttons still share equal flex-1
+         width among however many are present. #}
       <div class="flex items-center gap-3">
         {# D-03: minimal admin entry link — is_admin-gated; full nav is Phase 11 #}
         {% if request.state.user and request.state.user.is_admin %}
           <a href="/admin"
-             class="rounded border border-espresso-300 dark:border-espresso-600 px-3 py-1 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+             class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-base font-semibold min-h-[44px] hover:bg-espresso-100 dark:hover:bg-espresso-800">
             Admin
           </a>
         {% endif %}
         {# C5: Guided Brew entry point — routes to /recipes (recipe list carries
            the "Start guided brew" control per eafc6e3 fix). #}
         <a href="/recipes"
-           class="rounded border border-espresso-300 dark:border-espresso-600 px-3 py-1 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+           class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-base font-semibold min-h-[44px] hover:bg-espresso-100 dark:hover:bg-espresso-800">
           Guided Brew
         </a>
         <a href="/brew/new"
-           class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+           class="flex-1 inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold min-h-[44px] text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
           Log session
         </a>
       </div>
