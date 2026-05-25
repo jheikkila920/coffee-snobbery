@@ -135,13 +135,9 @@
       {# === TIMER SCREEN === shown while isRunning (paused or running) #}
       <div x-show="isRunning && !isDone" style="display:none" class="flex flex-col min-h-screen px-4 py-6 gap-4">
 
-        {# Top row: cancel + wake lock indicator #}
-        <div class="flex items-center justify-between">
-          <button type="button"
-                  x-on:click="cancelWithoutLogging()"
-                  class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
-            &times; Cancel without logging
-          </button>
+        {# Top row: wake lock indicator (Cancel moved to the bottom for easier
+           thumb reach on iOS — the top edge sits under the status bar/notch). #}
+        <div class="flex items-center justify-center">
           <span x-show="wakeLockState === 'held'"
                 class="text-xs text-green-600 dark:text-green-400 tabular-nums">
             ● Screen stays on
@@ -217,6 +213,16 @@
                   :class="cuePrefs.vibrate ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 text-espresso-800 dark:border-espresso-700 dark:text-cream-200'"
                   class="rounded px-3 text-sm min-h-[44px] inline-flex items-center justify-center">
             <span x-text="cuePrefs.vibrate ? 'Vibrate: On' : 'Vibrate: Off'">Vibrate: On</span>
+          </button>
+        </div>
+
+        {# Cancel — bottom of the running screen (mt-auto pins it to the screen
+           bottom) so it is an easy thumb reach on iOS rather than at the top. #}
+        <div class="mt-auto pt-2 flex justify-center">
+          <button type="button"
+                  x-on:click="cancelWithoutLogging()"
+                  class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
+            &times; Cancel without logging
           </button>
         </div>
       </div>
