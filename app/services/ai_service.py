@@ -22,9 +22,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import html.parser
+import ipaddress
 import json  # noqa: F401 — used in Task 2 OpenAI fallback flow
+import socket
 import time  # noqa: F401 — used in Task 2/3 for duration_ms calculation
 from typing import Any
+from urllib.parse import urlparse
 
 import anthropic
 import httpx
@@ -178,6 +181,9 @@ async def _verify_buy_url(url: str, roaster_name: str, coffee_name: str) -> bool
     # Scheme allowlist — no network call for non-https (T-07-SSRF)
     if not url.startswith("https://"):
         return False
+    # Resolve-validate gate — reject private/loopback/link-local/reserved IPs (S1)
+    if not _assert_public_host(url):
+        return False
 
     try:
         async with httpx.AsyncClient(
@@ -200,6 +206,45 @@ async def _verify_buy_url(url: str, roaster_name: str, coffee_name: str) -> bool
 
     except (httpx.TimeoutException, httpx.RequestError):
         return False
+
+
+def _assert_public_host(url: str) -> bool:
+    """Return False if the URL host resolves to any private/reserved address.
+
+    Resolves *url*'s hostname via ``socket.getaddrinfo`` and classifies every
+    returned IP with ``ipaddress``.  IPv4-mapped IPv6 addresses (``::ffff:…``)
+    are normalised to their IPv4 form before classification so that
+    ``::ffff:169.254.169.254`` is correctly rejected.
+
+    TOCTOU caveat: DNS resolution is not pinned to the connection — a
+    sub-millisecond window exists between this check and the ``httpx`` connect.
+    Accepted at household scale (D-05).
+
+    Returns:
+        ``True`` only when every resolved address is public.
+        ``False`` on DNS failure, unparseable address, or any private/loopback/
+        link-local/reserved address.
+    """
+    try:
+        host = urlparse(url).hostname
+        if not host:
+            return False
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False  # DNS failure -> reject
+
+    for _family, _type, _proto, _canon, sockaddr in infos:
+        ip_str = sockaddr[0]
+        try:
+            addr: ipaddress.IPv4Address | ipaddress.IPv6Address = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        # Normalise IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254 -> 169.254.169.254)
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+            addr = addr.ipv4_mapped
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -1480,6 +1525,9 @@ async def _fetch_page_text(url: str) -> str:
     """
     # Scheme allowlist — no network call for non-https (T-07-09 SSRF)
     if not url.startswith("https://"):
+        return ""
+    # Resolve-validate gate — reject private/loopback/link-local/reserved IPs (S1)
+    if not _assert_public_host(url):
         return ""
 
     try:
