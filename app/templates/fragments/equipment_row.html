@@ -15,9 +15,31 @@
 #}
 {% set archive_confirm = "Archive equipment — stops appearing in selectors but keeps brew history." %}
 {% if mode == "card" %}
+  {# NEW-11: relative container so edit/archive can be pinned top-right. #}
   <div id="equipment-{{ equipment.id }}"
        data-row
-       class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800{% if equipment.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+       class="relative rounded-lg border border-espresso-200 bg-cream-100 p-4 pr-24 dark:bg-espresso-900 dark:border-espresso-800{% if equipment.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
+    {# Edit / Archive pinned to top-right (NEW-11). pr-24 on the card prevents
+       the title text from sliding under these buttons. #}
+    <div class="absolute top-3 right-3 flex gap-1">
+      <button type="button"
+              hx-get="/equipment/{{ equipment.id }}/edit"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+        Edit
+      </button>
+      {% if not equipment.archived %}
+        <button type="button"
+                hx-post="/equipment/{{ equipment.id }}/archive"
+                hx-target="closest [data-row]"
+                hx-swap="outerHTML"
+                hx-confirm="{{ archive_confirm }}"
+                class="inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+          Archive
+        </button>
+      {% endif %}
+    </div>
     <div class="font-semibold">
       {{ equipment.brand }} {{ equipment.model }}
       {% if equipment.archived %}
@@ -32,25 +54,6 @@
     {% if equipment.notes %}
       <div class="text-sm mt-1 truncate">{{ equipment.notes }}</div>
     {% endif %}
-    <div class="mt-3 flex gap-3">
-      <button type="button"
-              hx-get="/equipment/{{ equipment.id }}/edit"
-              hx-target="closest [data-row]"
-              hx-swap="outerHTML"
-              class="inline-flex items-center justify-center rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
-        Edit
-      </button>
-      {% if not equipment.archived %}
-        <button type="button"
-                hx-post="/equipment/{{ equipment.id }}/archive"
-                hx-target="closest [data-row]"
-                hx-swap="outerHTML"
-                hx-confirm="{{ archive_confirm }}"
-                class="inline-flex items-center justify-center rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
-          Archive
-        </button>
-      {% endif %}
-    </div>
   </div>
 {% else %}
   <tr id="equipment-{{ equipment.id }}"
