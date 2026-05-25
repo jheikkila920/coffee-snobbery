@@ -63,6 +63,32 @@
           Sign out
         </button>
       </form>
+      {# Dark mode toggle — 3-state Auto/Light/Dark (C4, D-01).
+         x-data="darkToggle" string reference per docs/decisions/0001 CSP constraint.
+         No x-model, no inline hx-on:. #}
+      <div x-data="darkToggle" class="mt-6">
+        <p class="text-sm font-semibold text-espresso-700 dark:text-cream-200 mb-2">Display</p>
+        <div class="flex gap-2">
+          <button
+            x-on:click="setTheme('auto')"
+            :class="isActive('auto') ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 dark:border-espresso-700 text-espresso-800 dark:text-cream-200'"
+            class="rounded px-4 py-2 text-base font-semibold min-h-[44px]">
+            Auto
+          </button>
+          <button
+            x-on:click="setTheme('light')"
+            :class="isActive('light') ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 dark:border-espresso-700 text-espresso-800 dark:text-cream-200'"
+            class="rounded px-4 py-2 text-base font-semibold min-h-[44px]">
+            Light
+          </button>
+          <button
+            x-on:click="setTheme('dark')"
+            :class="isActive('dark') ? 'bg-espresso-700 text-cream-50' : 'border border-espresso-300 dark:border-espresso-700 text-espresso-800 dark:text-cream-200'"
+            class="rounded px-4 py-2 text-base font-semibold min-h-[44px]">
+            Dark
+          </button>
+        </div>
+      </div>
     </div>
   </main>
 {% endblock %}

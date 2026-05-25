@@ -139,31 +139,34 @@ def check_templates() -> None:
     if css_link_pos == -1:
         fail(f"{base_path}: tailwind_css_path link not found — cannot verify FOUC script placement.")
 
-    # (7) base.html contains a nonce'd inline script with snobbery:theme BEFORE the stylesheet link
-    # Find the no-FOUC script block
+    # (7) base.html contains a nonce'd inline script with snobbery:theme BEFORE the stylesheet link.
+    # Strip Jinja comments first so we find the actual script occurrence, not a comment mention.
+    import re as _re
+    base_no_jinja_comments = _re.sub(r'\{#.*?#\}', '', base_text, flags=_re.DOTALL)
     fouc_marker = "snobbery:theme"
-    fouc_pos = base_text.find(fouc_marker)
-    if fouc_pos == -1:
+    fouc_pos_nc = base_no_jinja_comments.find(fouc_marker)
+    if fouc_pos_nc == -1:
         fail(
-            f"{base_path}: 'snobbery:theme' not found. "
+            f"{base_path}: 'snobbery:theme' not found outside Jinja comments. "
             "No-FOUC inline head script must reference this key (C4)."
         )
     ok("base.html: snobbery:theme reference found")
 
-    if fouc_pos > css_link_pos:
+    # css_link_pos is based on raw text; redo with comment-stripped text for comparison
+    css_link_pos_nc = base_no_jinja_comments.find("tailwind_css_path")
+    if fouc_pos_nc > css_link_pos_nc:
         fail(
             f"{base_path}: 'snobbery:theme' reference appears AFTER the Tailwind stylesheet link. "
             "The no-FOUC script must run BEFORE the CSS link to prevent flash-of-wrong-theme (C4, Pitfall 4)."
         )
     ok("base.html: snobbery:theme reference appears before the Tailwind stylesheet link (no-FOUC)")
 
-    # Check the no-FOUC script carries a nonce
-    # Find the script block containing snobbery:theme and verify nonce
-    fouc_script_start = base_text.rfind("<script", 0, fouc_pos)
+    # Check the no-FOUC script carries a nonce — search backward from the marker in stripped text
+    fouc_script_start = base_no_jinja_comments.rfind("<script", 0, fouc_pos_nc)
     if fouc_script_start == -1:
         fail(f"{base_path}: could not locate the <script> tag containing snobbery:theme.")
-    fouc_script_tag_end = base_text.find(">", fouc_script_start)
-    fouc_script_tag = base_text[fouc_script_start:fouc_script_tag_end + 1]
+    fouc_script_tag_end = base_no_jinja_comments.find(">", fouc_script_start)
+    fouc_script_tag = base_no_jinja_comments[fouc_script_start:fouc_script_tag_end + 1]
     if "nonce=" not in fouc_script_tag:
         fail(
             f"{base_path}: the no-FOUC script tag does not carry nonce=. "
@@ -178,11 +181,12 @@ def check_templates() -> None:
             "Component must be loaded before the @alpinejs/csp core (C4)."
         )
 
-    # Find the dark-toggle.js script tag and check it has defer and nonce
-    toggle_tag_pos = base_text.find("dark-toggle.js")
-    toggle_script_start = base_text.rfind("<script", 0, toggle_tag_pos)
-    toggle_script_tag_end = base_text.find(">", toggle_script_start)
-    toggle_script_tag = base_text[toggle_script_start:toggle_script_tag_end + 1]
+    # Find the dark-toggle.js script tag and check it has defer and nonce.
+    # Use comment-stripped text to avoid false matches in Jinja comments.
+    toggle_tag_pos_nc = base_no_jinja_comments.find("dark-toggle.js")
+    toggle_script_start = base_no_jinja_comments.rfind("<script", 0, toggle_tag_pos_nc)
+    toggle_script_tag_end = base_no_jinja_comments.find(">", toggle_script_start)
+    toggle_script_tag = base_no_jinja_comments[toggle_script_start:toggle_script_tag_end + 1]
     if "defer" not in toggle_script_tag:
         fail(
             f"{base_path}: dark-toggle.js script tag is missing 'defer' attribute. "
@@ -195,11 +199,12 @@ def check_templates() -> None:
         )
     ok("base.html: dark-toggle.js loaded with defer + nonce")
 
-    # Verify dark-toggle.js loads BEFORE the @alpinejs/csp core
-    alpinejs_pos = base_text.find("@alpinejs/csp")
-    if alpinejs_pos == -1:
-        fail(f"{base_path}: @alpinejs/csp script not found — cannot verify load order.")
-    if toggle_tag_pos > alpinejs_pos:
+    # Verify dark-toggle.js loads BEFORE the @alpinejs/csp core script src tag.
+    # Use comment-stripped text so comment mentions of @alpinejs/csp don't mislead.
+    alpinejs_pos_nc = base_no_jinja_comments.find("cdn.jsdelivr.net/npm/@alpinejs/csp")
+    if alpinejs_pos_nc == -1:
+        fail(f"{base_path}: @alpinejs/csp CDN script not found — cannot verify load order.")
+    if toggle_tag_pos_nc > alpinejs_pos_nc:
         fail(
             f"{base_path}: dark-toggle.js is loaded AFTER @alpinejs/csp core. "
             "Alpine.data registrations must exist before Alpine boots (C4)."

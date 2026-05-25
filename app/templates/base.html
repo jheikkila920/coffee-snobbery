@@ -18,6 +18,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Snobbery">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    {# No-FOUC dark mode class — runs synchronously before first paint.
+       Reads localStorage 'snobbery:theme'; falls back to matchMedia for Auto.
+       Must appear BEFORE the Tailwind CSS link so the .dark class is set
+       before the browser renders the first frame (prevents flash-of-wrong-theme).
+       Nonce required by strict CSP (ADR 0001). No defer, no async (Pitfall 4). #}
+    <script nonce="{{ csp_nonce(request) }}">(function(){var t=localStorage.getItem('snobbery:theme');if(t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}})();</script>
     <link rel="stylesheet" href="{{ tailwind_css_path }}">
     {# Alpine.data() component registrations — MUST load BEFORE the alpine-csp core
        script so registrations are present when Alpine boots and walks the DOM
@@ -40,6 +46,9 @@
     <script defer src="/static/js/alpine-components/nav-bar.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/account-dropdown.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/ios-banner.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 13 dark-mode toggle component (plan 13-05 C4) — registers Alpine.data('darkToggle')
+       before the @alpinejs/csp core boots; uses snobbery:theme localStorage key. #}
+    <script defer src="/static/js/alpine-components/dark-toggle.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Phase 11: per-page head extras (e.g. GBM's NoSleep.js). Empty by default.
        Populate from page templates via {% block head_extra %}...{% endblock %}. #}
     {% block head_extra %}{% endblock %}
@@ -161,7 +170,7 @@
     </header>
 
     {# ── Mobile top strip (<768px): logo + search icon ── #}
-    <div x-data="searchBar" class="md:hidden flex h-14 px-4 items-center justify-between bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
+    <div x-data="searchBar" class="md:hidden flex min-h-14 px-4 items-center justify-between bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700 pt-[env(safe-area-inset-top)]">
       {# Brand logo (left) — gives the mobile chrome identity, not just a bare search icon #}
       <a href="/" class="flex items-center gap-2 hover:opacity-80">
         <img src="/static/img/logo-badge.png" alt="Snobbery" class="h-10 w-10 rounded-full">
@@ -184,7 +193,7 @@
         x-show="sheetOpen"
         @keydown.escape.window="closeSheet()"
         style="display: none"
-        class="fixed inset-0 z-50 flex flex-col bg-cream-50 dark:bg-espresso-950 md:hidden">
+        class="fixed inset-0 z-50 flex flex-col bg-cream-50 dark:bg-espresso-950 md:hidden pt-[env(safe-area-inset-top)]">
         {# Scrim (backdrop) — tap to close #}
         <div class="absolute inset-0 bg-espresso-950/50 dark:bg-espresso-950/70" @click.self="closeSheet()"></div>
         {# Sheet panel #}
