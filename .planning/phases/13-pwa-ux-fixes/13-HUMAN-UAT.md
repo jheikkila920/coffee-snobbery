@@ -58,3 +58,13 @@ blocked: 0
 | NEW-11 | enhancement | Equipment + coffee cards still tall; move edit/archive buttons to top-right corner (smaller ok) | open |
 | NEW-12 | bug + UX | "Start Guided Brew" button does nothing (tried cues on/off) — pre-existing, likely iOS unlockAudio/wakeLock throwing before isRunning=true OR steps JSON server/client mismatch (needs browser/on-device debug). Also: move the Cancel button to the BOTTOM, under Start Guided Brew | open |
 | NEW-13 | bug | Log/sessions page still shows the bottom nav raised up (982c0e6 bottom safe-area); config page is correct now | open |
+
+## Round 3 resolutions (2026-05-25)
+
+| # | Resolution | Status |
+|---|------------|--------|
+| NEW-12 | ROOT CAUSE: `data-steps="{{ recipe.steps\|tojson }}"` used a double-quoted attribute; tojson doesn't escape `"`, so the JSON truncated to `[{` → client `steps=[]` → `start()` no-op (all platforms). Fixed by single-quoting. VERIFIED via live authed browser repro: stepCount 3, Start → isRunning=true. | fixed-VERIFIED |
+| C7 | per-input `x-init="setDose($el.value)"` (CSP-safe; the prior `$nextTick(()=>…)` arrow was rejected by the @alpinejs/csp build) | fixed-pending-verify |
+| NEW-09/10/11 | sessions one-row / equal home buttons / card edit-archive top-right | fixed-pending-verify |
+| NEW-13 | min-height:100dvh on mobile content wrapper so short pages fill the viewport (iOS standalone fixed-nav float). Not reproducible off-device. | fixed-pending-device |
+| C10/#2 | cache-bust icon URLs (?v=build_hash) so iOS re-fetches the regenerated (darkened-hero) icons | fixed-pending-device |
