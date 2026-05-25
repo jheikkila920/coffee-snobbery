@@ -13,6 +13,7 @@ Limits per CONTEXT D-17:
 
 - ``/login`` and ``/setup``: 5/15 minutes per IP
 - ``/csp-report``: 30/minute per IP
+- ``/search``: 60/minute per IP (S4 — D-08)
 
 The ``register_rate_limiter(app)`` helper is called once by Plan 09 during
 ``app/main.py`` assembly. It (a) sets ``app.state.limiter`` (slowapi looks
@@ -40,6 +41,7 @@ log = structlog.get_logger()
 LOGIN_LIMIT: str = "5/15minutes"
 SETUP_LIMIT: str = "5/15minutes"
 CSP_REPORT_LIMIT: str = "30/minute"
+SEARCH_LIMIT: str = "60/minute"
 
 # Module-level Limiter. Constructed at import so router modules can decorate
 # at module-load time via ``@limiter.limit(...)``. ``default_limits=[]``
