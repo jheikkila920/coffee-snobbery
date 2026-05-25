@@ -21,6 +21,35 @@
  * recognised (belt-and-suspenders alongside the Tailwind arbitrary value). */
 .nav-safe-area { padding-bottom: env(safe-area-inset-bottom); }
 
+/* iOS standalone PWA safe-area gap filler — outside @layer so it is not purged.
+ *
+ * Symptom (real iOS standalone PWA only): a strip ~env(safe-area-inset-bottom)
+ * tall appears below the fixed bottom nav, showing the body background. It is
+ * masked on pages whose last content block matches the nav background
+ * (cream-100 / espresso-900) and conspicuous on plain cream-50 body pages
+ * (coffees, equipment, recipes, sessions) — which is why it looked page-specific.
+ * Not reproducible off-device: desktop Chromium/Playwright report inset 0.
+ *
+ * Fix: extend the nav's own background colour into that strip via a positioned
+ * ::after. The nav is position:fixed, so it is the containing block for this
+ * absolute child — no wrapper needed. height collapses to 0 where there is no
+ * home indicator, so it is inert on every other surface; background-color:inherit
+ * tracks the nav's light/dark background automatically.
+ *
+ * NOTE: this paints over the artifact rather than asserting the engine cause.
+ * The precise reason bottom:0 doesn't reach the physical edge in iOS standalone
+ * (despite viewport-fit=cover) is NOT confirmed locally. Pending on-device
+ * verification — see .planning/debug/resolved/bottom-nav-floats-ios-pwa.md. */
+.nav-safe-area-extend::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * env(safe-area-inset-bottom));
+  height: env(safe-area-inset-bottom);
+  background-color: inherit;
+}
+
 /* htmx indicator — defined as plain CSS so it survives the strict nonce-based
  * CSP that blocks the inline <style> htmx normally injects at load time.
  * Without this rule the .htmx-indicator span is permanently visible because
