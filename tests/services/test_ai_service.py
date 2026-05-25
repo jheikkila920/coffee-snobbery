@@ -187,11 +187,19 @@ async def test_url_verify_verified() -> None:
 @respx.mock
 @pytest.mark.asyncio
 async def test_url_verify_404() -> None:
+    import socket
+    from unittest.mock import patch
+
     from app.services.ai_service import _verify_buy_url
 
     url = "https://example-roaster.com/not-found"
     respx.get(url).mock(return_value=httpx.Response(404, text="Not found"))
-    result = await _verify_buy_url(url, "Counter Culture", "Yirgacheffe")
+    # Mock getaddrinfo so _assert_public_host passes; the 404 handler is what we
+    # are exercising here (without this the gate would short-circuit on hosts
+    # that fail to resolve in CI, making the assertion pass vacuously).
+    mock_public = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443))]
+    with patch("socket.getaddrinfo", return_value=mock_public):
+        result = await _verify_buy_url(url, "Counter Culture", "Yirgacheffe")
     assert result is False
 
 
@@ -291,6 +299,24 @@ async def test_ssrf_ipv4_mapped_ipv6_blocked() -> None:
     mock_result = [
         (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::ffff:169.254.169.254", 443, 0, 0))
     ]
+    with patch("socket.getaddrinfo", return_value=mock_result):
+        result = await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee")
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_ssrf_cgnat_blocked() -> None:
+    """CGNAT shared space (100.64.0.0/10, RFC 6598) must be rejected.
+
+    Python's ipaddress does not flag CGNAT under is_private/is_reserved/etc., so
+    the gate relies on `not is_global` to catch it (CR-01).
+    """
+    import socket
+    from unittest.mock import patch
+
+    from app.services.ai_service import _verify_buy_url
+
+    mock_result = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("100.64.0.1", 443))]
     with patch("socket.getaddrinfo", return_value=mock_result):
         result = await _verify_buy_url("https://example.com/coffee", "Roaster", "Coffee")
     assert result is False

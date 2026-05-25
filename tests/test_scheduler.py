@@ -22,7 +22,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_idempotent_job_registration() -> None:
-    """Exactly 2 jobs registered after N register_jobs() calls — no duplicates.
+    """Exactly 3 jobs registered after N register_jobs() calls — no duplicates.
 
     Highest-risk behavior #5 per 08-VALIDATION.md: calling register_jobs()
     multiple times (i.e., on every container restart) must not add duplicate

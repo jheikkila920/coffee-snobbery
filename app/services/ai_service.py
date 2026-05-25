@@ -233,6 +233,9 @@ def _assert_public_host(url: str) -> bool:
     except OSError:
         return False  # DNS failure -> reject
 
+    if not infos:
+        return False  # no addresses resolved -> reject (defensive)
+
     for _family, _type, _proto, _canon, sockaddr in infos:
         ip_str = sockaddr[0]
         try:
@@ -242,7 +245,17 @@ def _assert_public_host(url: str) -> bool:
         # Normalise IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254 -> 169.254.169.254)
         if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
             addr = addr.ipv4_mapped
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        # `not is_global` is the primary gate: it rejects anything not globally
+        # routable, including CGNAT shared space (100.64.0.0/10, RFC 6598) that
+        # none of the is_private/is_reserved flags classify. The explicit flags
+        # remain for clarity of intent and defence in depth.
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_reserved
+            or not addr.is_global
+        ):
             return False
     return True
 
