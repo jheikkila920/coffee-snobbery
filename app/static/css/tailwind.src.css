@@ -50,6 +50,19 @@
   background-color: inherit;
 }
 
+/* Content safe-area bottom padding (NEW-13).
+ * The fixed bottom nav is h-16 (4rem). Scrolled page content needs pb-16 to clear
+ * the nav top edge, PLUS env(safe-area-inset-bottom) to clear the iOS home indicator
+ * strip below the nav on devices without a physical home button.
+ * Without the safe-area term, content on a scrollable page can rest beneath the home
+ * indicator region, which makes the bottom nav appear "raised" (a visible gap between
+ * the nav and the physical screen bottom).
+ * Scoped to max-width: 767px (mobile only) so it is inert on desktop where the
+ * bottom nav is hidden — no conflict with layout at md breakpoint and above. */
+@media (max-width: 767px) {
+  .content-nav-safe-area { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* htmx indicator — defined as plain CSS so it survives the strict nonce-based
  * CSP that blocks the inline <style> htmx normally injects at load time.
  * Without this rule the .htmx-indicator span is permanently visible because
