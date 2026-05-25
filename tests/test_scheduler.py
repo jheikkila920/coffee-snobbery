@@ -9,7 +9,8 @@ Per 08-VALIDATION.md §"Per-Task Verification Map":
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -46,9 +47,9 @@ async def test_idempotent_job_registration() -> None:
         register_jobs(sched)
         register_jobs(sched)
         jobs = sched.get_jobs()
-        assert len(jobs) == 2
+        assert len(jobs) == 3
         job_ids = {j.id for j in jobs}
-        assert job_ids == {"nightly_ai_refresh", "nightly_backup"}
+        assert job_ids == {"nightly_ai_refresh", "nightly_backup", "nightly_session_sweep"}
     finally:
         sched.shutdown(wait=False)
 
@@ -362,3 +363,124 @@ def test_status_row_write(sync_db: Any) -> None:
     assert parsed["users_processed"] == 2
     assert parsed["regenerations"] == 1
     assert parsed["overall"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# B2 — Nightly session sweep
+# ---------------------------------------------------------------------------
+
+
+def _seed_user_for_sweep(sync_db: Any) -> int:
+    """Seed a minimal active user and return its id (FK target for sessions)."""
+    from app.models.user import User
+    from app.services.auth import hash_password
+
+    suffix = uuid.uuid4().hex[:6]
+    user = User(
+        username=f"sweep_{suffix}",
+        email=f"sweep_{suffix}@test.example",
+        password_hash=hash_password("twelve-chars-min"),
+        is_admin=False,
+        is_active=True,
+    )
+    sync_db.add(user)
+    sync_db.flush()
+    return user.id
+
+
+def test_session_sweep_deletes_expired(sync_db: Any) -> None:
+    """Expired session rows are deleted by run_nightly_session_sweep().
+
+    The job opens its own SessionLocal() internally, so we must commit the
+    seed data first and then query via a fresh session (not the fixture's
+    open transaction) to see the job's DELETE.
+    """
+    if sync_db is None:
+        pytest.skip("sync_db not available")
+
+    try:
+        from app.services.auth import hash_password  # noqa: F401
+    except ImportError:
+        pytest.skip("app.services.auth not available")
+
+    from app.db import SessionLocal
+    from app.models.session import Session as SessionModel
+    from app.services.scheduler import run_nightly_session_sweep
+
+    user_id = _seed_user_for_sweep(sync_db)
+
+    now = datetime.now(UTC)
+    expired_sid = uuid.uuid4()
+    unexpired_sid = uuid.uuid4()
+
+    # Expired row: expires_at 1 day in the past.
+    expired = SessionModel(
+        session_id=expired_sid,
+        user_id=user_id,
+        last_seen=now - timedelta(days=2),
+        expires_at=now - timedelta(days=1),
+        created_at=now - timedelta(days=2),
+    )
+    # Unexpired row: expires_at 1 day in the future.
+    unexpired = SessionModel(
+        session_id=unexpired_sid,
+        user_id=user_id,
+        last_seen=now,
+        expires_at=now + timedelta(days=1),
+        created_at=now,
+    )
+    sync_db.add(expired)
+    sync_db.add(unexpired)
+    sync_db.commit()
+
+    # Job opens its own SessionLocal — seed must be committed before calling.
+    run_nightly_session_sweep()
+
+    # Query in a fresh session to see the job's committed DELETE.
+    with SessionLocal() as fresh_db:
+        gone = fresh_db.get(SessionModel, expired_sid)
+        survived = fresh_db.get(SessionModel, unexpired_sid)
+
+    assert gone is None, "Expired session row should have been deleted by the sweep"
+    assert survived is not None, "Unexpired session row should not be deleted"
+
+
+def test_session_sweep_retains_unexpired(sync_db: Any) -> None:
+    """Unexpired session rows are NOT deleted by run_nightly_session_sweep().
+
+    Companion to test_session_sweep_deletes_expired — confirms the strict
+    ``<`` comparison leaves rows whose expires_at is in the future untouched.
+    """
+    if sync_db is None:
+        pytest.skip("sync_db not available")
+
+    try:
+        from app.services.auth import hash_password  # noqa: F401
+    except ImportError:
+        pytest.skip("app.services.auth not available")
+
+    from app.db import SessionLocal
+    from app.models.session import Session as SessionModel
+    from app.services.scheduler import run_nightly_session_sweep
+
+    user_id = _seed_user_for_sweep(sync_db)
+
+    now = datetime.now(UTC)
+    unexpired_sid = uuid.uuid4()
+
+    live = SessionModel(
+        session_id=unexpired_sid,
+        user_id=user_id,
+        last_seen=now,
+        expires_at=now + timedelta(hours=12),
+        created_at=now,
+    )
+    sync_db.add(live)
+    sync_db.commit()
+
+    run_nightly_session_sweep()
+
+    with SessionLocal() as fresh_db:
+        survived = fresh_db.get(SessionModel, unexpired_sid)
+
+    assert survived is not None, "Unexpired session row should survive the sweep"
