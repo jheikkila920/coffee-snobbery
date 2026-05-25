@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: in_progress
-stopped_at: Phase 13 added (not planned)
-last_updated: "2026-05-24T00:12:45.425Z"
-last_activity: 2026-05-24 -- Phase 13 (PWA UX Fixes) added after PWA UAT; debug fixes 982c0e6 + eafc6e3 shipped
+status: completed
+stopped_at: Phase 13 context gathered
+last_updated: "2026-05-25T01:05:37.710Z"
+last_activity: "2026-05-24 -- Completed quick task 260524-hg6: redirect unauthenticated requests to /login"
 progress:
   total_phases: 14
   completed_phases: 13
   total_plans: 83
-  completed_plans: 76
-  percent: 93
+  completed_plans: 83
+  percent: 100
 ---
 
 # Project State
@@ -159,7 +159,7 @@ Three plan-phase research flags carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-23T23:29:45.571Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-hardening-tests/12-CONTEXT.md
+Last session: 2026-05-25T01:05:37.681Z
+Stopped at: Phase 13 context gathered
+Resume file: .planning/phases/13-pwa-ux-fixes/13-CONTEXT.md
 Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).
