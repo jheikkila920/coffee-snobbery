@@ -24,13 +24,14 @@
         <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Archived</span>
       {% endif %}
     </div>
-    <div class="mt-1">
+    {# C3: group type + usage_count as flex-wrap pills (mirrors coffee_row.html card, lines 43-50). #}
+    <div class="mt-1 flex flex-wrap gap-2">
       <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ equipment.type }}</span>
+      <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ equipment.usage_count }} session{% if equipment.usage_count != 1 %}s{% endif %}</span>
     </div>
     {% if equipment.notes %}
       <div class="text-sm mt-1 truncate">{{ equipment.notes }}</div>
     {% endif %}
-    <div class="text-sm mt-1">{{ equipment.usage_count }} session{% if equipment.usage_count != 1 %}s{% endif %}</div>
     <div class="mt-3 flex gap-3">
       <button type="button"
               hx-get="/equipment/{{ equipment.id }}/edit"
@@ -85,7 +86,6 @@
     </td>
   </tr>
 {% endif %}
-{% if include_oob_form_clear %}
-  {# 04-RESEARCH Pattern 2: clear the form mount on successful create. #}
-  <div id="equipment-form-mount" hx-swap-oob="innerHTML"></div>
-{% endif %}
+{# C2: OOB form-clear removed — create route now returns equipment_list.html fragment,
+   and the form's hx-target is #equipment-list (not #equipment-form-mount), so the list
+   swap replaces the list container and the form collapses implicitly (D-04). #}

@@ -206,7 +206,7 @@ async def create_equipment(
             status_code=200,
         )
 
-    equipment = equipment_service.create_equipment(
+    equipment_service.create_equipment(
         db,
         type_=form.type,
         brand=form.brand,
@@ -214,14 +214,15 @@ async def create_equipment(
         notes=form.notes,
         by_user_id=user.id,
     )
+    # C2/D-03: return the full list fragment so sort/group order is correct and
+    # the form collapses implicitly (hx-target points at #equipment-list, not
+    # #equipment-form-mount, so the list swap replaces the list container and
+    # the create form simply disappears from view — D-04).
+    groups = equipment_service.list_equipment_grouped_by_type(db, include_archived=False)
     return templates.TemplateResponse(
         request=request,
-        name="fragments/equipment_row.html",
-        context={
-            "equipment": equipment,
-            "mode": "row",
-            "include_oob_form_clear": True,
-        },
+        name="fragments/equipment_list.html",
+        context={"groups": groups, "include_archived": False},
     )
 
 
