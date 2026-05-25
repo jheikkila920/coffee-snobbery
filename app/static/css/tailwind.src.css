@@ -60,7 +60,17 @@
  * Scoped to max-width: 767px (mobile only) so it is inert on desktop where the
  * bottom nav is hidden — no conflict with layout at md breakpoint and above. */
 @media (max-width: 767px) {
-  .content-nav-safe-area { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+  /* min-height fills the viewport so SHORT pages (coffees/recipes/roasters with
+   * few rows) still reach the bottom. Without it, in an iOS standalone PWA a
+   * document shorter than the viewport lets the position:fixed bottom nav ride
+   * UP to the document's end instead of the physical screen bottom — the "raised
+   * nav" John saw only in the installed PWA, only on sparse pages. 100dvh tracks
+   * the dynamic viewport; 100vh is the fallback for older engines. */
+  .content-nav-safe-area {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* htmx indicator — defined as plain CSS so it survives the strict nonce-based
