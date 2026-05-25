@@ -37,7 +37,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -62,10 +62,19 @@ log = structlog.get_logger(__name__)
 
 
 def _count_active_admins(db: Session) -> int:
-    """Count active admin users with a FOR UPDATE row lock (Pitfall 7)."""
-    return db.execute(
-        text("SELECT COUNT(*) FROM users WHERE is_admin = true AND is_active = true FOR UPDATE")
-    ).scalar_one()
+    """Count active admin users with a FOR UPDATE row lock (Pitfall 7).
+
+    The lock is applied to the inner subquery (on individual User rows), not
+    to the outer COUNT — PostgreSQL does not allow FOR UPDATE on aggregates.
+    This serializes concurrent admin-demotion transactions at the DB level.
+    """
+    locked_subq = (
+        select(User.id)
+        .where(User.is_admin.is_(True), User.is_active.is_(True))
+        .with_for_update()
+        .subquery()
+    )
+    return db.execute(select(func.count()).select_from(locked_subq)).scalar_one()
 
 
 async def _delete_user_sessions(target_id: int) -> None:
