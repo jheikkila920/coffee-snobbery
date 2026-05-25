@@ -392,24 +392,29 @@ async def create_coffee(
         by_user_id=user.id,
     )
 
-    # Row response needs the lookup dicts the list endpoint also builds.
-    flavor_note_names = coffees_service.flavor_note_name_map(
-        db, ids=coffee.advertised_flavor_note_ids or []
-    )
+    # C2/D-03: return the full list fragment so the new coffee appears in correct
+    # sort/filter order and the form collapses implicitly (hx-target is #coffee-list,
+    # so the list swap replaces the list container and the form mount is vacated — D-04).
+    rows = coffees_service.list_coffees(db, roaster_id=None, country=None, process=None, archived=False)
+    all_ids: list[int] = []
+    for c in rows:
+        all_ids.extend(c.advertised_flavor_note_ids or [])
+    flavor_note_names = coffees_service.flavor_note_name_map(db, ids=all_ids)
+    roaster_ids = [c.roaster_id for c in rows if c.roaster_id is not None]
     roaster_name_map: dict[int, str] = {}
-    if coffee.roaster_id is not None:
-        roaster = roasters_service.get_roaster(db, roaster_id=coffee.roaster_id)
-        if roaster is not None:
-            roaster_name_map[coffee.roaster_id] = roaster.name
+    if roaster_ids:
+        for roaster in roasters_service.list_roasters(db, include_archived=True):
+            if roaster.id in roaster_ids:
+                roaster_name_map[roaster.id] = roaster.name
+    filters = {"roaster_id": None, "country": None, "process": None, "archived": False}
     return templates.TemplateResponse(
         request=request,
-        name="fragments/coffee_row.html",
+        name="fragments/coffee_list.html",
         context={
-            "coffee": coffee,
-            "mode": "row",
+            "coffees": rows,
+            "filters": filters,
             "flavor_note_names": flavor_note_names,
             "roaster_name_map": roaster_name_map,
-            "include_oob_form_clear": True,
         },
     )
 
