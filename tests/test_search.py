@@ -454,6 +454,52 @@ def test_short_query_empty(
 
 
 # ---------------------------------------------------------------------------
+# S4: Input length cap + rate limit
+# ---------------------------------------------------------------------------
+
+
+def test_long_query_returns_empty(
+    client: Any,
+    seeded_admin_user: dict[str, Any],
+) -> None:
+    """GET /search with a 101-char q returns 200 with empty body. (S4, D-07)
+
+    The server caps raw q at 100 chars before strip(), so a 101-char string
+    short-circuits to an empty 200 — same shape as the <2-char guard.
+    """
+    cookies = _make_cookie(seeded_admin_user)
+
+    long_q = "a" * 101
+    resp = client.get(f"/search?q={long_q}", cookies=cookies)
+    assert resp.status_code == 200
+    assert resp.text.strip() == "", (
+        f"Expected empty response for 101-char query; got: {resp.text[:200]!r}"
+    )
+
+
+def test_search_rate_limit(
+    client: Any,
+    seeded_admin_user: dict[str, Any],
+) -> None:
+    """61st GET /search in a minute from one IP returns 429. (S4, D-08)
+
+    Fires 61 requests against SEARCH_LIMIT ("60/minute"). The in-memory limiter
+    resets between tests via the autouse _reset_rate_limiter fixture in conftest.
+    """
+    cookies = _make_cookie(seeded_admin_user)
+
+    statuses: list[int] = []
+    for _ in range(61):
+        r = client.get("/search?q=ab", cookies=cookies)
+        statuses.append(r.status_code)
+
+    assert 429 in statuses, (
+        f"Expected a 429 after 60 requests (SEARCH_LIMIT = 60/minute); "
+        f"status codes: {statuses[-5:]!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # SEARCH-04: User scoping — CRITICAL IDOR test (T-10-IDOR)
 # ---------------------------------------------------------------------------
 
