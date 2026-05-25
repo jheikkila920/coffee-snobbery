@@ -46,7 +46,7 @@
   {%- endif -%}
 {%- endmacro %}
 <div id="brew-prefill-region" class="flex flex-col gap-3"
-     x-init="setDose($refs.doseInput ? $refs.doseInput.value : ''); setWater($refs.waterInput ? $refs.waterInput.value : '')">
+     x-init="$nextTick(() => { setDose($refs.doseInput ? $refs.doseInput.value : ''); setWater($refs.waterInput ? $refs.waterInput.value : ''); })">
   {# --- Coffee (drives D-04 re-prefill + D-11 advertised chips) ---
      hx-get="/brew/prefill" on change re-prefills the whole region (D-04) and
      refreshes the advertised chips (D-11). hx-include pulls the recipe so a
