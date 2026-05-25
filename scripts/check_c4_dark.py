@@ -74,10 +74,7 @@ def check_default() -> None:
     ok("tailwind.src.css: .dark input rule present")
 
     if ".dark a" not in css_text:
-        fail(
-            f"{css_path}: .dark a rule not found. "
-            "Expected class-scoped dark anchor rules (C4)."
-        )
+        fail(f"{css_path}: .dark a rule not found. Expected class-scoped dark anchor rules (C4).")
     ok("tailwind.src.css: .dark a rule present")
 
     # (4) No @media prefers-color-scheme dark blocks remain
@@ -93,7 +90,10 @@ def check_default() -> None:
     toggle_text = toggle_path.read_text(encoding="utf-8")
 
     # (5) Alpine.data('darkToggle') registration and snobbery:theme key
-    if "Alpine.data('darkToggle'" not in toggle_text and 'Alpine.data("darkToggle"' not in toggle_text:
+    if (
+        "Alpine.data('darkToggle'" not in toggle_text
+        and 'Alpine.data("darkToggle"' not in toggle_text
+    ):
         fail(
             f"{toggle_path}: Alpine.data('darkToggle') registration not found. "
             "Component must register via Alpine.data (CSP-compliant pattern)."
@@ -111,11 +111,10 @@ def check_default() -> None:
     # Strip single-line JS comments before checking to avoid false positives
     # from comment text that mentions forbidden patterns by name.
     import re
-    toggle_no_comments = re.sub(r'//[^\n]*', '', toggle_text)
+
+    toggle_no_comments = re.sub(r"//[^\n]*", "", toggle_text)
     if "eval(" in toggle_no_comments:
-        fail(
-            f"{toggle_path}: eval() found — forbidden by ADR 0001 (strict CSP, no unsafe-eval)."
-        )
+        fail(f"{toggle_path}: eval() found — forbidden by ADR 0001 (strict CSP, no unsafe-eval).")
     ok("dark-toggle.js: no eval()")
 
     if "x-model" in toggle_no_comments:
@@ -137,12 +136,15 @@ def check_templates() -> None:
 
     css_link_pos = base_text.find("tailwind_css_path")
     if css_link_pos == -1:
-        fail(f"{base_path}: tailwind_css_path link not found — cannot verify FOUC script placement.")
+        fail(
+            f"{base_path}: tailwind_css_path link not found — cannot verify FOUC script placement."
+        )
 
     # (7) base.html contains a nonce'd inline script with snobbery:theme BEFORE the stylesheet link.
     # Strip Jinja comments first so we find the actual script occurrence, not a comment mention.
     import re as _re
-    base_no_jinja_comments = _re.sub(r'\{#.*?#\}', '', base_text, flags=_re.DOTALL)
+
+    base_no_jinja_comments = _re.sub(r"\{#.*?#\}", "", base_text, flags=_re.DOTALL)
     fouc_marker = "snobbery:theme"
     fouc_pos_nc = base_no_jinja_comments.find(fouc_marker)
     if fouc_pos_nc == -1:
@@ -157,7 +159,8 @@ def check_templates() -> None:
     if fouc_pos_nc > css_link_pos_nc:
         fail(
             f"{base_path}: 'snobbery:theme' reference appears AFTER the Tailwind stylesheet link. "
-            "The no-FOUC script must run BEFORE the CSS link to prevent flash-of-wrong-theme (C4, Pitfall 4)."
+            "The no-FOUC script must run BEFORE the CSS link to prevent "
+            "flash-of-wrong-theme (C4, Pitfall 4)."
         )
     ok("base.html: snobbery:theme reference appears before the Tailwind stylesheet link (no-FOUC)")
 
@@ -166,7 +169,7 @@ def check_templates() -> None:
     if fouc_script_start == -1:
         fail(f"{base_path}: could not locate the <script> tag containing snobbery:theme.")
     fouc_script_tag_end = base_no_jinja_comments.find(">", fouc_script_start)
-    fouc_script_tag = base_no_jinja_comments[fouc_script_start:fouc_script_tag_end + 1]
+    fouc_script_tag = base_no_jinja_comments[fouc_script_start : fouc_script_tag_end + 1]
     if "nonce=" not in fouc_script_tag:
         fail(
             f"{base_path}: the no-FOUC script tag does not carry nonce=. "
@@ -186,7 +189,7 @@ def check_templates() -> None:
     toggle_tag_pos_nc = base_no_jinja_comments.find("dark-toggle.js")
     toggle_script_start = base_no_jinja_comments.rfind("<script", 0, toggle_tag_pos_nc)
     toggle_script_tag_end = base_no_jinja_comments.find(">", toggle_script_start)
-    toggle_script_tag = base_no_jinja_comments[toggle_script_start:toggle_script_tag_end + 1]
+    toggle_script_tag = base_no_jinja_comments[toggle_script_start : toggle_script_tag_end + 1]
     if "defer" not in toggle_script_tag:
         fail(
             f"{base_path}: dark-toggle.js script tag is missing 'defer' attribute. "
@@ -215,7 +218,8 @@ def check_templates() -> None:
     if "safe-area-inset-top" not in base_text:
         fail(
             f"{base_path}: safe-area-inset-top not found on the mobile top strip. "
-            "Expected pt-[env(safe-area-inset-top)] utility on the md:hidden top strip element (C1)."
+            "Expected pt-[env(safe-area-inset-top)] utility on the md:hidden "
+            "top strip element (C1)."
         )
     ok("base.html: safe-area-inset-top present on mobile strip")
 
@@ -225,10 +229,10 @@ def check_templates() -> None:
 
     if 'x-data="darkToggle"' not in hub_text and "x-data='darkToggle'" not in hub_text:
         fail(
-            f"{hub_path}: x-data=\"darkToggle\" not found. "
+            f'{hub_path}: x-data="darkToggle" not found. '
             "Config hub must include the dark toggle UI block (C4)."
         )
-    ok("config_hub.html: x-data=\"darkToggle\" present")
+    ok('config_hub.html: x-data="darkToggle" present')
 
     if "setTheme(" not in hub_text:
         fail(

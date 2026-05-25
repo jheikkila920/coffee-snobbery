@@ -147,8 +147,7 @@ def test_sw_cache_name_is_versioned(client) -> None:
         f"Body excerpt: {r.text[:300]}"
     )
     assert match.group(1), (
-        "The hash segment after 'snobbery-v' must be non-empty. "
-        f"Got: {match.group(0)!r}"
+        f"The hash segment after 'snobbery-v' must be non-empty. Got: {match.group(0)!r}"
     )
 
 
@@ -163,7 +162,6 @@ def test_build_hash_prefers_build_id_txt(tmp_path, monkeypatch) -> None:
     Cleans up in a finally block to leave no stray artifact in the source tree.
     """
     import importlib
-
     from pathlib import Path
 
     build_id_path = Path("app/static/build_id.txt")

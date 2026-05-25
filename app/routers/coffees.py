@@ -378,7 +378,7 @@ async def create_coffee(
             status_code=200,
         )
 
-    coffee = coffees_service.create_coffee(
+    coffees_service.create_coffee(
         db,
         name=form.name,
         roaster_id=form.roaster_id,
@@ -396,7 +396,9 @@ async def create_coffee(
     # we must (a) empty the form mount and (b) update the list via OOB swap.
     # The response body lands in #coffee-form-mount (innerHTML) → collapses the form.
     # The OOB div updates #coffee-list with the freshly ordered list.
-    rows = coffees_service.list_coffees(db, roaster_id=None, country=None, process=None, archived=False)
+    rows = coffees_service.list_coffees(
+        db, roaster_id=None, country=None, process=None, archived=False
+    )
     all_ids: list[int] = []
     for c in rows:
         all_ids.extend(c.advertised_flavor_note_ids or [])

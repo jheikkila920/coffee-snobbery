@@ -233,9 +233,7 @@ def test_coffee_create_returns_list_fragment(
         "swapped into #coffee-form-mount (emptying it); it should not reference itself"
     )
     # Newly created coffee must appear (inside the OOB list)
-    assert _COFFEE_NAME in body, (
-        f"Newly created coffee name '{_COFFEE_NAME}' not found in response"
-    )
+    assert _COFFEE_NAME in body, f"Newly created coffee name '{_COFFEE_NAME}' not found in response"
 
 
 # --------------------------------------------------------------------------- #
