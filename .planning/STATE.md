@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Phase 12 context gathered
+status: in_progress
+stopped_at: Phase 13 added (not planned)
 last_updated: "2026-05-24T00:12:45.425Z"
-last_activity: 2026-05-24 -- Phase 12 execution started
+last_activity: 2026-05-24 -- Phase 13 (PWA UX Fixes) added after PWA UAT; debug fixes 982c0e6 + eafc6e3 shipped
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 13
   total_plans: 83
   completed_plans: 76
-  percent: 100
+  percent: 93
 ---
 
 # Project State
@@ -86,6 +86,10 @@ Progress: [██████████] 96%
 | Phase 11 P02 | 8 | 2 tasks | 4 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 13 added (2026-05-24): PWA UX Fixes — post-UAT polish (9 success criteria) from John's iOS PWA testing. Sibling bottom-nav-float (`982c0e6`) and guided-brew dead-span (`eafc6e3`) already fixed via /gsd-debug, out of scope.
 
 ### Decisions
 

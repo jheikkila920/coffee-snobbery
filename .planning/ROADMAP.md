@@ -383,3 +383,23 @@ Phases execute in numeric order: 0 â†’ 1 â†’ 2 â†’ 3 â†’ 4 �
 | 10. Global Search | 0/TBD | Not started | - |
 | 11. PWA + Mobile Polish | 0/TBD | Not started | - |
 | 12. Hardening + Tests | 0/TBD | Not started | - |
+
+### Phase 13: PWA UX Fixes
+**Goal:** Resolve the buildable UAT findings from John's iOS PWA testing and ensure deployed fixes actually reach the installed PWA. Post-launch polish on top of the v1 trunk (Phases 11–12); no schema, auth, AI, or deployment-topology changes.
+**Depends on:** Phase 11 (PWA + Mobile Polish), Phase 12 (Hardening + Tests)
+**Requirements:** UAT-sourced (no formal REQUIREMENT IDs; success criteria below are the contract)
+**Success Criteria** (what must be TRUE):
+  1. The iOS standalone PWA top bar/header is no longer obscured by the device status bar — the header carries `env(safe-area-inset-top)` padding, mirroring the existing bottom safe-area handling, on both the mobile top strip and any sticky top chrome.
+  2. Creating a new equipment item (and a new coffee) renders the complete, correctly-laid-out card immediately with no page refresh — the create route returns the same card markup the list uses, swapped into the list container, instead of a `mode="row"` `<tr>` dropped into the non-table `#*-form-mount` div.
+  3. Equipment cards at 375px are shorter: related fields are grouped horizontally (flex-wrap pills, as coffee cards already do) rather than each field on its own line.
+  4. A manual dark-mode toggle is available on the config hub near the "Signed in as" / Sign out area. Tailwind moves from `darkMode:'media'` to `darkMode:'class'`, the choice persists (localStorage), and an "auto/system" default preserves today's behavior with no flash-of-wrong-theme on load.
+  5. Guided Brew is reachable from the home page and the log/sessions page (today only on recipes). A regression test covers `recipe_row.html` enabled-vs-no-steps rendering — the coverage gap that let the dead-`<span>` bug ship (debug session `bottom`… see `resolved/guided-brew-does-nothing.md`).
+  6. The Audio & haptic cue controls on the guided-brew page are redesigned to read clearly (the current `role="switch"` toggles confuse users), without losing the localStorage-persisted chime/vibrate prefs.
+  7. Brew-log form: the ratio recalculates automatically when a recipe prefills dose/water (today the Alpine computed value only updates via `x-on:input`, so programmatic prefill is missed); and the 0–5 rating stars fit on a single line at 375px (today they wrap 4 + 1).
+  8. Export CSV and Import sessions are moved off the log/sessions page onto a dedicated page linked from the config hub, decluttering the primary log view (routes `/brew/export` + `/brew/import` unchanged; only entry-point location moves).
+  9. Service-worker cache versioning: the SW cache name/version bumps per deploy so a rebuild reaches installed PWAs without a manual "Clear site data." Cross-cutting — without it, every fix above stays invisible on installed PWAs.
+**Notes:** Sibling iOS bottom-nav float (commit `982c0e6`) and guided-brew dead-span (commit `eafc6e3`) were already fixed via `/gsd-debug` this session and are out of scope here. Criterion 1 reuses the safe-area technique validated by `982c0e6` — if that on-device check fails, revisit the approach for both. Per-criterion root causes with file:line already exist (investigated this session); planning can lean on them instead of re-researching.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 13 to break down)
