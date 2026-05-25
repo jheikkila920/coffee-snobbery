@@ -1,23 +1,25 @@
-"""One-time PWA icon and hero image generation script.
+"""One-time PWA icon generation script.
 
-Generates the six static image assets required by the PWA manifest and the
-login page redesign. Run once, commit the outputs — never run at Docker build
+Generates the five static image assets required by the PWA manifest and the
+in-app nav badge. Run once, commit the outputs — never run at Docker build
 time or at application startup (D-15).
 
 Usage (inside the running container, or locally with Pillow installed):
     python scripts/generate_pwa_icons.py
 
-Source: app/static/img/snobbery-login.jpg
+Source: app/static/img/hero.jpg  (1021×1021 square mascot — C10)
 Outputs (app/static/img/):
     icon-192.png          — circular, 192×192 (standard PWA icon)
     icon-512.png          — circular, 512×512 (standard PWA icon)
     icon-512-maskable.png — maskable, 512×512, solid cream-50 background (purpose: maskable)
     apple-touch-icon.png  — circular, 180×180 (iOS home screen)
     logo-badge.png        — circular, 64×64 (in-app nav badge, 2× retina: renders at 32px)
-    snobbery-login-hero.jpg — optimised JPEG ≤80KB for the login page hero
 
 Pitfall 8: icon-512-maskable.png MUST have a solid (alpha=255) background in
 the corners. Transparent corners fail Chrome's Lighthouse "Maskable icon" audit.
+
+D-07: The login hero (snobbery-login-hero.jpg) is NOT generated here — it is
+a separately managed brand asset.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-SRC = Path("app/static/img/snobbery-login.jpg")
+SRC = Path("app/static/img/hero.jpg")
 OUT = Path("app/static/img")
 
 
@@ -34,11 +36,19 @@ def circular_crop(img: Image.Image, size: int) -> Image.Image:
     """Crop the image to a circle with a transparent background.
 
     Steps:
-    1. Convert to RGBA and resize to (size, size) with LANCZOS resampling.
-    2. Create a greyscale mask with a white-filled ellipse.
-    3. Composite the resized image onto a transparent canvas using the mask.
+    1. Center-crop to a square first (defensive — correct for any aspect ratio).
+    2. Resize the square to (size, size) with LANCZOS resampling.
+    3. Apply a circular mask, compositing onto a transparent canvas.
     """
+    # 1. Center-crop to square (no distortion for any aspect ratio).
+    w, h = img.size
+    min_dim = min(w, h)
+    left = (w - min_dim) // 2
+    top = (h - min_dim) // 2
+    img = img.crop((left, top, left + min_dim, top + min_dim))
+    # 2. Resize the square.
     img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
+    # 3. Apply circular mask.
     mask = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(mask)
     draw.ellipse((0, 0, size - 1, size - 1), fill=255)
@@ -88,12 +98,5 @@ if __name__ == "__main__":
     # Logo badge (renders at 32×32 on retina; stored at 64×64).
     circular_crop(src, 64).save(OUT / "logo-badge.png")
     print("  logo-badge.png")
-
-    # Login hero: resize and compress — NOT a circular crop.
-    # target ≤80KB at quality=75 + optimize=True.
-    hero = src.convert("RGB")
-    hero.thumbnail((720, 720), Image.LANCZOS)
-    hero.save(OUT / "snobbery-login-hero.jpg", "JPEG", quality=75, optimize=True)
-    print("  snobbery-login-hero.jpg")
 
     print("Icons generated successfully.")
