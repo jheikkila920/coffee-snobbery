@@ -79,25 +79,27 @@ def manifest() -> JSONResponse:
         "start_url": "/?source=pwa",
         "background_color": "#FAF7F2",
         "theme_color": "#FAF7F2",
+        # ?v={_BUILD_HASH} cache-busts icons so an installed PWA picks up
+        # regenerated artwork instead of a stale cached copy (#2).
         "icons": [
             {
-                "src": "/static/img/icon-192.png",
+                "src": f"/static/img/icon-192.png?v={_BUILD_HASH}",
                 "sizes": "192x192",
                 "type": "image/png",
             },
             {
-                "src": "/static/img/icon-512.png",
+                "src": f"/static/img/icon-512.png?v={_BUILD_HASH}",
                 "sizes": "512x512",
                 "type": "image/png",
             },
             {
-                "src": "/static/img/icon-512-maskable.png",
+                "src": f"/static/img/icon-512-maskable.png?v={_BUILD_HASH}",
                 "sizes": "512x512",
                 "type": "image/png",
                 "purpose": "maskable",
             },
             {
-                "src": "/static/img/apple-touch-icon.png",
+                "src": f"/static/img/apple-touch-icon.png?v={_BUILD_HASH}",
                 "sizes": "180x180",
                 "type": "image/png",
             },

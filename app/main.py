@@ -236,6 +236,9 @@ def create_app() -> FastAPI:
     # the canonical Jinja2Templates instance for new routes. The two share
     # the same directory — autoescape ON on both per SEC-05.
     templates.env.globals["tailwind_css_path"] = compute_tailwind_css_path()
+    # build_hash cache-busts the apple-touch-icon URL so iOS re-fetches a
+    # regenerated icon instead of serving its aggressively-cached copy (#2).
+    templates.env.globals["build_hash"] = pwa_router._BUILD_HASH
     app.state.templates = templates
 
     # Middleware stack — last added is OUTERMOST (Starlette reverse-of-add).
