@@ -299,6 +299,126 @@ class TestToggleAdmin:
         )
 
 
+class TestMultiAdminOperations:
+    """B1 regression: multi-admin operations must succeed (not 500) when 2+ admins exist.
+
+    The buggy _count_active_admins issues FOR UPDATE on an aggregate, which Postgres
+    rejects with 500. These tests confirm the fix by asserting DB state changes.
+    """
+
+    def test_demote_other_admin_succeeds(
+        self,
+        client: Any,
+        two_admins: dict[str, Any],
+    ) -> None:
+        """Admin A demoting admin B (is_admin=false) with 2 admins present succeeds."""
+        admin1_cookie = two_admins["admin1_cookie"]
+        admin2_id = two_admins["admin2_id"]
+        _prime_csrf(client, admin1_cookie)
+
+        resp = client.post(
+            f"/admin/users/{admin2_id}",
+            data={
+                "username": f"admin2-demoted-{admin2_id}",
+                "is_admin": "",  # absent = False (checkbox coerce)
+            },
+        )
+        assert resp.status_code == 200, (
+            f"Expected 200 on demote-other-admin, got {resp.status_code}. Body: {resp.text[:300]}"
+        )
+
+        from sqlalchemy import select
+
+        from app.db import SessionLocal
+        from app.models.user import User
+
+        with SessionLocal() as db:
+            user = db.execute(select(User).where(User.id == admin2_id)).scalar_one_or_none()
+        assert user is not None, "admin2 row missing after demote"
+        assert user.is_admin is False, (
+            f"Expected admin2.is_admin=False after demote, got {user.is_admin}"
+        )
+
+    def test_toggle_admin_other_admin_succeeds(
+        self,
+        client: Any,
+        two_admins: dict[str, Any],
+    ) -> None:
+        """Admin A toggling admin B (demote) with 2 admins present succeeds."""
+        admin1_cookie = two_admins["admin1_cookie"]
+        admin2_id = two_admins["admin2_id"]
+        _prime_csrf(client, admin1_cookie)
+
+        resp = client.post(f"/admin/users/{admin2_id}/toggle-admin")
+        assert resp.status_code == 200, (
+            f"Expected 200 on toggle-admin-other, got {resp.status_code}. Body: {resp.text[:300]}"
+        )
+
+        from sqlalchemy import select
+
+        from app.db import SessionLocal
+        from app.models.user import User
+
+        with SessionLocal() as db:
+            user = db.execute(select(User).where(User.id == admin2_id)).scalar_one_or_none()
+        assert user is not None, "admin2 row missing after toggle-admin"
+        assert user.is_admin is False, (
+            f"Expected admin2.is_admin=False after toggle (was True), got {user.is_admin}"
+        )
+
+    def test_deactivate_other_admin_succeeds(
+        self,
+        client: Any,
+        two_admins: dict[str, Any],
+    ) -> None:
+        """Admin A deactivating admin B with 2 admins present succeeds."""
+        admin1_cookie = two_admins["admin1_cookie"]
+        admin2_id = two_admins["admin2_id"]
+        _prime_csrf(client, admin1_cookie)
+
+        resp = client.post(f"/admin/users/{admin2_id}/deactivate")
+        assert resp.status_code == 200, (
+            f"Expected 200 on deactivate-other-admin, got {resp.status_code}. "
+            f"Body: {resp.text[:300]}"
+        )
+
+        from sqlalchemy import select
+
+        from app.db import SessionLocal
+        from app.models.user import User
+
+        with SessionLocal() as db:
+            user = db.execute(select(User).where(User.id == admin2_id)).scalar_one_or_none()
+        assert user is not None, "admin2 row missing after deactivate"
+        assert user.is_active is False, (
+            f"Expected admin2.is_active=False after deactivate, got {user.is_active}"
+        )
+
+    def test_delete_other_admin_succeeds(
+        self,
+        client: Any,
+        two_admins: dict[str, Any],
+    ) -> None:
+        """Admin A deleting admin B (no brew_sessions) with 2 admins present succeeds."""
+        admin1_cookie = two_admins["admin1_cookie"]
+        admin2_id = two_admins["admin2_id"]
+        _prime_csrf(client, admin1_cookie)
+
+        resp = client.post(f"/admin/users/{admin2_id}/delete")
+        assert resp.status_code == 200, (
+            f"Expected 200 on delete-other-admin, got {resp.status_code}. Body: {resp.text[:300]}"
+        )
+
+        from sqlalchemy import select
+
+        from app.db import SessionLocal
+        from app.models.user import User
+
+        with SessionLocal() as db:
+            user = db.execute(select(User).where(User.id == admin2_id)).scalar_one_or_none()
+        assert user is None, "Expected admin2 row deleted (no brew_sessions), but row still exists"
+
+
 class TestDeactivateRequiresCsrf:
     """ADMIN-01: CSRF enforcement on deactivate."""
 
