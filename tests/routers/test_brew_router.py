@@ -695,3 +695,44 @@ def test_prefill_requires_user(app, clean_brew_router) -> None:
     client = TestClient(app)
     r = client.get("/brew/prefill?coffee_id=1", headers={"HX-Request": "true"})
     assert r.status_code == 401, f"anonymous prefill must 401, got {r.status_code}"
+
+
+# --------------------------------------------------------------------------- #
+# GET /data-tools — C8 auth-gated data tools page (T-13-15)                   #
+# --------------------------------------------------------------------------- #
+
+
+def _require_data_tools_route() -> None:
+    """Skip if the GET /data-tools route has not landed."""
+    try:
+        from app.routers.brew import data_router  # noqa: F401
+    except ImportError:
+        pytest.skip("plan 13-06 dependency: app.routers.brew.data_router not importable")
+
+
+def test_data_tools_authed_returns_page(app, seeded_regular_user) -> None:
+    """Authenticated GET /data-tools → 200; body contains /brew/import (C8, T-13-15)."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    _require_brew_router()
+    _require_data_tools_route()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    r = client.get("/data-tools")
+    assert r.status_code == 200, f"authed GET /data-tools must 200, got {r.status_code}"
+    assert "/brew/import" in r.text, "data-tools page must contain the /brew/import form action"
+
+
+def test_data_tools_requires_auth(app) -> None:
+    """Unauthenticated GET /data-tools → 302 or 401 (require_user gating, T-13-15)."""
+    _require_postgres()
+    _require_p5_migration_applied()
+    _require_brew_router()
+    _require_data_tools_route()
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app, allow_redirects=False)
+    r = client.get("/data-tools")
+    assert r.status_code in (302, 401), (
+        f"unauthenticated GET /data-tools must 302 or 401, got {r.status_code}"
+    )

@@ -64,6 +64,10 @@ from app.templates_setup import templates
 
 router = APIRouter(prefix="/brew")
 
+# Supplemental router for routes outside the /brew prefix (e.g. /data-tools).
+# Included in app.main after brew_router.
+data_router = APIRouter()
+
 # The sessions list (Plan 06) lives at /brew. Success redirects here.
 _LIST_URL = "/brew"
 
@@ -620,6 +624,26 @@ def _render_import_results(request: Request, *, outcomes: list[Any], error: str 
             "refused": refused,
             "error": error,
         },
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Data tools — GET /data-tools (C8, D-06)                                     #
+# --------------------------------------------------------------------------- #
+
+
+@data_router.get("/data-tools", response_class=HTMLResponse)
+def data_tools_page(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+) -> Response:
+    """Dedicated Export / Import sessions page (C8, D-06).
+
+    Auth-gated with require_user (T-13-15). Entry point only — the underlying
+    /brew/export and /brew/import routes are unchanged.
+    """
+    return templates.TemplateResponse(
+        request=request, name="pages/data_tools.html", context={"results": None}
     )
 
 

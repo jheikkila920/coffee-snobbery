@@ -267,6 +267,7 @@ def create_app() -> FastAPI:
         brew_guided_router.router
     )  # BEFORE brew_router — /brew/guided must not be captured by /brew/{session_id}
     app.include_router(brew_router.router)
+    app.include_router(brew_router.data_router)  # /data-tools (C8, D-06)
     app.include_router(home_router.router)
     app.include_router(config_hub_router.router)
     app.include_router(ai_router.router)

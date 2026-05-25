@@ -11,19 +11,7 @@
 
    Empty states (UI-SPEC §Empty States): zero sessions → the single Phase 5
    snobbery wink; filtered-zero → widen-the-filters guidance + Clear filters. #}
-{# Out-of-band swap: keep the header "Export CSV" href in sync with the active
-   filters after each HTMX filter change (D-15 — the export downloads exactly the
-   currently-filtered view). hx-swap-oob replaces #export-csv-link in place. Only
-   emitted on the HX-Request fragment branch (is_fragment); on a full-page load the
-   header already renders the link, so emitting it here would render a visible
-   duplicate inside the list. `export_query` is the request query string. #}
-{% if is_fragment %}
-<a id="export-csv-link" hx-swap-oob="true"
-   href="/brew/export{% if export_query %}?{{ export_query }}{% endif %}"
-   class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
-  Export CSV
-</a>
-{% endif %}
+{# C8: The OOB export-link sync is removed — Export/Import moved to /data-tools. #}
 <div id="session-list">
   {% if rows %}
     <div class="hidden md:block">
