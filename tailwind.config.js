@@ -24,7 +24,7 @@ module.exports = {
     "./app/templates/**/*.html",
     "./app/static/js/**/*.js",
   ],
-  darkMode: 'media',
+  darkMode: 'selector',  // v3.4.1+ canonical; activates .dark class on <html>
   theme: {
     extend: {
       colors: {

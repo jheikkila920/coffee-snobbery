@@ -85,15 +85,14 @@
     color: #4B3422;            /* espresso-600 (muted) */
     opacity: 1;
   }
-  @media (prefers-color-scheme: dark) {
-    input, select, textarea {
-      color: #F4EFE6;            /* cream-100 */
-      background-color: #21150C; /* espresso-900 */
-      border-color: #3D2817;     /* espresso-700 */
-    }
-    input::placeholder, textarea::placeholder {
-      color: #DACBAE;            /* cream-300 (muted) */
-    }
+  /* Dark mode form controls — class-scoped (C4: darkMode selector; explicit Light wins on dark system). */
+  .dark input, .dark select, .dark textarea {
+    color: #F4EFE6;            /* cream-100 */
+    background-color: #21150C; /* espresso-900 */
+    border-color: #3D2817;     /* espresso-700 */
+  }
+  .dark input::placeholder, .dark textarea::placeholder {
+    color: #DACBAE;            /* cream-300 (muted) */
   }
 
   /* Readable hyperlink color, app-wide (Phase 5 round-4 fix).
@@ -108,10 +107,9 @@
     color: #3D2817;              /* espresso-700 (accent link) */
   }
   a:hover { color: #2B1B10; }    /* espresso-800 */
-  @media (prefers-color-scheme: dark) {
-    a {
-      color: #E3D5C9;            /* espresso-100 (light accent on dark surface) */
-    }
-    a:hover { color: #F4EFE6; }  /* cream-100 */
+  /* Dark mode anchor color — class-scoped (C4: explicit Light wins on dark system). */
+  .dark a {
+    color: #E3D5C9;            /* espresso-100 (light accent on dark surface) */
   }
+  .dark a:hover { color: #F4EFE6; }  /* cream-100 */
 }
