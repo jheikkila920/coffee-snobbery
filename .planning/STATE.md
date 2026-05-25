@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.1
-milestone_name: milestone
-status: milestone_complete
-stopped_at: Phase 14 context gathered
-last_updated: "2026-05-25T19:54:25.804Z"
-last_activity: 2026-05-25 -- Phase 14 execution started
+milestone_name: Initial Release
+status: Awaiting next milestone
+stopped_at: Milestone v1.1 complete
+last_updated: "2026-05-25T21:27:59.041Z"
+last_activity: 2026-05-25 — Milestone v1.1 completed and archived
 progress:
   total_phases: 15
   completed_phases: 15
   total_plans: 93
-  completed_plans: 89
+  completed_plans: 93
   percent: 100
 ---
 
@@ -18,19 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-16)
+See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 14 — audit-remediation
+**Current focus:** v1.1 Initial Release shipped — planning next milestone (/gsd-new-milestone)
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-25
-
-Progress: [██████████] 96%
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-25 — Milestone v1.1 completed and archived
 
 ## Performance Metrics
 
@@ -159,10 +157,18 @@ Three plan-phase research flags carried forward:
 |----------|------|--------|-------------|
 | Deploy (infra) | G-01: VPS volumes are root-owned — next deploy needs a one-time `docker compose run --rm -u root coffee-snobbery chown -R app:app /app/data` (or recreate empty volumes) so the app user can write backups + photos. Dockerfile now creates app-owned mountpoints for fresh volumes; existing VPS volumes predate the fix. | open | 2026-05-21 (Phase 08) |
 | Test infra | T-INFRA-1 (pre-existing, NOT Phase 9): the full `pytest tests/` suite has cross-module isolation gaps surfaced when run as one batch (the project normally runs per-phase isolated). (a) Root `fresh_db` autouse wipes only users+sessions, never coffees/brew_sessions, so a 2nd full-suite run trips phase_04 `DELETE FROM coffees` (RESTRICT FK). (b) `test_setup_concurrent_race` passes in isolation but fails in full-suite — likely the Phase 3 app_settings in-memory cache (`setup_completed`) not being invalidated between tests. Fix = teardown that TRUNCATEs catalog tables + clears the settings cache in root conftest. Touches shared test infra + auth path — defer to a dedicated test-hygiene task. | open | 2026-05-21 (Phase 09 regression gate) |
+| UAT (human) | Pending human UAT scenarios: Phase 01 (3), 02 (1), 07 (2), 11 (3); Phase 09 partial. Acknowledged at v1.1 close — run the per-phase `*-HUMAN-UAT.md` scenarios on-device. | open | 2026-05-25 (v1.1 close) |
+| Verification | `human_needed` verifications unresolved: Phases 01, 02, 07, 09, 10, 11 (automated checks passed; human sign-off pending). | open | 2026-05-25 (v1.1 close) |
+| UAT (human) | Phase 14 manual UAT (the last named gate): at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows ≤2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency <100ms. | open | 2026-05-25 (v1.1 close) |
+| Feature/UI | Phase 11 nav + sign-out: plan 11-03 is marked complete but project memory ([[phase-11-owes-nav-and-signout]]) flags a possible gap (Phase 6 removed the last sign-out link). Verify on-device that persistent nav + identity + sign-out are present before trusting; build if missing. | open | 2026-05-25 (v1.1 close) |
 
 ## Session Continuity
 
 Last session: 2026-05-25T19:30:53.944Z
-Stopped at: Phase 14 context gathered
-Resume file: .planning/phases/14-audit-remediation/14-CONTEXT.md
-Next: Manual UAT (only remaining gate) — at 375px the search icon opens a full-screen sheet that auto-focuses and closes via X/Esc/backdrop; DevTools shows <=2 requests on rapid typing (250ms debounce + hx-sync); p95 search latency < 100ms. Then Phase 11 (nav + sign-out, see [[phase-11-owes-nav-and-signout]]).
+Stopped at: Milestone v1.1 (Initial Release) completed and archived
+Resume file: —
+Next: Start the next milestone with /gsd-new-milestone. Before/alongside that, work down the acknowledged debt in "Deferred Items" (human UAT + human_needed verifications, Phase 11 nav/sign-out verify, G-01 VPS chown on next deploy).
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

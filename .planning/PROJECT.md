@@ -14,131 +14,44 @@ A returning user — phone in hand, kettle nearby — can log a brew session in 
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+**v1.1 Initial Release (shipped 2026-05-25)** — all 116 mapped requirements across Foundation, Auth, Security, Data Model, Brew UX, Catalog, Admin, Home/Analytics, AI, Search, Mobile/PWA, Aesthetic, and Testing shipped. Full traceability table archived in [`milestones/v1.1-REQUIREMENTS.md`](./milestones/v1.1-REQUIREMENTS.md). Headline capabilities now live:
+
+- ✓ Two-container Docker stack behind NGINX, auto-migrations, single uvicorn worker — v1.1
+- ✓ Setup/login/admin auth (argon2id, session regeneration, MultiFernet-encrypted API keys) — v1.1
+- ✓ Full security posture: nonce-CSP, security headers, double-submit CSRF, hardened uploads — v1.1
+- ✓ Shared catalog (coffees/roasters/flavor-notes/equipment/recipes) + per-user brew logging with sub-30s prefill — v1.1
+- ✓ Analytics home page (pure-SQL preference derivations, HTMX lazy-load) — v1.1
+- ✓ AI differentiator: three-tier web-search coffee rec with verified URLs, SSRF-hardened, signature-based nightly regen — v1.1
+- ✓ Admin (users, credential vault, settings, backups, system + API-health) — v1.1
+- ✓ APScheduler nightly AI refresh + `pg_dump`/photos backups with retention — v1.1
+- ✓ Postgres trigram global search with per-user note scoping — v1.1
+- ✓ Installable PWA (service worker, bottom/top nav, dark mode, Guided Brew Mode) — v1.1
+- ✓ Test suite (~25.8k LOC) + Playwright responsive smoke + CI — v1.1
+
+**Validation caveat:** shipped is not the same as user-confirmed-valuable. Several phases retain `human_needed` verification and pending human UAT (see Known Gaps below) — these are deferred, not closed. Move items to a stronger "confirmed valuable" footing as on-device UAT is completed.
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
+<!-- Current scope. Building toward these. Next milestone TBD. -->
 
-**Foundation**
-- [ ] Two-container Docker Compose stack (FastAPI web + PostgreSQL 16) reachable on host port 8080
-- [ ] Alembic migrations auto-run on container start via entrypoint
-- [ ] Behaves correctly behind NGINX reverse proxy (`X-Forwarded-Proto`, `X-Forwarded-For`)
-- [ ] Named volumes for Postgres data, photos, and backups
+No active milestone. v1.1 is complete and deployed. Start the next milestone with `/gsd-new-milestone` once direction is chosen.
 
-**Authentication & Authorization**
-- [ ] First-run `/setup` flow creates initial admin when zero users exist
-- [ ] Username + password login with argon2id hashing (no public registration)
-- [ ] Signed session cookies (HttpOnly, Secure, SameSite=Lax), 30-day expiry, refresh on activity
-- [ ] `is_admin` role gates `/admin`; non-admins return 403
-- [ ] Rate limit `/login` to 5 attempts per IP per 15 minutes
+**Carried-forward candidates (from v1.1 Out of Scope / deferrals):**
+- [ ] Inventory management (bag count, depletion tracking) — flagged "maybe v2"
+- [ ] PWA offline write queue + sync — explicitly deferred from v1
+- [ ] Per-user/month AI cost ceiling — revisit only if signature-based regen proves insufficient
+- [ ] SSE streaming for AI responses — v1 shipped polling; SSE was deferred to "v1.1 polish" and not built
 
-**Security Hardening**
-- [ ] CSRF protection on every state-changing form, HTMX-aware
-- [ ] Security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) on every response
-- [ ] Pydantic v2 validation on every form, numeric range enforcement
-- [ ] Image upload validation (magic bytes, Pillow decode, EXIF strip)
-- [ ] API keys encrypted at rest via Fernet (`APP_ENCRYPTION_KEY` env var), never logged, only last-4 shown in admin UI
-- [ ] Audit logging for auth events and admin actions; no PII in logs
+### Known Gaps (deferred at v1.1 close)
 
-**Data Model — Shared Household Catalog**
-- [ ] `roasters` table with autocomplete + create-on-save
-- [ ] `flavor_notes` table (normalized vocabulary) with autocomplete + create-on-save
-- [ ] `coffees` table (shared, soft-delete via `archived`)
-- [ ] `equipment` table (brewer/grinder/kettle/scale/water_filter/other, soft-delete)
-- [ ] `recipes` table with JSONB pour steps and step builder UI
+<!-- Acknowledged debt carried past the milestone, not closed. Also in STATE.md "Deferred Items". -->
 
-**Data Model — Per-User**
-- [ ] `brew_sessions` table tied to user, coffee, optional recipe, brewer/grinder/kettle equipment
-- [ ] `api_credentials` table (admin-managed, Fernet-encrypted keys)
-- [ ] `app_settings` table for runtime-editable settings, seeded with `recommendation_region=US`
-- [ ] Table-backed `sessions` store
-
-**Brew Session UX**
-- [ ] Add brew session form with aggressive prefill from last session + selected recipe (single scrollable form, not stepped)
-- [ ] Tag input for observed flavor notes (autocomplete + create new)
-- [ ] Rating control 0–5 in 0.25 steps, thumb-operable
-- [ ] LocalStorage draft persistence across reload/navigation
-- [ ] Quick re-log: one-tap "Brew again" on any session prefills everything but rating/flavor notes/notes
-- [ ] Guided Brew Mode (full-screen timer, step auto-advance with audio + haptic cues, screen wake lock, prefills session form on completion)
-
-**Coffee Catalog UX**
-- [ ] Coffees CRUD with table-on-desktop, card-list-on-mobile
-- [ ] Bag photo upload (`capture="environment"`, client-side downscale, server-side resize to ≤1600px wide, 400px thumbnail, EXIF stripped, JPEG/PNG/WebP, max 5MB)
-- [ ] Filter by roaster / country / process / archived
-
-**Brew Session Catalog UX**
-- [ ] Sessions list with filter by coffee / brewer / rating range / date range
-- [ ] CSV export of current user's sessions
-
-**Equipment & Recipes UX**
-- [ ] Equipment CRUD grouped by type; archive (not delete) when referenced
-- [ ] Recipes CRUD with step builder (add/remove/reorder pours, cumulative water + time offsets), pour timeline preview, duplicate-recipe action
-
-**Admin**
-- [ ] User management (list, create, edit, reset password, toggle admin, deactivate, delete)
-- [ ] API credentials management per provider (Anthropic, OpenAI) with enable/disable
-- [ ] `app_settings` editor with `value_type`-driven input rendering
-- [ ] Backups: manual download (pg_dump + photos tarball) and admin list of retained nightly backups
-- [ ] Nightly `pg_dump` + photos tarball at 02:00 in `APP_TIMEZONE`, 14-day retention (configurable via `BACKUP_RETENTION_DAYS`)
-- [ ] System info panel (versions, storage usage, session count, last backup status)
-
-**Home Page (Analytics)**
-- [ ] Top coffees: top 5 by avg rating, min 2 sessions
-- [ ] Preference profile: avg rating by origin / process / roaster / roast level
-- [ ] Top-10 flavor descriptors appearing in 4.0+ rated sessions
-- [ ] Roast freshness sweet spot (buckets: 0–3, 4–7, 8–14, 15–21, 22+ days)
-- [ ] Sweet spots: top 3 cross-dimensional combos `(origin × process × brewer × recipe)`, min 3 sessions, ranked by avg rating
-- [ ] Recent brews list (last 10) with edit links
-- [ ] Unrated coffees list (catalog entries the user hasn't brewed yet)
-- [ ] Each section lazy-loads via HTMX after initial render
-
-**AI Integration**
-- [ ] Provider abstraction in `services/ai_service.py` (Anthropic default, OpenAI fallback)
-- [ ] Live coffee recommendation with web search tool, three-tier fallback (live → broadened → characteristics_only)
-- [ ] URL HEAD-check before rendering buy links; unverified URLs surface as plain text with note
-- [ ] Recipe suggestion picks from user's existing `recipes` (never invents)
-- [ ] Alternative-brewer callout when historical data shows ≥0.5 rating delta for the recommended style
-- [ ] Equipment recommendation (profile-only, no web search), allowed to say "no changes recommended"
-- [ ] Paste-and-rank flow (on-demand, never cached)
-- [ ] Sweet spots AI prose interpretation generated alongside coffee recommendation, cached together
-- [ ] Cold-start empty state when user has <3 brew sessions
-- [ ] Signature-based regeneration nightly at 00:00 in `APP_TIMEZONE`; skip when input hash unchanged
-- [ ] Manual "Refresh recommendations" button bypasses signature check
-- [ ] Stale-indicator badge when stored signature ≠ current signature
-- [ ] In-memory per-`(user_id, recommendation_type)` lock to prevent concurrent runs
-- [ ] All AI responses validated against Pydantic schemas; schema mismatch surfaces "Try again" UI
-- [ ] Graceful "AI not configured" state when no provider key enabled
-
-**Global Search**
-- [ ] Persistent search input in top nav (collapsed to icon on mobile, expands to full-screen sheet)
-- [ ] Postgres full-text search (or trigram indexes — implementation TBD in plan-phase) across coffee names, roaster names, flavor notes, brew session notes, recipe names/descriptions, equipment names
-- [ ] Results grouped by entity type; user only sees own session notes; shared catalog visible to all
-- [ ] HTMX live-search debounced to 250ms
-
-**Mobile / PWA**
-- [ ] Bottom tab nav (Home / Log / Config / Admin) at <768px with iOS safe-area padding
-- [ ] Top horizontal nav at ≥768px
-- [ ] Tables collapse to card lists at mobile widths; no horizontal scroll
-- [ ] All tap targets ≥44×44px
-- [ ] `inputmode` / `type` attributes set correctly for grams, temp, rating, dates
-- [ ] Native `<select>` for short dropdowns; searchable HTMX dropdowns reserved for long lists (coffees)
-- [ ] Modals are full-screen sheets on mobile, dialogs on desktop
-- [ ] Sticky form actions on long forms
-- [ ] `manifest.json` (name, icons 192/512 + maskable, `display: standalone`, theme color)
-- [ ] Service worker caches app shell for instant repeat loads + brief offline read access
-- [ ] Apple touch icon + iOS install meta tags
-- [ ] Installable to home screen on iOS Safari and Android Chrome
-- [ ] Smoke check at 375×667 and 390×844 viewports (Playwright or equivalent)
-
-**Aesthetic**
-- [ ] Warm, minimalist palette (off-white/cream surfaces, espresso accents) with system-preference dark mode
-- [ ] Empty states lean into the "snobbery" tone without becoming gimmicky (e.g. "No brews logged yet. The snobbery awaits.")
-
-**Testing**
-- [ ] Smoke test covering acceptance-criteria happy path (create user → coffee → equipment → recipe → session → view home)
-- [ ] Unit tests for `ai_service` signature logic, `encryption` round-trip, `analytics` queries, CSRF middleware
-- [ ] Responsive smoke test at 375px and 390px viewports
+- [ ] Human UAT pending: Phase 01 (3 scenarios), 02 (1), 07 (2), 11 (3); Phase 09 partial
+- [ ] `human_needed` verification: Phases 01, 02, 07, 09, 10, 11
+- [ ] Phase 14 manual UAT: 375px search full-screen sheet behavior + p95 latency
+- [ ] Phase 11 nav + sign-out: 11-03 marked complete but project memory flags a possible gap — verify on-device
+- [ ] G-01: VPS named volumes are root-owned — next deploy needs one-time `chown -R app:app /app/data`
+- [ ] T-INFRA-1: full-suite test isolation gaps (catalog TRUNCATE teardown + settings cache clear)
 
 ### Out of Scope
 
@@ -164,26 +77,26 @@ A returning user — phone in hand, kettle nearby — can log a brew session in 
 
 ## Context
 
+**Shipped v1.1 (2026-05-25):** the complete v1 product is built and deployed. ~20,900 LOC Python (`app/`) + 84 Jinja templates + 8 Alembic migrations, backed by ~25,800 LOC of tests. 576 commits over 9 days. Pushed to `origin/main` (`30d25de`).
+
 **Household scope:** Two users today (John, Farrah). Designed for that scale; not engineered for >10 users.
 
 **Phone-first:** ~90% of use is phone-in-hand at the kettle. Desktop is secondary. Every UX decision evaluated at 375px first.
 
-**Deployment shape:** Self-hosted on John's existing VPS with NGINX already terminating TLS and proxying by hostname. App listens on `localhost:8080`. Reverse-proxy header trust is non-optional.
-
-**Existing artifacts:**
-- `snobbery-gsd-prompt.md` — the original product brief that defined this project. Historical reference; the code becomes the source of truth as it's built.
-- `CLAUDE.md` — operational conventions, stack invariants, communication style, deployment runbook, and "never do silently" list. Authoritative for ongoing work.
+**Deployment shape:** Self-hosted on John's existing VPS — the shared n8n box where Nginx Proxy Manager (containerized) owns 80/443. Snobbery attaches as an NPM Proxy Host → `coffee-snobbery:8000` over the shared docker network; `TRUSTED_PROXY_IPS=*` is required or Secure cookies break. App listens on `localhost:8080` locally.
 
 **AI flows are the differentiator.** The non-AI build is a competent household log; the AI flows (live coffee recommendation with web search and verified URL, alternative-brewer callout, sweet-spots prose) are why this exists instead of a spreadsheet.
 
 **Cost discipline matters.** Web search is expensive. The signature-based regeneration design is load-bearing for keeping the bill sane. Don't break it.
 
+**Known debt at v1.1:** human UAT and `human_needed` verifications remain open on several phases; the VPS data-volume chown (G-01) and full-suite test-isolation (T-INFRA-1) items are unresolved. See Known Gaps.
+
 ## Constraints
 
 - **Tech stack**: Python 3.12 + FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL 16 — locked. No React/Vue/Svelte. No SQLite. No JWT. No npm build pipeline.
-- **Frontend**: Jinja2 templates + HTMX + Tailwind (CDN) + Alpine.js — locked. Custom CSS only when utilities can't cover it (lives in `app/static/css/custom.css`).
+- **Frontend**: Jinja2 templates + HTMX + Tailwind (standalone CLI, v3) + Alpine.js — locked. Custom CSS only when utilities can't cover it (lives in `app/static/css/custom.css`).
 - **Auth**: argon2-cffi for password hashing, signed session cookies via itsdangerous, Fernet (`cryptography`) for API key encryption — locked.
-- **Deployment**: Docker Compose with two services (`coffee-snobbery`, `coffee-snobbery-db`), single VPS behind existing NGINX. Migrations run automatically on container start.
+- **Deployment**: Docker Compose with two services (`coffee-snobbery`, `coffee-snobbery-db`), single VPS behind existing NGINX (Nginx Proxy Manager). Migrations run automatically on container start.
 - **Container naming**: `coffee-snobbery` (web), `coffee-snobbery-db` (db), `coffee-snobbery-net` (network). Volumes: `coffee_snobbery_postgres_data`, `coffee_snobbery_photos`, `coffee_snobbery_backups`.
 - **Scheduling**: APScheduler in-process. No external worker (no Celery / RQ / cron container).
 - **Concurrency model**: low — household scale. Synchronous FastAPI handlers are fine where they keep code simpler; async where it pays for itself (AI calls).
@@ -194,29 +107,31 @@ A returning user — phone in hand, kettle nearby — can log a brew session in 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use existing `snobbery-gsd-prompt.md` as the canonical idea document | The spec is detailed and load-bearing; rewriting it would lose nuance. CLAUDE.md adds the operational layer. | — Pending |
-| Greenfield build (no prior scaffold to integrate) | Confirmed by John during init questioning. CLAUDE.md is aspirational guidance, not code-on-disk truth. | — Pending |
-| Defer PWA offline write queue to v2 | Service-worker write sync + conflict resolution is non-trivial. Household app is rarely brewing without connectivity. v1 shows a clear error on offline writes; revisit if it bites. | — Pending |
-| Cost control via signature-based regen only — no separate AI token ceiling | Household scale + nightly cadence + manual refresh is naturally bounded. Adding a daily/monthly cap before the cost surprises us is premature plumbing. | — Pending |
-| Test posture: smoke + critical-path units | Acceptance-criteria smoke test plus unit coverage on `ai_service` signature logic, `encryption`, `analytics`, and CSRF. Full per-router coverage is deferred. | — Pending |
-| Aesthetic: warm + minimalist + system-preference dark mode | Matches the "snobbery" tone (off-white/cream surfaces, espresso accents) without crossing into gimmicky. Dark mode follows OS preference — no manual toggle in v1. | — Pending |
-| Single-scrollable brew session form with aggressive prefill (not stepped) | Spec recommends this. Returning user logging session N+1 only fills rating/flavor notes/notes; everything else prefills from last session + selected recipe. | — Pending |
-| AI: Anthropic by default, OpenAI fallback; both must support web search | Per spec. SDK versions verified at install to confirm web-search tool availability. | — Pending |
-| Search implementation: choose between Postgres full-text and trigram indexes during plan-phase | Both viable. Decision punted to the phase that actually builds search so the engineer can prototype both if needed. | — Pending |
-| Deviate from spec: HTMX 2.x, not 1.9 | HTMX 2.x is stable; spec wording predates the release. Migration delta is ~6 items. Approved during init. | — Pending |
-| Deviate from spec: Tailwind standalone CLI binary in Dockerfile, not CDN | v4 Play CDN permanently requires `unsafe-inline` for styles, blocking a strict nonce-based CSP. CLI is a single executable, not npm — honors the spec's intent ("no build pipeline"). Approved during init. | — Pending |
-| Add `bags` table to v1 Foundation (separate from `coffees` catalog) | Without bag-as-instance, sweet-spots-by-roast-date is unreliable as soon as anyone reorders a bean. Cheap migration now; painful later. Approved during init. | — Pending |
-| Add `wishlist_entries` table to v1 | AI coffee-rec card needs an "Add to wishlist" landing. Otherwise the rec is suggest-and-forget. Approved during init. | — Pending |
-| Add `yield_grams_actual`, `tds_pct`, `extraction_yield_pct` to `brew_sessions` in v1 | Two nullable columns + one GENERATED column. Optional refractometer fields signal audience-awareness without forcing them. Approved during init. | — Pending |
-| AI streaming via polling, not SSE, in v1 | Simpler, no `proxy_buffering off` requirement at NGINX, easier to debug. SSE deferred to v1.1 polish. Approved during init. | — Pending |
-| CSV import alongside export, scope-limited | Imports only brew sessions; refuses rows where coffee or bag not in catalog. Lets users seed from Beanconqueror to clear the AI cold-start cliff. Approved during init. | — Pending |
-| Cold-start AI: friendly empty state with progress meter | Show "Log N more brews and add M more flavor notes" instead of degraded AI output. AI gates at ≥3 sessions and ≥5 distinct flavor notes per user. Approved during init. | — Pending |
-| Admin API health panel (not in spec) | Only way to see silent AI failures (model deprecated, key revoked, quota hit). Adds confidence to "set it and forget it" deployment. Approved during init. | — Pending |
-| Server-side draft autosave-on-blur as iOS ITP backstop | localStorage alone loses drafts after 7 days of non-installed Safari ITP inactivity. ~50 LOC + a server-side draft store. Approved during init. | — Pending |
-| Single uvicorn worker; document loudly in README + entrypoint | APScheduler in-process + module-level AI locks both require single-process. A future `--workers 4` would silently fire every nightly job 4× and bill 4× the AI cost. | — Pending |
-| CSRF via double-submit-cookie pattern | Rotated-per-request tokens break HTMX on second POST because fragments don't update `<body>` `hx-headers`. Surfaced by research at Phase 1 timing. | — Pending |
-| `MultiFernet` from day one, not single Fernet | Rotation-ready encryption from the first migration. Adding key rotation later orphans previously-encrypted rows. | — Pending |
-| APScheduler with `SQLAlchemyJobStore` + `misfire_grace_time=3600` + `coalesce=True` | Default `MemoryJobStore` silently loses every job after a VPS restart. The 1s default grace window means a restart that lands at 00:00:01 misses the nightly run entirely. | — Pending |
+| Use existing `snobbery-gsd-prompt.md` as the canonical idea document | The spec is detailed and load-bearing; rewriting it would lose nuance. CLAUDE.md adds the operational layer. | ✓ Good — spec drove the whole build |
+| Greenfield build (no prior scaffold to integrate) | Confirmed by John during init questioning. | ✓ Shipped v1.1 |
+| Defer PWA offline write queue to v2 | Service-worker write sync + conflict resolution is non-trivial; household app rarely brews offline. | — Still deferred (v2) |
+| Cost control via signature-based regen only — no separate AI token ceiling | Household scale + nightly cadence + manual refresh is naturally bounded. | ✓ Shipped v1.1 — revisit if costs surprise |
+| Test posture: smoke + critical-path units | Acceptance-criteria smoke + unit coverage on the load-bearing services. | ✓ Shipped v1.1 (~25.8k LOC tests + CI) |
+| Aesthetic: warm + minimalist + system-preference dark mode | Matches the "snobbery" tone without gimmicks. | ✓ Shipped v1.1 — Phase 13 added a manual 3-state toggle |
+| Single-scrollable brew session form with aggressive prefill (not stepped) | Returning user logging session N+1 only fills rating/notes. | ✓ Shipped v1.1 (sub-30s path) |
+| AI: Anthropic by default, OpenAI fallback; both must support web search | Per spec; SDK web-search availability verified at install. | ✓ Shipped v1.1 |
+| Search implementation: FTS vs trigram decided at plan-phase | Both viable; punted to the phase that builds search. | ✓ trigram (`pg_trgm`) chosen — Phase 10 |
+| Deviate from spec: HTMX 2.x, not 1.9 | HTMX 2.x is stable; spec wording predates the release. | ✓ Good — 2.0.10 in production |
+| Deviate from spec: Tailwind standalone CLI binary, not CDN | v4 Play CDN forces `unsafe-inline`, blocking nonce-CSP. CLI is a single executable, no npm. | ✓ Shipped v1.1 — built on Tailwind **v3** (JS config, `darkMode:'selector'`) |
+| Add `bags` instance table to v1 Foundation | Bag-as-instance keeps sweet-spots-by-roast-date reliable across reorders. | ✓ Shipped v1.1 (migration 1) |
+| Add `wishlist_entries` table to v1 | AI coffee-rec card needs an "Add to wishlist" landing. | ✓ Shipped v1.1 |
+| Add refractometer columns to `brew_sessions` (yield/TDS/EY) | Optional fields signal audience-awareness; EY is a GENERATED whole-percent column. | ✓ Shipped v1.1 |
+| AI streaming via polling, not SSE, in v1 | Simpler, no `proxy_buffering off` at NGINX, easier to debug. | ✓ Shipped v1.1 — SSE deferred (still unbuilt) |
+| CSV import alongside export, scope-limited | Imports only brew sessions; refuses rows where coffee/bag not in catalog. | ✓ Shipped v1.1 |
+| Cold-start AI: friendly empty state with progress meter | Gate AI at ≥3 sessions and ≥5 distinct flavor notes per user. | ✓ Shipped v1.1 |
+| Admin API health panel (not in spec) | Surfaces silent AI failures (deprecated model, revoked key, quota). | ✓ Shipped v1.1 (Phase 9) |
+| Server-side draft autosave-on-blur as iOS ITP backstop | localStorage alone loses drafts after 7 days of ITP inactivity. | ✓ Shipped v1.1 |
+| Single uvicorn worker; document loudly | APScheduler in-process + module-level AI locks require single-process. | ✓ Good — enforced + documented in 3 places |
+| CSRF via double-submit-cookie pattern | Rotated-per-request tokens break HTMX on second POST. | ✓ Good — stable across HTMX swaps |
+| `MultiFernet` from day one, not single Fernet | Rotation-ready encryption from the first migration. | ✓ Shipped v1.1 |
+| APScheduler `SQLAlchemyJobStore` + `misfire_grace_time=3600` + `coalesce=True` | Defaults silently lose jobs across restarts. | ✓ Shipped v1.1 (Phase 8) |
+| Deploy behind Nginx Proxy Manager on the shared n8n box | No host nginx; NPM container owns 80/443. `TRUSTED_PROXY_IPS=*` required. | ✓ Good — documented deployment topology |
+| Execute Phase 14 directly on `main` (branch-policy exception) | John's explicit call; recorded as a verification override. | ⚠ Acceptable once — prefer feature branches for auth/security work |
 
 ## Evolution
 
@@ -236,4 +151,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 — Phase 13 (PWA UX Fixes) complete: all 9 post-UAT criteria delivered + verified on-device across 3 review rounds. C9 SW cache-bump (content-deterministic build_id), C10 icon regen + cache-busted URLs, C2/C3 create-fragment (CR-01 wipe-on-error blocker found+fixed in code review), C6/C7 cue controls + ratio prefill, C4/C1 dark toggle + iOS safe-areas, C5/C8 guided-brew reach + /data-tools. Notable bug: guided-brew Start did nothing on all platforms — root-caused via live browser repro to a double-quoted `data-steps` attribute truncating the steps JSON; fixed by single-quoting. Canonical gate: 965 passed + e2e. Phase 14 (Audit Remediation) complete 2026-05-25: B1 last-admin guard crash (locked-subquery COUNT), S1 SSRF gate on both AI URL fetchers (+ CGNAT bypass closed in code review, CR-01), B2 nightly session sweep, S4 /search cap + rate limit, B4 dead-code removal — all 5 criteria verified, executed on `main` per John. Phase 14 is now the FINAL phase of milestone v1.1 — milestone complete (run /gsd-complete-milestone). (Validated/Active requirement reconciliation still overdue — run /gsd-docs-update.)*
+*Last updated: 2026-05-25 — v1.1 Initial Release milestone complete. 15 phases (0–14), 93 plans, 103 tasks shipped and pushed to origin/main (30d25de). Full requirements traceability archived to milestones/v1.1-REQUIREMENTS.md; full roadmap detail to milestones/v1.1-ROADMAP.md. Closed with acknowledged debt — open human UAT + human_needed verifications on several phases, plus G-01 (VPS chown) and T-INFRA-1 (test isolation) — see Known Gaps and STATE.md "Deferred Items". Next: /gsd-new-milestone.*
