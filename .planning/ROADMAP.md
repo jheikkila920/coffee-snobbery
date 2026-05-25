@@ -424,7 +424,9 @@ Plans:
   4. **[LOW] `/search` is hardened.** `app/routers/search.py` caps `q` length (over-long input short-circuits to empty 200) and carries a slowapi rate limit (new constant in `app/rate_limit.py`, matching the existing per-route pattern).
   5. **[LOW] Dead code removed.** The unreachable duplicate self-demote guard at `app/routers/admin/users.py:298-300` is deleted (its condition is already fully handled at lines 290-296).
 **Notes:** Verified-and-EXCLUDED items (deliberate, with reasons): login-CSRF on `/login` + `/setup` — documented accepted household-scale risk in `app/csrf.py:46-55`; app-layer HSTS — offloaded to Nginx Proxy Manager by design; async/sync handler mixing in `run_ai_refresh`/`post_ai_refresh`/`_verify_and_persist_url` — Codex overstated it (the AI call is `await`ed on an async client so the loop is NOT blocked for the AI call; only short sync DB ops block) and the area is "ask-first"; `_LOCKS` dict eviction — negligible at household scale (bounded by users × rec-types). Items 1 and 2 touch auth/admin and security ("ask-first" areas per CLAUDE.md) — John approved this scope. Per-item root causes with file:line are already pinned above; planning can lean on them.
-**Plans:** 0 plans
-
+**Plans:** 4 plans (all Wave 1 — parallel; disjoint files)
 Plans:
-- [ ] TBD (run /gsd-plan-phase 14 to break down)
+- [ ] 14-01-PLAN.md — B1 last-admin guard subquery COUNT (keep FOR UPDATE) + B4 dead self-demote guard removal + multi-admin regression tests (users.py)
+- [ ] 14-02-PLAN.md — S1 SSRF resolve-validate gate (`_assert_public_host`) on both fetchers + private-IP/mapped/DNS test suite (ai_service.py)
+- [ ] 14-03-PLAN.md — B2 nightly `nightly_session_sweep` job (03:00, idempotent → 3 jobs) + sweep tests (scheduler.py)
+- [ ] 14-04-PLAN.md — S4 `/search` 100-char cap + `SEARCH_LIMIT` rate limit + over-long-query test (search.py, rate_limit.py)
