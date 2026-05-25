@@ -45,8 +45,7 @@
           data-prefill-pill="{{ field }}">{{ pill_sources[field] }}</span>
   {%- endif -%}
 {%- endmacro %}
-<div id="brew-prefill-region" class="flex flex-col gap-3"
-     x-init="$nextTick(() => { setDose($refs.doseInput ? $refs.doseInput.value : ''); setWater($refs.waterInput ? $refs.waterInput.value : ''); })">
+<div id="brew-prefill-region" class="flex flex-col gap-3">
   {# --- Coffee (drives D-04 re-prefill + D-11 advertised chips) ---
      hx-get="/brew/prefill" on change re-prefills the whole region (D-04) and
      refreshes the advertised chips (D-11). hx-include pulls the recipe so a
@@ -147,6 +146,7 @@
       <input name="dose_grams_actual" inputmode="decimal"
              value="{{ values.get('dose_grams_actual', '') }}"
              x-ref="doseInput"
+             x-init="setDose($el.value)"
              x-on:input="setDose($el.value)"
              class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('dose_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('dose_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['dose_grams_actual'] }}</p>{% endif %}
@@ -156,6 +156,7 @@
       <input name="water_grams_actual" inputmode="decimal"
              value="{{ values.get('water_grams_actual', '') }}"
              x-ref="waterInput"
+             x-init="setWater($el.value)"
              x-on:input="setWater($el.value)"
              class="w-full rounded border px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('water_grams_actual') %} border-red-300{% else %} border-espresso-200{% endif %}">
       {% if errors.get('water_grams_actual') %}<p class="text-sm text-red-700 mt-1">{{ errors['water_grams_actual'] }}</p>{% endif %}
