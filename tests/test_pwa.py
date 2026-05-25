@@ -120,3 +120,71 @@ def test_apple_touch_icon_and_web_app_meta_in_head(client) -> None:
         'base.html must include <meta name="apple-mobile-web-app-status-bar-style"> '
         "for iOS status bar appearance (MOB-11). Meta tag not found in /login response."
     )
+
+
+# --- Phase 13, Plan 01: C9 cache-versioning regression tests -------------------
+
+
+def test_sw_cache_name_is_versioned(client) -> None:
+    """GET /sw.js body contains a snobbery-v<hash> CACHE_NAME token (C9).
+
+    Asserts only the structural shape (snobbery-v followed by alphanumeric chars)
+    so the test is green in both:
+      - source-tree / CI runs where no compiled tailwind.*.css and no build_id.txt
+        exist (hash falls back to "dev" → CACHE_NAME = "snobbery-vdev"), and
+      - baked-image runs where a real timestamp or CSS hash is present.
+
+    This is a regression guard: if the __BUILD_HASH__ token is ever left
+    un-substituted or the CACHE_NAME prefix changes, this test catches it.
+    Do NOT use pytest.skip here — skip-as-green is a verification gap
+    (memory: tests-pass-by-skip-mask-green).
+    """
+    r = client.get("/sw.js")
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text[:200]}"
+    match = re.search(r"snobbery-v([A-Za-z0-9]+)", r.text)
+    assert match is not None, (
+        "GET /sw.js body must contain a CACHE_NAME matching 'snobbery-v<alphanum>'. "
+        f"Body excerpt: {r.text[:300]}"
+    )
+    assert match.group(1), (
+        "The hash segment after 'snobbery-v' must be non-empty. "
+        f"Got: {match.group(0)!r}"
+    )
+
+
+def test_build_hash_prefers_build_id_txt(tmp_path, monkeypatch) -> None:
+    """_get_build_hash() returns build_id.txt content (truncated to 16 chars) when present (C9).
+
+    This is the RED test for Task 1 — it fails until Task 2 rewrites
+    _get_build_hash() to prefer build_id.txt over the CSS-filename hash.
+
+    Uses a real temp file under app/static/build_id.txt (the production path)
+    so the test exercises the exact Path the implementation will read.
+    Cleans up in a finally block to leave no stray artifact in the source tree.
+    """
+    import importlib
+
+    from pathlib import Path
+
+    build_id_path = Path("app/static/build_id.txt")
+    test_content = "20260524120000"
+    created = False
+    try:
+        build_id_path.write_text(test_content, encoding="utf-8")
+        created = True
+
+        # Re-import to get a fresh call — the module-level _BUILD_HASH is
+        # computed at import time, so we call the function directly.
+        import app.routers.pwa as pwa_module
+
+        importlib.reload(pwa_module)
+        result = pwa_module._get_build_hash()
+
+        assert result == test_content[:16], (
+            f"_get_build_hash() must return build_id.txt content (truncated to 16 chars) "
+            f"when the file is present. Expected {test_content[:16]!r}, got {result!r}. "
+            "Task 2 (pwa.py rewrite) has not landed yet — this is expected RED."
+        )
+    finally:
+        if created and build_id_path.exists():
+            build_id_path.unlink()
