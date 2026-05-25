@@ -44,8 +44,10 @@ Snobbery ships as 13 sequenced horizontal layers, each one a load-bearing slice 
 - [x] **Phase 9: Admin** â€” User CRUD, API credential vault with last-4 display, app_settings value_type-driven editor, backups list + manual run, system info + API health panels
  (completed 2026-05-21)
 - [x] **Phase 10: Global Search** â€” FTS-vs-trigram decision at plan time, Postgres-based cross-entity search with per-user session-note scoping, debounced HTMX live results (completed 2026-05-22)
-- [x] **Phase 11: PWA + Mobile Polish** â€” Manifest from `/manifest.json`, `/sw.js` at root with `Service-Worker-Allowed: /`, dual theme-color metas, maskable icons, iOS install banner, bottom/top nav, card-list collapse, Guided Brew Mode with wake-lock fallback, aesthetic + dark mode + branding (completed 2026-05-23)
-- [x] **Phase 12: Hardening + Tests** â€” Pytest smoke (happy path), `respx`-backed AI service tests, encryption round-trip + rotation test, analytics-query tests, CSRF tests, Playwright responsive smoke at 375Ã—667 and 390Ã—844, CSP audit, `|safe` grep test (completed 2026-05-24)
+- [x] **Phase 11: PWA + Mobile Polish** â€” Manifest from `/manifest.json`, `/sw.js` at root with `Service-Worker-Allowed: /`, dual theme-color metas, maskable icons, iOS install banner, bottom/top nav, card-list collapse, Guided Brew Mode with wake-lock fallback, aesthetic + dark mode + branding
+ (completed 2026-05-23)
+- [x] **Phase 12: Hardening + Tests** â€” Pytest smoke (happy path), `respx`-backed AI service tests, encryption round-trip + rotation test, analytics-query tests, CSRF tests, Playwright responsive smoke at 375Ã—667 and 390Ã—844, CSP audit, `|safe` grep test
+ (completed 2026-05-24)
 
 ## Phase Details
 
@@ -399,7 +401,14 @@ Phases execute in numeric order: 0 â†’ 1 â†’ 2 â†’ 3 â†’ 4 �
   8. Export CSV and Import sessions are moved off the log/sessions page onto a dedicated page linked from the config hub, decluttering the primary log view (routes `/brew/export` + `/brew/import` unchanged; only entry-point location moves).
   9. Service-worker cache versioning: the SW cache name/version bumps per deploy so a rebuild reaches installed PWAs without a manual "Clear site data." Cross-cutting — without it, every fix above stays invisible on installed PWAs.
 **Notes:** Sibling iOS bottom-nav float (commit `982c0e6`) and guided-brew dead-span (commit `eafc6e3`) were already fixed via `/gsd-debug` this session and are out of scope here. Criterion 1 reuses the safe-area technique validated by `982c0e6` — if that on-device check fails, revisit the approach for both. Per-criterion root causes with file:line already exist (investigated this session); planning can lean on them instead of re-researching.
-**Plans:** 0 plans
-
+**Plans:** 6 plans
 Plans:
-- [ ] TBD (run /gsd-plan-phase 13 to break down)
+**Wave 1** *(parallel — disjoint files)*
+- [ ] 13-01-PLAN.md — C9 SW cache versioning (build_id.txt -> CACHE_NAME bump per build; LOAD-BEARING GATE)
+- [ ] 13-02-PLAN.md — C10 regenerate circular badge + PWA icons from hero.jpg; harden circular_crop (D-07)
+- [ ] 13-03-PLAN.md — C2/C3 create routes return list fragment + flex-wrap equipment pills (D-03/D-04)
+- [ ] 13-04-PLAN.md — C6/C7 guided-brew cue controls redesign + brew-form ratio recalc on prefill + single-line stars
+- [ ] 13-05-PLAN.md — C1/C4 iOS safe-area-top + 3-state dark toggle (Tailwind v3 darkMode:selector, no-FOUC) (D-01/D-02)
+
+**Wave 2** *(blocked on 13-05 — shared config_hub.html)*
+- [ ] 13-06-PLAN.md — C5/C8 Guided Brew reach (Home/Log -> /recipes) + recipe_row regression test + Export/Import -> /data-tools (D-05/D-06)
