@@ -15,18 +15,14 @@
     <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
       <h1 class="text-2xl font-semibold">Sessions</h1>
       <div class="flex flex-wrap gap-3">
-        {# Export href carries the active filters so the download mirrors the
-           on-screen view (D-15). The id lets the filter fragment OOB-swap a
-           fresh href after each HTMX filter change (see session_list.html). #}
-        <a id="export-csv-link"
-           href="/brew/export{% if export_query %}?{{ export_query }}{% endif %}"
-           class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
-          Export CSV
-        </a>
-        <a href="/brew/import"
+        {# C5: Guided Brew entry point — routes to /recipes (recipe list carries
+           the "Start guided brew" control per eafc6e3 fix). #}
+        <a href="/recipes"
            class="rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
-          Import sessions
+          Guided Brew
         </a>
+        {# C8: Export/Import moved to /data-tools (linked from config hub).
+           The OOB export-link sync in session_list.html is also removed. #}
         <a href="/brew/new"
            class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
           Log session

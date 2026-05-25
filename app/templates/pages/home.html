@@ -16,6 +16,12 @@
             Admin
           </a>
         {% endif %}
+        {# C5: Guided Brew entry point — routes to /recipes (recipe list carries
+           the "Start guided brew" control per eafc6e3 fix). #}
+        <a href="/recipes"
+           class="rounded border border-espresso-300 dark:border-espresso-600 px-3 py-1 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+          Guided Brew
+        </a>
         <a href="/brew/new"
            class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
           Log session
