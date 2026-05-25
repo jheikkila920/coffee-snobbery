@@ -1,14 +1,15 @@
 ---
-status: partial
+status: passed
 phase: 13-pwa-ux-fixes
 source: [13-VERIFICATION.md]
 started: 2026-05-25T11:20:00Z
-updated: 2026-05-25T12:30:00Z
+updated: 2026-05-25T18:00:00Z
 ---
 
 ## Current Test
 
-[John verified 2026-05-25; 6/8 pass, 2 gaps + 5 new issues — see Gaps]
+[APPROVED by John 2026-05-25 — all items resolved across 3 rounds; #12 Start-brew
++ Cancel-move verified via live browser, icons/nav/layout confirmed on-device.]
 
 ## Tests
 
@@ -41,8 +42,8 @@ result: pass (create valid/invalid + Guided Brew links + data-tools all good)
 ## Summary
 
 total: 8
-passed: 6
-issues: 2
+passed: 8
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0

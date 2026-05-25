@@ -401,14 +401,14 @@ Phases execute in numeric order: 0 â†’ 1 â†’ 2 â†’ 3 â†’ 4 �
   8. Export CSV and Import sessions are moved off the log/sessions page onto a dedicated page linked from the config hub, decluttering the primary log view (routes `/brew/export` + `/brew/import` unchanged; only entry-point location moves).
   9. Service-worker cache versioning: the SW cache name/version bumps per deploy so a rebuild reaches installed PWAs without a manual "Clear site data." Cross-cutting — without it, every fix above stays invisible on installed PWAs.
 **Notes:** Sibling iOS bottom-nav float (commit `982c0e6`) and guided-brew dead-span (commit `eafc6e3`) were already fixed via `/gsd-debug` this session and are out of scope here. Criterion 1 reuses the safe-area technique validated by `982c0e6` — if that on-device check fails, revisit the approach for both. Per-criterion root causes with file:line already exist (investigated this session); planning can lean on them instead of re-researching.
-**Plans:** 6 plans
+**Plans:** 6/6 plans complete
 Plans:
 **Wave 1** *(parallel — disjoint files)*
-- [ ] 13-01-PLAN.md — C9 SW cache versioning (build_id.txt -> CACHE_NAME bump per build; LOAD-BEARING GATE)
-- [ ] 13-02-PLAN.md — C10 regenerate circular badge + PWA icons from hero.jpg; harden circular_crop (D-07)
-- [ ] 13-03-PLAN.md — C2/C3 create routes return list fragment + flex-wrap equipment pills (D-03/D-04)
-- [ ] 13-04-PLAN.md — C6/C7 guided-brew cue controls redesign + brew-form ratio recalc on prefill + single-line stars
-- [ ] 13-05-PLAN.md — C1/C4 iOS safe-area-top + 3-state dark toggle (Tailwind v3 darkMode:selector, no-FOUC) (D-01/D-02)
+- [x] 13-01-PLAN.md — C9 SW cache versioning (build_id.txt -> CACHE_NAME bump per build; LOAD-BEARING GATE)
+- [x] 13-02-PLAN.md — C10 regenerate circular badge + PWA icons from hero.jpg; harden circular_crop (D-07)
+- [x] 13-03-PLAN.md — C2/C3 create routes return list fragment + flex-wrap equipment pills (D-03/D-04)
+- [x] 13-04-PLAN.md — C6/C7 guided-brew cue controls redesign + brew-form ratio recalc on prefill + single-line stars
+- [x] 13-05-PLAN.md — C1/C4 iOS safe-area-top + 3-state dark toggle (Tailwind v3 darkMode:selector, no-FOUC) (D-01/D-02)
 
 **Wave 2** *(blocked on 13-05 — shared config_hub.html)*
-- [ ] 13-06-PLAN.md — C5/C8 Guided Brew reach (Home/Log -> /recipes) + recipe_row regression test + Export/Import -> /data-tools (D-05/D-06)
+- [x] 13-06-PLAN.md — C5/C8 Guided Brew reach (Home/Log -> /recipes) + recipe_row regression test + Export/Import -> /data-tools (D-05/D-06)
