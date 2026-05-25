@@ -3,63 +3,58 @@ status: partial
 phase: 13-pwa-ux-fixes
 source: [13-VERIFICATION.md]
 started: 2026-05-25T11:20:00Z
-updated: 2026-05-25T11:20:00Z
+updated: 2026-05-25T12:30:00Z
 ---
 
 ## Current Test
 
-[awaiting human testing]
-
-## Preconditions
-
-- Local stack rebuilt this session; running at http://localhost:8080 (cache `snobbery-v20260525111723`).
-- For your INSTALLED iOS PWA: deploy to the VPS first (`git pull && docker compose build coffee-snobbery && docker compose up -d coffee-snobbery`). C9 fixes FUTURE auto-updates; the currently-installed pre-C9 service worker should self-replace on next launch (the `/sw.js` bytes changed), but do ONE "Clear site data" (Settings > Safari, or DevTools > Application > Clear storage) on the first post-deploy load to remove any doubt. Subsequent deploys won't need it — that is the whole point of C9.
-- Visual/375px checks: use DevTools responsive mode at 375px against localhost.
+[John verified 2026-05-25; 6/8 pass, 2 gaps + 5 new issues — see Gaps]
 
 ## Tests
 
-### 1. C9 — SW cache bumps per build (already machine-verified)
-expected: Two consecutive builds with a template change yield DIFFERENT `snobbery-v...` cache names; no-op rebuild stays stable; `skipWaiting` + `clients.claim` preserved.
-result: [pending] — orchestrator confirmed locally (snobbery-v20260525024520 -> ...105505). Listed for your audit/sign-off.
+### 1. C9 — SW cache bumps per build
+expected: cache name bumps on a front-end change; SW lifecycle preserved.
+result: pass ("not sure how to test, but seems fine")
 
 ### 2. C10 — Icon visual quality
-expected: `app/static/img/logo-badge.png` and `icon-512.png` show the FULL mascot (bean + top-hat + monocle + cup + steam) inscribed in the circle, undistorted (not squished, not zoomed to the face). `icon-512-maskable.png` keeps ~10% safe-zone padding on cream. In-app at 375px, the top-left nav badge is a clean circle with the full undistorted mascot.
-result: [pending]
+expected: full undistorted mascot, readable against background.
+result: issue→fix-pending-redeploy — mascot much better, but background blended with the mascot. John updated hero.jpg; icons regenerated from it (commit pending push). Re-verify after deploy.
 
-### 3. C1 — iOS standalone top-strip safe-area (REAL IPHONE REQUIRED)
-expected: On the installed iOS PWA, the top strip (logo + search) is NOT obscured by the status bar / Dynamic Island.
-result: [pending] — NOTE: this reuses the UNVERIFIED safe-area technique from the bottom-nav fix (commit 982c0e6). If the top strip is still obscured, the technique needs a revised approach for BOTH top and bottom — report that.
+### 3. C1 — iOS standalone top-strip safe-area
+result: pass ("safe area on iOS is good")
 
 ### 4. C4 — Dark toggle: instant switch, no FOUC, persistence
-expected: Config hub shows an Auto/Light/Dark toggle near Sign out (Auto default). Choosing Dark -> app goes dark immediately; reload -> still dark with NO flash of light first. Choosing Light -> light; reload -> still light. Choosing Auto -> follows the OS/DevTools prefers-color-scheme.
-result: [pending]
+result: pass ("dark toggle works well")
 
 ### 5. C4/D-02 — Light wins on dark system; login always dark
-expected: With the OS set to dark, choosing Light keeps the app LIGHT (proves the old @media blocks are now `.dark`-class-scoped). Signed-out `/login` (and `/setup`) stay espresso-dark regardless of toggle/system.
-result: [pending]
+result: pass
 
 ### 6. C6 — Guided-brew cue controls read clearly
-expected: On `/brew/guided`, the Audio & haptic cue controls read as clear On/Off (no ambiguous `role=switch`). Toggle Chime + Vibrate, reload -> choices persist (localStorage `snobbery:gbm:cues`). In-brew cue buttons also read clearly.
-result: [pending]
+result: pass ("Audio & haptic cue controls much easier to understand now")
 
-### 7. C7 — Ratio recalc on prefill; single-line stars at 375px
-expected: On `/brew/new`, selecting a recipe/coffee that prefills dose & water updates the "1:N.NN" ratio IMMEDIATELY without typing; typing dose still updates it. The 0-5 rating stars sit on a SINGLE line at 375px (no 4+1 wrap), each star >= 44px tap target.
-result: [pending]
+### 7. C7 — Ratio recalc on prefill; single-line stars
+result: ISSUE — ratio does NOT auto-populate when dose & water have prefilled values (the x-init re-sync fix did not work). Stars single-line: OK (not called out).
 
-### 8. C2/C5/C8 — Create flow + navigation (browser, 375px)
-expected:
-- C2 (the fixed-this-session blocker): creating a coffee/equipment with VALID data adds it to the list and collapses the form (no refresh). Creating with INVALID data re-shows the form with errors and leaves the list intact (does NOT wipe the catalog).
-- C5: Home and Log/sessions pages show a "Guided Brew" action -> `/recipes`.
-- C8: Log/sessions view has NO inline Export/Import; config hub links to `/data-tools`; on `/data-tools`, Export downloads a CSV and Import accepts a CSV (CSRF enforced).
-result: [pending]
+### 8. C2/C5/C8 — Create flow + navigation
+result: pass (create valid/invalid + Guided Brew links + data-tools all good)
 
 ## Summary
 
 total: 8
-passed: 0
-issues: 0
-pending: 8
+passed: 6
+issues: 2
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+| # | Type | Item | Status |
+|---|------|------|--------|
+| C10 | gap (fix-pending) | Icon background blended with mascot; hero.jpg updated + icons regenerated — re-verify after deploy | fixed-pending-verify |
+| C7 | gap (bug) | Brew ratio does not recalc when a recipe/coffee prefills dose & water programmatically; x-init re-sync did not fire/pick up values | open |
+| NEW-09 | enhancement | Log page: put Guided Brew + Log Session + Filters on ONE row (Filters on its own row lengthens the page) | open |
+| NEW-10 | enhancement | Home page: make Admin, Guided Brew, Log Session buttons all the same size | open |
+| NEW-11 | enhancement | Equipment + coffee cards still tall; move edit/archive buttons to top-right corner (smaller ok) | open |
+| NEW-12 | bug + UX | "Start Guided Brew" button does nothing (tried cues on/off) — pre-existing, likely iOS unlockAudio/wakeLock throwing before isRunning=true OR steps JSON server/client mismatch (needs browser/on-device debug). Also: move the Cancel button to the BOTTOM, under Start Guided Brew | open |
+| NEW-13 | bug | Log/sessions page still shows the bottom nav raised up (982c0e6 bottom safe-area); config page is correct now | open |
