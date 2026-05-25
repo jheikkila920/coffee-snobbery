@@ -8,6 +8,20 @@ Snobbery is a self-hosted household coffee log for pour-over enthusiasts who car
 
 A returning user — phone in hand, kettle nearby — can log a brew session in under 30 seconds and trust that the home page's "what to buy next" recommendation is grounded in their actual log, not generic taste advice.
 
+## Current Milestone: v1.2 Polish & Mobile-First
+
+**Goal:** Make Snobbery feel purpose-built and major-company polished, truly mobile-first, with AI consolidated into its own destination and the app cleanly self-hostable by others.
+
+**Target features:**
+- v1.1 debt cleanup (early phase): G-01 VPS chown, T-INFRA-1 test isolation, Phase 11 nav/sign-out verify, pending human UAT, clear `human_needed` verifications
+- Self-host packaging: prebuilt image to a registry (no `docker compose build` for end users), thorough deploy doc including NPM setup, better README, simpler first-run
+- Mobile-first audit + rework of every screen at 375px to a major-company polish bar
+- IA restructuring: Admin off bottom nav (to a config-page button under Flavor Notes), new AI page on bottom nav consolidating all AI features, simplified action-button home (home/AI/Core-Value split decided during UI design)
+- Guided Brew Mode polish (purpose-built mobile feel)
+- New capabilities, research-driven: Beanconqueror-inspired parity (selected subset), cafe quick-rate (no-recipe coffee log: brand/name, info, brew method, rating), AI research-a-coffee + predict-rating-from-preferences
+
+**Deferred to v2.0+:** public SaaS, hundreds of users, isolated per-user databases, public signup, invite-code multi-user. Breaks roughly six locked invariants (single worker, shared catalog, no-email, household-scale cost model); a product pivot, not a polish milestone.
+
 ## Requirements
 
 ### Validated
@@ -32,15 +46,23 @@ A returning user — phone in hand, kettle nearby — can log a brew session in 
 
 ### Active
 
-<!-- Current scope. Building toward these. Next milestone TBD. -->
+<!-- Current scope. Building toward v1.2 (see Current Milestone above). REQUIREMENTS.md holds the REQ-ID breakdown once defined. -->
 
-No active milestone. v1.1 is complete and deployed. Start the next milestone with `/gsd-new-milestone` once direction is chosen.
+v1.2 Polish & Mobile-First (in planning). High-level scope:
+- [ ] v1.1 debt cleanup (G-01, T-INFRA-1, Phase 11 nav verify, human UAT, human_needed sign-offs)
+- [ ] Self-host packaging (prebuilt image, deploy/NPM docs, README, simpler first-run)
+- [ ] Mobile-first audit + rework of every screen to a major-company polish bar
+- [ ] IA restructuring (Admin off nav, new AI page, simplified home)
+- [ ] Guided Brew polish
+- [ ] Beanconqueror-inspired parity (subset, post-research)
+- [ ] Cafe quick-rate (no-recipe coffee log)
+- [ ] AI research-a-coffee + predict-rating
 
-**Carried-forward candidates (from v1.1 Out of Scope / deferrals):**
-- [ ] Inventory management (bag count, depletion tracking) — flagged "maybe v2"
-- [ ] PWA offline write queue + sync — explicitly deferred from v1
-- [ ] Per-user/month AI cost ceiling — revisit only if signature-based regen proves insufficient
-- [ ] SSE streaming for AI responses — v1 shipped polling; SSE was deferred to "v1.1 polish" and not built
+**Still-deferred candidates (not committed to v1.2):**
+- [ ] Inventory management (bag count, depletion tracking) — re-evaluate against Beanconqueror research
+- [ ] PWA offline write queue + sync — v2
+- [ ] SSE streaming for AI responses — could fold into the AI-page rework if cheap; else defer
+- [ ] Per-user/month AI cost ceiling — revisit if on-demand AI research/predict cost surprises
 
 ### Known Gaps (deferred at v1.1 close)
 
@@ -74,6 +96,7 @@ No active milestone. v1.1 is complete and deployed. Start the next milestone wit
 - Per-user/day or per-month AI cost ceiling — signature-based regen is the cost control at household scale; revisit if costs surprise
 - Full per-router test coverage — v1 is smoke + critical paths only; expand if regressions become a pattern
 - Real-time scraper or product index — AI uses web search at request time, no background ingestion
+- Public/hosted multi-user (signup link, hundreds of users, isolated per-user data) — evaluated for v1.2 and deferred; breaks the single-worker, shared-catalog, no-email, and household-scale cost invariants. A potential v2.0 pivot, not a minor milestone.
 
 ## Context
 
@@ -132,6 +155,10 @@ No active milestone. v1.1 is complete and deployed. Start the next milestone wit
 | APScheduler `SQLAlchemyJobStore` + `misfire_grace_time=3600` + `coalesce=True` | Defaults silently lose jobs across restarts. | ✓ Shipped v1.1 (Phase 8) |
 | Deploy behind Nginx Proxy Manager on the shared n8n box | No host nginx; NPM container owns 80/443. `TRUSTED_PROXY_IPS=*` required. | ✓ Good — documented deployment topology |
 | Execute Phase 14 directly on `main` (branch-policy exception) | John's explicit call; recorded as a verification override. | ⚠ Acceptable once — prefer feature branches for auth/security work |
+| v1.2 scope: self-host-friendly distribution, not multi-user | Public/invite multi-user breaks ~6 locked invariants (single worker, shared catalog, no email, cost model); a v2.0 pivot | — Pending (v1.2 in planning) |
+| v1.2: mobile-first audit + rework, not rewrite | App is already mobile-first; a rewrite throws away a working v1.1 at high risk | — Pending |
+| v1.2: consolidate AI to its own bottom-nav page; Admin off nav | Admin is rare-access; frees a nav slot; AI is the differentiator and deserves a destination | — Pending |
+| v1.2: home/AI split + Core Value wording deferred to UI design | Needs mockups before deciding whether the what-to-buy-next rec leaves the home page | — Pending |
 
 ## Evolution
 
@@ -151,4 +178,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 — v1.1 Initial Release milestone complete. 15 phases (0–14), 93 plans, 103 tasks shipped and pushed to origin/main (30d25de). Full requirements traceability archived to milestones/v1.1-REQUIREMENTS.md; full roadmap detail to milestones/v1.1-ROADMAP.md. Closed with acknowledged debt — open human UAT + human_needed verifications on several phases, plus G-01 (VPS chown) and T-INFRA-1 (test isolation) — see Known Gaps and STATE.md "Deferred Items". Next: /gsd-new-milestone.*
+*Last updated: 2026-05-25 — v1.2 Polish & Mobile-First milestone started. Direction: self-host-friendly distribution (not multi-user), mobile-first audit + rework (not rewrite), AI consolidated to its own bottom-nav page, v1.1 debt folded in early. Public/hosted multi-user deferred to v2.0. v1.1 archive preserved in milestones/v1.1-REQUIREMENTS.md, milestones/v1.1-ROADMAP.md, and milestones/v1.1-phases/. Next: research -> requirements -> roadmap.*
