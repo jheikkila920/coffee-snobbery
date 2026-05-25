@@ -200,11 +200,11 @@ def test_list_coffees_includes_responsive_layout_markers(
 
 
 def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) -> None:
-    """POST minimal valid form → 200 + full list fragment containing the new coffee.
+    """POST minimal valid form → 200 + OOB list update; form mount collapsed.
 
-    Plan 13-03 (C2/D-03): create now returns coffee_list.html (the full list
-    fragment), not the bare coffee_row.html <tr>. The OOB form-clear is removed;
-    form collapse happens via hx-target="#coffee-list" (D-04).
+    CR-01/WR-01 fix (plan 13-03 review): the form targets #coffee-form-mount.
+    On success the response body is swapped into #coffee-form-mount (emptying
+    it), and contains an OOB div that updates #coffee-list with the full list.
     """
     _require_postgres()
     _require_p4_migration_applied()
@@ -220,9 +220,11 @@ def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) ->
     )
     assert resp.status_code == 200, resp.text
     assert 'id="coffee-' in resp.text
-    # Plan 13-03: returns the list fragment — list-container markers must be present.
+    # Success response contains OOB swap that updates #coffee-list.
+    assert 'hx-swap-oob="innerHTML"' in resp.text
+    # List-container markers appear inside the OOB div.
     assert "space-y-3" in resp.text or 'class="hidden md:block"' in resp.text
-    # OOB form-clear is removed (C2 — form collapses via list-swap hx-target).
+    # form-mount ID must NOT appear in the response body (it's the swap target, not content).
     assert "coffee-form-mount" not in resp.text
 
 
