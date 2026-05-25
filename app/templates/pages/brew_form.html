@@ -115,7 +115,7 @@
             <legend class="text-sm font-semibold">Rating</legend>
             <input type="hidden" name="rating" :value="hiddenValue">
             <div role="group" aria-label="Rating, 0 to 5 stars"
-                 class="flex flex-wrap items-center gap-1 min-h-[56px] py-2"
+                 class="flex flex-nowrap items-center gap-1 min-h-[56px] py-2"
                  x-on:keydown="onKeydown($event)" tabindex="0">
               {% for i in range(5) %}
                 <span class="relative inline-block w-14 h-14">
