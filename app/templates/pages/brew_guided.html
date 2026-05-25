@@ -29,7 +29,7 @@
   <div x-data="guidedBrewMode"
        data-recipe-id="{{ recipe.id }}"
        data-coffee-id="{{ coffee.id if coffee else '' }}"
-       data-steps="{{ recipe.steps | tojson }}"
+       data-steps='{{ recipe.steps | tojson }}'
        class="fixed inset-0 z-50 flex flex-col bg-cream-50 dark:bg-espresso-950 overflow-y-auto">
 
     {# ── No-steps state ── show when recipe.steps is empty; no JS needed #}
