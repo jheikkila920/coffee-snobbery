@@ -44,17 +44,20 @@
               class="rounded border border-espresso-300 px-3 py-1 text-sm min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Duplicate
       </button>
-      {# D-07b: "Start guided brew" entry point (Plan 11-04). Disabled if no steps. #}
+      {# D-07b: "Start guided brew" entry point (Plan 11-04). Disabled if no steps — links
+         to the recipe editor so the user can add steps rather than silently doing nothing. #}
       {% if recipe.steps %}
         <a href="/brew/guided?recipe_id={{ recipe.id }}"
            class="rounded bg-espresso-700 text-cream-50 px-3 py-1 text-sm min-h-[44px] inline-flex items-center hover:bg-espresso-800">
           Start guided brew
         </a>
       {% else %}
-        <span class="rounded border border-espresso-200 text-espresso-400 px-3 py-1 text-sm min-h-[44px] inline-flex items-center cursor-not-allowed dark:border-espresso-700 dark:text-espresso-500"
-              title="Recipe has no steps.">
+        <a href="/recipes/{{ recipe.id }}/edit"
+           class="rounded border border-espresso-200 text-espresso-500 px-3 py-1 text-sm min-h-[44px] inline-flex items-center hover:bg-espresso-50 dark:border-espresso-700 dark:text-espresso-400 dark:hover:bg-espresso-900"
+           aria-label="Start guided brew — add steps to this recipe first">
           Start guided brew
-        </span>
+          <span class="ml-1 text-xs opacity-75">(add steps)</span>
+        </a>
       {% endif %}
       {% if not recipe.archived %}
         <button type="button"
@@ -95,17 +98,20 @@
               class="ml-1 rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Duplicate
       </button>
-      {# D-07b: "Start guided brew" entry point (Plan 11-04). Disabled if no steps. #}
+      {# D-07b: "Start guided brew" entry point (Plan 11-04). Disabled if no steps — links
+         to the recipe editor so the user can add steps rather than silently doing nothing. #}
       {% if recipe.steps %}
         <a href="/brew/guided?recipe_id={{ recipe.id }}"
            class="ml-1 rounded bg-espresso-700 text-cream-50 px-3 py-1 text-sm min-h-[44px] inline-flex items-center hover:bg-espresso-800">
           Start guided brew
         </a>
       {% else %}
-        <span class="ml-1 rounded border border-espresso-200 text-espresso-400 px-3 py-1 text-sm min-h-[44px] inline-flex items-center cursor-not-allowed dark:border-espresso-700 dark:text-espresso-500"
-              title="Recipe has no steps.">
+        <a href="/recipes/{{ recipe.id }}/edit"
+           class="ml-1 rounded border border-espresso-200 text-espresso-500 px-3 py-1 text-sm min-h-[44px] inline-flex items-center hover:bg-espresso-50 dark:border-espresso-700 dark:text-espresso-400 dark:hover:bg-espresso-900"
+           aria-label="Start guided brew — add steps to this recipe first">
           Start guided brew
-        </span>
+          <span class="ml-1 text-xs opacity-75">(add steps)</span>
+        </a>
       {% endif %}
       {% if not recipe.archived %}
         <button type="button"
