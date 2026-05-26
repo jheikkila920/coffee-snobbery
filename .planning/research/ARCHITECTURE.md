@@ -1,604 +1,510 @@
-# Architecture — Snobbery
+# Architecture Research — Snobbery v1.2 Integration
 
-**Project:** Snobbery (self-hosted household coffee log)
-**Researched:** 2026-05-16
-**Overall confidence:** HIGH for component boundaries and request paths (stack is well-trodden); HIGH for reverse-proxy + PWA gotchas (verified against MDN + uvicorn docs); MEDIUM for build-order specifics (dependency graph is judgment, not citation).
-
-This document validates the spec's architecture, names the component boundaries the spec leaves implicit, walks three load-bearing request paths, gives an explicit build-order DAG, and surfaces the proxy/PWA/scheduler/concurrency gotchas that will bite if ignored.
+**Domain:** Self-hosted household coffee log (v1.2 new-feature integration into existing FastAPI app)
+**Researched:** 2026-05-25
+**Confidence:** HIGH — all findings grounded in direct source code reads of the actual v1.1 codebase
 
 ---
 
-## 1. Component Map
+## System Overview (Current v1.1 State)
 
 ```
-              ┌──────────────────────── coffee-snobbery container ───────────────────────┐
-              │                                                                          │
-   NGINX  ──► │  Uvicorn (1 worker)                                                      │
-   (host)     │   └─► FastAPI app                                                        │
-              │        ├─ MIDDLEWARES (outer → inner)                                    │
-              │        │   1. ProxyHeadersMiddleware  (X-Forwarded-Proto/For trust)      │
-              │        │   2. SecurityHeadersMiddleware (CSP, X-Frame-Options, etc.)     │
-              │        │   3. RequestLoggingMiddleware (structlog, request-id, redact)   │
-              │        │   4. SessionMiddleware (CUSTOM — table-backed, see §5)          │
-              │        │   5. CSRFMiddleware (starlette-csrf, double-submit cookie)      │
-              │        │   6. SlowAPI limiter middleware (/login, /setup only)           │
-              │        │                                                                  │
-              │        ├─ ROUTERS (one file per page in app/routers/)                    │
-              │        │   ├─ auth.py     /login /logout /setup                          │
-              │        │   ├─ home.py     /  (+ partials for lazy-loaded sections)       │
-              │        │   ├─ log.py      /log + /log/sessions /log/coffees + partials   │
-              │        │   ├─ config.py   /config (equipment + recipes)                  │
-              │        │   ├─ admin.py    /admin (users, api-creds, settings, backups)   │
-              │        │   ├─ search.py   /search (HTMX live results)                    │
-              │        │   ├─ ai.py       /ai/refresh /ai/status /ai/stream (SSE)        │
-              │        │   ├─ photos.py   /photos/{id} (served via app, not disk)        │
-              │        │   └─ pwa.py      /manifest.json /sw.js (Service-Worker-Allowed) │
-              │        │                                                                  │
-              │        ├─ SERVICES (app/services/ — pure logic, no FastAPI imports)      │
-              │        │   ├─ auth.py        password verify, session create/destroy     │
-              │        │   ├─ csrf.py        token mint/verify wrappers (if hand-rolled) │
-              │        │   ├─ encryption.py  Fernet wrappers for API keys                │
-              │        │   ├─ settings.py    typed app_settings reader + in-memory cache │
-              │        │   ├─ photos.py      Pillow magic-byte verify, resize, EXIF strip│
-              │        │   ├─ search.py      Postgres FTS / pg_trgm query builder        │
-              │        │   ├─ analytics.py   preference derivation SQL (no Python loops) │
-              │        │   ├─ ai_service.py  provider abstraction, signature, lock, cache│
-              │        │   ├─ backup.py      pg_dump subprocess + photos tarball         │
-              │        │   └─ scheduler.py   APScheduler init, job registration          │
-              │        │                                                                  │
-              │        ├─ TEMPLATES (app/templates/ — Jinja2 + HTMX + Alpine)            │
-              │        │   ├─ base.html (CSP nonce, csrf meta, hx-headers, dark mode)    │
-              │        │   ├─ pages/  (full-page renders)                                │
-              │        │   └─ partials/ (HTMX-target fragments — *.partial.html)         │
-              │        │                                                                  │
-              │        ├─ STATIC (app/static/)                                           │
-              │        │   ├─ css/tailwind.css (built into image, see STACK §3.1)        │
-              │        │   ├─ css/custom.css                                              │
-              │        │   ├─ js/sw.js (service worker — served from /sw.js, scope=/)    │
-              │        │   ├─ js/tag-input.js, rating.js, guided-brew.js                 │
-              │        │   ├─ manifest.json (PWA manifest, served from /manifest.json)   │
-              │        │   └─ icons/ (192/512/maskable + apple-touch-icon)               │
-              │        │                                                                  │
-              │        ├─ MODELS (app/models/) — SQLAlchemy 2.0 Mapped[...] per entity   │
-              │        ├─ SCHEMAS (app/schemas/) — Pydantic v2 form + AI response models │
-              │        └─ MIGRATIONS (app/migrations/ — Alembic, auto-run in entrypoint) │
-              │                                                                          │
-              │  APScheduler (AsyncIOScheduler, runs INSIDE the uvicorn process)         │
-              │   ├─ nightly_ai_refresh  @ 00:00 APP_TIMEZONE                            │
-              │   └─ nightly_backup      @ 02:00 APP_TIMEZONE                            │
-              │                                                                          │
-              └──────────────────────────────────────────────────────────────────────────┘
-                                                │
-                                                ▼
-              ┌────────────────── coffee-snobbery-db container ──────────────────┐
-              │  Postgres 16 (internal network only, named volume)               │
-              │  Extensions enabled in first migration:                          │
-              │    citext, pg_trgm, unaccent                                     │
-              └──────────────────────────────────────────────────────────────────┘
+Browser (mobile-first, 375px primary)
+    |  HTMX 2.0.10 + Alpine.js CSP build + Tailwind v3 standalone CLI
+    v
+Nginx Proxy Manager (host container, owns 80/443)
+    -> coffee-snobbery:8000 over shared docker net (TRUSTED_PROXY_IPS=*)
+    v
+Uvicorn (1 worker, --proxy-headers, --workers 1 enforced in entrypoint.sh)
+FastAPI app
+    |
+    +-- Middleware stack (outer->inner):
+    |     RequestContextMiddleware   (nonce + request_id)
+    |     SecurityHeadersMiddleware  (nonce-CSP + all security headers)
+    |     FragmentCacheHeadersMiddleware (no-store on HX-Request fragments)
+    |     CSRFFormFieldShim          (form field -> header hoist)
+    |     CSRFMiddleware             (double-submit cookie, starlette-csrf)
+    |     SessionMiddleware          (table-backed async, SessionLocal)
+    |
+    +-- Routers (18 total in app/routers/):
+    |     pwa, csp_report, auth, debug, admin,
+    |     roasters, flavor_notes, coffees, equipment, recipes, bags,
+    |     brew_guided, brew (+data_router), home, config_hub,
+    |     ai, photos, search
+    |
+    +-- Services (app/services/):
+    |     ai_service, analytics, scheduler, credentials,
+    |     encryption, search, settings, wishlist
+    |
+    +-- APScheduler (in-process, single worker — INVIOLABLE):
+          nightly AI refresh (coffee rec + sweet spots per user)
+          nightly pg_dump backup + photos tar + retention prune
+    |
+    v
+PostgreSQL 16 (coffee-snobbery-db container)
+    Shared catalog: coffees, roasters, flavor_notes, equipment, recipes, bags
+    Per-user:       brew_sessions, ai_recommendations, wishlist_entries, brew_drafts, sessions
+    Admin:          users, api_credentials, app_settings
 ```
-
-### Component ownership
-
-| Component | Owns | Does NOT own |
-|---|---|---|
-| **Routers** | HTTP boundary, form parsing, CSRF dep, session dep, template rendering, redirects | Business logic, SQL queries, AI calls (delegate to services) |
-| **Services** | Business logic, SQL via SQLAlchemy session, external API calls, hashing/encryption | Anything FastAPI-specific (`Request`, `Depends`, `Form`) — keeps services unit-testable |
-| **Middleware** | Cross-cutting concerns: proxy headers, security headers, structured logging, session lookup, CSRF token enforcement, rate limit | Page-specific logic, business rules |
-| **Models** | SQLAlchemy table definitions, relationships, indexes | Query construction (lives in services) |
-| **Schemas** | Pydantic v2 form validation, AI response schemas, CSV export shapes | DB persistence |
-| **Templates** | HTML rendering, HTMX attributes, Alpine directives, Tailwind classes | Logic beyond simple conditionals; no fetches, no business decisions |
-| **Static** | Tailwind-compiled CSS, hand-rolled JS modules, PWA manifest + service worker, icons | Any user-generated content (photos go to `/app/data/photos`) |
-| **Scheduler** | Triggering nightly AI refresh + nightly backup; that's it | Long-running coordination across processes (single uvicorn worker rule, see §5.4) |
-| **Migrations** | Schema evolution, extension creation, seed rows for `app_settings` | Application logic |
-
-### Explicit boundary calls (where the spec is ambiguous)
-
-| Question the spec doesn't pin down | Recommendation |
-|---|---|
-| Is CSRF token issuance a service or middleware? | **Middleware.** Token is minted on first GET, set as a cookie + injected into a `<meta name="csrf-token">` via context processor. Verification on POST/PUT/DELETE happens in middleware before the route handler. Single global enforcement point. |
-| Where does session lookup happen? | **Custom SessionMiddleware** runs after CSRF middleware but before any router. It reads the signed cookie, queries the `sessions` table, attaches `request.state.user` (or `None`). Routers that require auth use a `current_user` dependency that 401/redirects when `request.state.user is None`. |
-| Where does the AI provider abstraction live? | **`services/ai_service.py`**, single file. Exposes `async def get_coffee_recommendation(user_id, force=False)` and `async def get_equipment_recommendation(user_id, force=False)`. Internal classes `AnthropicProvider` and `OpenAIProvider` implement a small `Provider` protocol. Routers never import provider SDKs directly. |
-| Photo storage on disk — what owns the path? | **`services/photos.py`** owns the path layout: `/app/data/photos/{uuid_prefix_2}/{uuid}.jpg` and `/{uuid_prefix_2}/{uuid}_thumb.jpg`. Two-char prefix sharding to keep directory size sane. Models store only the `photo_path` text column; the service resolves it. |
-| Photos served by app vs static mount? | **By app, via `routers/photos.py`.** Sets cache headers (`Cache-Control: private, max-age=31536000, immutable` because the URL is content-addressed by UUID), enforces session auth (don't serve photos to unauthenticated requests), and lets the future addition of per-user photo ACLs land in one place. **Do not** add `app.mount("/photos", StaticFiles(...))` — it skips the security middleware chain. |
-| Where does the in-memory AI lock live? | **In `ai_service.py` module-level dict** `Dict[Tuple[UUID, RecType], asyncio.Lock]`. Single uvicorn worker means single process means a module-level dict is sufficient. If you ever scale workers, replace with a Postgres advisory lock — but that's a v2 problem. |
-| Where does the input-signature hash live? | **`ai_service.compute_input_signature(user_id) -> str`**, pure SQL aggregate (single round-trip). Stored on `ai_recommendations.input_signature`. The home-page template gets `is_stale = stored != current` from the route handler, not from the template. |
-| HTMX partials — where do they live? | **`templates/partials/*.partial.html`**, named to match the HTMX target. e.g. `home/top_coffees.partial.html`, `home/coffee_recommendation.partial.html`. Pages reference them via `{% include %}` in the initial render and as `hx-get` targets after. |
 
 ---
 
-## 2. Request Path Walkthroughs
+## Q1: AI Page Consolidation — Router and Template Structure
 
-Three load-bearing paths, with the exact middleware order and service hops. The middleware order is **outer to inner** — i.e., a request flows through them top-to-bottom on the way in and bottom-to-top on the way out.
+### Current AI surface map (verified from source)
 
-### Path A — Login (POST /login)
+| Surface | Current location | Current route | Fragment/Template |
+|---------|-----------------|---------------|-------------------|
+| AI coffee rec hero card | home page | `GET /home/cards/ai-recommendation` in `home.py` | `fragments/home/ai_rec_hero.html` + 4 state variants |
+| Manual AI refresh button | home page | `POST /ai/refresh` in `ai.py` | Returns 204 + HX-Trigger or inline HTML |
+| Sweet spots AI prose | home page sweet-spots card | `GET /home/cards/sweet-spots` in `home.py` | `fragments/home/sweet_spots.html` (includes prose) |
+| Equipment rec (on-demand) | home page | `POST /ai/equipment` in `ai.py` | `fragments/home/equipment_rec.html` |
+| Paste-and-rank page | standalone | `GET /ai/paste-rank`, `POST /ai/paste-rank` in `ai.py` | `pages/paste_rank.html`, `fragments/ai/paste_rank_results.html` |
+| Wishlist page | standalone | `GET /ai/wishlist` in `ai.py` | `pages/wishlist.html` |
+| Wishlist CRUD | anywhere | `POST /ai/wishlist/add`, `/purchase`, `/remove` | 204 + HX-Trigger |
 
-```
-NGINX (TLS, sets X-Forwarded-Proto: https, X-Forwarded-For: <client>)
-  │
-  ▼
-Uvicorn  --proxy-headers --forwarded-allow-ips=127.0.0.1
-  │  ProxyHeadersMiddleware (built into uvicorn)
-  │  rewrites request.url.scheme = "https", request.client.host = <client>
-  │
-  ▼
-[1] SecurityHeadersMiddleware
-        Sets CSP nonce on request.state.csp_nonce. Headers added on response.
-[2] RequestLoggingMiddleware
-        Generates request-id, binds to structlog context. Logs path + method
-        on entry. Does NOT log body (would leak password).
-[3] SessionMiddleware (custom)
-        Reads `session_id` cookie. SELECT FROM sessions WHERE id=? AND expires_at>now().
-        For /login on a fresh client: no cookie → request.state.user = None.
-        Touch session if found (updates last_seen).
-[4] CSRFMiddleware (starlette-csrf)
-        Reads csrftoken cookie + X-CSRF-Token header (or form _csrf field).
-        For POST /login: required. 403 if mismatch.
-        Note: csrf cookie was set on the GET /login render.
-[5] SlowAPI limiter
-        Decorated on the /login route: @limiter.limit("5/15minutes")
-        Key function uses request.client.host (post-ProxyHeaders).
-        429 if exceeded.
-  │
-  ▼
-Route: auth.login_post
-  → schemas.LoginForm.model_validate(form data)   (Pydantic)
-  → services.auth.authenticate(username, password)
-       └─ SELECT user WHERE username=? (citext eq)
-       └─ argon2.verify(stored_hash, password)    (constant-time)
-       └─ structlog.info("auth.login_attempt", username, success, ip)
-  → services.auth.create_session(user_id)
-       └─ INSERT INTO sessions (id, user_id, csrf_seed, expires_at, last_seen)
-       └─ returns signed cookie value
-  → response = RedirectResponse(url="/", status_code=303)
-       Set-Cookie: session_id=<signed>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000
-  │
-  ▼ (on the way OUT, response flows back through middlewares)
-CSRFMiddleware → rotates csrftoken cookie (good hygiene post-auth)
-SessionMiddleware → no-op (handler already set the cookie)
-RequestLoggingMiddleware → logs status, duration
-SecurityHeadersMiddleware → attaches CSP/XFO/etc to the redirect response too
-  │
-  ▼
-Uvicorn → NGINX (with response) → browser follows redirect to GET /
-```
+### What moves to the AI page vs what stays on home
 
-**Failure modes worth naming:**
-- Wrong password → `auth.authenticate` returns None → 200 with login template re-rendered + error message. Argon2 verify runs even when user not found (timing-safe), to avoid user enumeration.
-- 6th attempt within 15 min from same IP → SlowAPI 429 before the handler runs.
-- Stolen CSRF token (cross-site form) → CSRFMiddleware 403.
-- Browser sends `http://` because NGINX is misconfigured → cookie has `Secure` flag → browser refuses to send it back → app sees no session → endless redirect loop. (See §4 for the trust-list config that prevents this.)
+**Move to `/ai` page:**
+- The AI coffee rec hero card. The fragment endpoint `GET /home/cards/ai-recommendation` becomes `GET /ai/cards/recommendation` (or is aliased). The fragment template relocates from `fragments/home/` to `fragments/ai/`. The polling `hx-trigger` in the AI page template points at the new URL.
+- The manual refresh button. `POST /ai/refresh` handler itself does not change — it returns `HX-Retarget="#ai-rec-hero"` and `HX-Reswap="outerHTML"` which targets the hero div wherever it lives. Only the template wiring changes.
+- The equipment rec card and its `POST /ai/equipment` handler. Template reference moves from `fragments/home/equipment_rec.html` to `fragments/ai/equipment_rec.html` (rename optional — path is a single string in one handler).
+- Sweet spots AI prose. Currently rendered inside `fragments/home/sweet_spots.html` via `sweet_spots_prose` context var loaded in `card_sweet_spots()`. Move the AI prose to the `/ai` page as its own card. Strip the prose from the home card entirely.
 
-### Path B — Log brew session (POST /log/sessions)
+**Stays on home:**
+- The five analytics data cards: top-coffees, preference-profile, flavor-descriptors, roast-freshness, sweet-spots (the SQL data table view — just without the AI prose overlay). These are the user's log data, not AI output.
+- Recent brews and unrated coffees (operational log data, not AI).
+- The cold-start gate check in `home_shell()`. The `/` route still calls `analytics.get_cold_start_counts` and passes the gate state to `pages/home.html`. The home page may show a simplified teaser ("AI is ready — see the AI tab") instead of the full rec card.
 
-This is the highest-frequency write path. It must be fast and bulletproof.
+**New on `/ai` page:**
+- The `/ai` router already exists in `app/routers/ai.py`. Add `GET /ai` as the page shell handler alongside the existing POST handlers.
+- New `pages/ai.html` template: AI rec hero as primary content, equipment rec on-demand section, sweet spots prose section, links to paste-rank and wishlist.
 
-```
-NGINX → Uvicorn → middleware chain (same 5 layers as above)
-  Note: SessionMiddleware now finds the session cookie and attaches
-        request.state.user = User(id=..., is_admin=...).
-  CSRFMiddleware enforces double-submit cookie on this POST.
-  │
-  ▼
-Route: log.create_session_post
-  → schemas.BrewSessionForm.model_validate(form data)
-       - rating: Field(ge=0, le=5, multiple_of=0.25)
-       - dose_grams_actual: Field(gt=0, le=100)
-       - water_grams_actual: Field(gt=0, le=2000)
-       - water_temp_c_actual: Field(ge=0, le=100)
-       - coffee_id, brewer_id FK existence validated by services layer
-       - flavor_notes: list[str] — service resolves to existing IDs or creates new rows
-  → current_user dep (returns 303 to /login if not authed)
-  → services.flavor_notes.upsert_many(observed_names) → list[UUID]
-       SELECT existing WHERE LOWER(name) IN (...)
-       INSERT any missing in a single statement (ON CONFLICT DO NOTHING + re-SELECT)
-  → services.coffees.assert_exists(coffee_id), .equipment.assert_exists(...)
-  → INSERT INTO brew_sessions (...)
-  → COMMIT
-  → Response:
-       If hx-request: 200 with brew_session_row.partial.html (HTMX swaps it into the table)
-       Else: 303 redirect to /log
-  → No AI call. No analytics recompute. Stats are computed at read-time on /.
-       The signature changes (max(updated_at) bumped). UI will show "Outdated — refresh?"
-       on next /home render; the nightly scheduler picks up the regen at 00:00 anyway.
-  │
-  ▼ middlewares on the way out, no special behavior.
-```
+### Preserving signature-based regen, cold-start gate, and polling
 
-**Notable design choices:**
-- **No write-time analytics recomputation.** The home page derives everything from SQL queries on read. At household scale this stays fast — no materialized views needed in v1. Index `brew_sessions(user_id, brewed_at)` and `brew_sessions(user_id, coffee_id)`.
-- **No write-time AI trigger.** The signature mismatch is enough — the home page itself shows a "stale" badge, and the nightly job catches up. Avoids per-write LLM cost.
-- **Flavor-note tag upsert in the same transaction** as the session insert. If the session insert fails, the upserted notes orphan — that's fine (they're a shared vocabulary; nobody minds an unused tag). If a constraint moves to require notes be used, add a cleanup job.
-- **HTMX-aware response.** Check `request.headers.get("hx-request") == "true"`. If yes, return the partial that swaps into the sessions table; if no, full redirect. Same pattern for every write endpoint.
+The signature check, regen, and nightly scheduler are entirely inside `ai_service.regenerate()` and `scheduler.py`. Nothing about moving the UI fragment to a different page touches these. Verified: `ai_service._LOCKS`, `_THROTTLE`, `regenerate()`, `in_flight()`, `is_stale()` — all operate on `user_id` and `rec_type` strings; they have no knowledge of which page renders the result.
 
-### Path C — Home page (GET /)
+The cold-start gate (`analytics.get_cold_start_counts`) must be called in the new `GET /ai/cards/recommendation` handler just as it is in the current `GET /home/cards/ai-recommendation` handler. Same function, same signature, same DB query. Copy the exact five-branch logic from `home.py card_ai_recommendation()` into the new AI-router handler.
 
-The page has 7+ sections. AI sections are slow (10–30s with web search). The spec says each section lazy-loads via HTMX after initial render.
+The polling flow (`hx-trigger="aiRecUpdated"` event from `POST /ai/refresh`) is controlled entirely in the template — the handler returns `HX-Trigger: aiRecUpdated` unconditionally regardless of what page the button is on.
 
-```
-NGINX → Uvicorn → middleware chain
-  Session resolves to authenticated user.
-  CSRF check is a no-op on GET (token is read on next POST).
-  │
-  ▼
-Route: home.home_get
-  → current_user dep
-  → If user.brew_session_count < 3:
-       Render templates/pages/home_cold_start.html — done.
-  → Else:
-       1. SELECT recent 10 sessions (cheap)
-       2. SELECT current input_signature (single aggregate query)
-       3. SELECT stored ai_recommendations FOR user
-       4. is_stale_coffee = stored.coffee.input_signature != current
-          is_stale_equipment = stored.equipment.input_signature != current
-       5. Render templates/pages/home.html with:
-            - eager: recent brews, sweet spots SQL chips, stale badges
-            - lazy: <div hx-get="/home/sections/top_coffees" hx-trigger="load">…</div>
-                    <div hx-get="/home/sections/preference_profile" hx-trigger="load">…</div>
-                    <div hx-get="/home/sections/ai_coffee_rec" hx-trigger="load">…</div>
-                    (etc.)
-  → 200 OK
-  │
-  ▼ then 5+ HTMX GET requests fire from the browser, each its own request through
-    the full middleware chain. The router for /home/sections/* checks current_user,
-    runs the relevant analytics query OR pulls cached AI from ai_recommendations,
-    returns a *.partial.html that swaps into the placeholder div.
-```
+### Concrete component changes
 
-**AI coffee rec section specifically:**
-- `/home/sections/ai_coffee_rec` returns the cached `ai_recommendations.response_json` rendered as a card. Includes a "Refresh" button that POSTs to `/ai/refresh`.
-- POST /ai/refresh returns 202 + an `hx-get`-driven polling endpoint at `/ai/status?type=coffee` that returns "still working" until the async LLM call (with web search) completes, then swaps the new card in.
-- The actual LLM call runs inside the POST handler via `asyncio.create_task(...)` so the HTTP response returns immediately. The task acquires the per-user lock, calls the provider, runs the HEAD-check on the URL, writes to `ai_recommendations`, releases the lock.
-- If SSE is chosen instead of polling: `/ai/stream` uses `sse-starlette` with `htmx-ext-sse@2.2.4` on the client side. **Recommendation: start with polling.** It's simpler, easier to debug, survives proxy buffering issues. SSE is a v1.1 polish.
+**NEW (v1.2):**
+- `app/routers/ai.py` — add `GET /ai` page shell handler (new route on existing router)
+- `app/templates/pages/ai.html` — new full page extending base.html
+- `app/templates/fragments/ai/recommendation_hero.html` — relocated from `fragments/home/ai_rec_hero.html`
+- `app/templates/fragments/ai/equipment_rec.html` — relocated from `fragments/home/equipment_rec.html` (optional rename)
 
-**Render-order issue worth pre-empting:** The lazy-load divs must each render with a `hx-get` and a placeholder shimmer. If the shimmer renders inside a flex container, set explicit `min-height` so the page doesn't reflow as sections fill in — bad UX on mobile.
+**MODIFIED (v1.2):**
+- `app/routers/home.py` — add `GET /ai/cards/recommendation` handler (five-branch state machine, same logic as current `card_ai_recommendation`); strip `get_latest_recommendation` call from `card_sweet_spots()`
+- `app/templates/pages/home.html` — remove AI rec hero section; add teaser or link to /ai page
+- `app/templates/fragments/home/sweet_spots.html` — remove `sweet_spots_prose` block
+- `app/routers/ai.py` — `GET /ai` page shell handler
+
+**UNCHANGED:**
+- `POST /ai/refresh`, `POST /ai/equipment`, `POST /ai/paste-rank`, all wishlist POSTs — handlers are not changed
+- `app/services/ai_service.py` (existing functions) — zero changes
+- `app/services/analytics.py` — zero changes
+- `app/services/scheduler.py` — zero changes
+- `app/models/ai_recommendation.py` — zero changes
 
 ---
 
-## 3. Build Order
+## Q2: Cafe Quick-Rate Data Model
 
-Strict dependency DAG. Earlier phases unblock later ones. Phases that don't depend on each other can run in parallel if you have multiple engineers (you don't, but treat the lack of dependency as freedom to reorder).
+### Options analyzed
 
-```
-PHASE 0 — Foundation (no app logic yet)
-├── A. docker-compose.yml + Dockerfile + entrypoint.sh
-├── B. app/main.py (lifespan only, no routes), config.py (pydantic-settings)
-├── C. SQLAlchemy engine + session factory + base model
-├── D. Alembic init + first migration: extensions (citext, pg_trgm, unaccent) + users table
-└── E. Static Tailwind build pipeline in Dockerfile (per STACK §3.1)
+**Option A — Separate `cafe_logs` table (new entity)**
+A new table with: `user_id`, `brand` (text, roaster/brand name), `coffee_name`, `brew_method` (text), `rating`, `notes`, `logged_at`.
 
-PHASE 1 — Cross-cutting middleware (everything depends on these)
-DEPENDS ON: PHASE 0
-├── F. ProxyHeadersMiddleware verified (test with curl + X-Forwarded-Proto)
-├── G. SecurityHeadersMiddleware + CSP nonce generator + base.html with nonce
-├── H. Structured logging (structlog) + request-id middleware
-├── I. Custom SessionMiddleware + sessions table migration
-├── J. CSRFMiddleware (starlette-csrf) + base.html meta tag + hx-headers config
-└── K. SlowAPI limiter wired (used by /login, /setup only)
-        Why first: every later router relies on session, CSRF, CSP. If you bolt these
-        on after building routers, every router needs revisiting.
+**Option B — Optional-field variant on `brew_sessions`**
+Add `cafe_mode boolean` + nullable `cafe_brand` to `brew_sessions`; use a sentinel/null `coffee_id`.
 
-PHASE 2 — Auth + user model (gates all other features)
-DEPENDS ON: PHASE 1
-├── L. User model + migration
-├── M. services/auth.py (argon2 hash/verify, session create/destroy)
-├── N. /setup route (first-run admin creation)
-├── O. /login, /logout routes
-├── P. current_user dependency + is_admin guard
-└── Q. Smoke: setup → login → see "home" stub
-        Why second: you cannot meaningfully test ANY other route without auth.
+**Option C — Nullable-recipe brew session (minimal change)**
+A brew session where `coffee_id` points to a shared catalog "cafe placeholder" coffee, `bag_id` / `recipe_id` are NULL.
 
-PHASE 3 — Encryption + settings infrastructure
-DEPENDS ON: PHASE 2
-├── R. services/encryption.py (Fernet wrappers) + unit tests
-├── S. app_settings model + migration + seed rows
-├── T. services/settings.py (typed reader + in-memory cache + invalidation on write)
-└── U. api_credentials model + migration (uses encryption.py for at-rest storage)
-        Why before AI: AI service reads keys from api_credentials, which requires
-        encryption. AI service reads recommendation_region from app_settings.
+### Trade-off analysis (grounded in the actual schema)
 
-PHASE 4 — Shared catalog (coffees, equipment, recipes, roasters, flavor_notes)
-DEPENDS ON: PHASE 2
-├── V. Five models + migrations + indexes
-├── W. Routers for /log (coffees tab) + /config (equipment + recipes)
-├── X. Autocomplete endpoints for roasters + flavor_notes
-├── Y. services/photos.py + /photos/{id} route + Pillow magic-byte verify
-└── Z. Step builder for recipes (Alpine.js + Jinja)
-        Independent of AI; can land in parallel with PHASE 3 if engineers exist.
+**Option B is the worst choice.** `brew_sessions.coffee_id` is `NOT NULL` with `ForeignKey("coffees.id", ondelete="RESTRICT")` — verified from `app/models/brew_session.py` line 79. Making it nullable is a lossy migration that breaks a documented architectural invariant. More critically, every analytics function in `analytics.py` does an INNER JOIN on `BrewSession.coffee_id == Coffee.id` without any guard. NULL `coffee_id` rows would be silently excluded from all analytics — acceptable in principle, but the implicit exclusion is a maintenance trap. `compute_input_signature()` in `analytics.py` iterates rated sessions by `BrewSession.coffee_id` and would need guards everywhere. Every query becomes `WHERE brew_sessions.cafe_mode IS NOT TRUE`. This is a pervasive pollution.
 
-PHASE 5 — Brew sessions (the daily-use surface)
-DEPENDS ON: PHASE 4
-├── AA. brew_sessions model + migration + indexes ((user_id, brewed_at), (user_id, coffee_id))
-├── BB. /log/sessions routes (list, add, edit, delete)
-├── CC. Aggressive-prefill logic (last session + selected recipe)
-├── DD. LocalStorage draft persistence (vanilla JS in app/static/js/)
-├── EE. Quick re-log action (server returns prefilled form, no special endpoint)
-├── FF. Tag input component (Alpine + autocomplete via HTMX hx-get)
-├── GG. Rating control (Alpine over hidden numeric input)
-└── HH. CSV export route
-        Why before analytics: analytics queries against brew_sessions.
+**Option C is workable but still polluting.** A shared "cafe placeholder" coffee solves the NOT NULL constraint but not the analytics join problem. The placeholder coffee surfaces in `get_top_coffees()` rankings, `get_preference_profile()` origin/process breakdowns, and `get_flavor_descriptors()`. Filtering it out requires a `coffee.is_placeholder` flag and edits to every analytics query. This is a covert schema dependency that makes analytics.py harder to reason about.
 
-PHASE 6 — Analytics (home-page non-AI)
-DEPENDS ON: PHASE 5
-├── II. services/analytics.py — every query is pure SQL
-├── JJ. Home page route + lazy-load partials (top coffees, preference profile, sweet spots,
-│       recent brews, unrated coffees, roast freshness buckets)
-├── KK. Index review: confirm sub-50ms p95 on each query at 1000-session dataset
-└── LL. Stale-data badge plumbing (signature compute + comparison)
-        Why before AI: AI section is a card on top of an otherwise-functional home page.
-        Cold start can land here.
+**Option A is correct.** Verdict: separate `cafe_logs` table.
 
-PHASE 7 — AI service (the differentiator)
-DEPENDS ON: PHASE 3 (encryption + settings) + PHASE 6 (analytics provides AI input)
-├── MM. services/ai_service.py provider abstraction (Anthropic + OpenAI)
-├── NN. Pydantic AI response schemas (CoffeeRecommendation, EquipmentRecommendation)
-├── OO. URL HEAD-check (httpx, 5s timeout)
-├── PP. ai_recommendations model + migration (response_json, input_signature, etc.)
-├── QQ. Compute-input-signature SQL aggregate
-├── RR. /ai/refresh + polling endpoint /ai/status (or SSE — see §4)
-├── SS. Per-(user_id, type) asyncio.Lock dict
-├── TT. Alternative-brewer callout logic (data-derived, in ai_service)
-├── UU. Sweet-spots AI prose (generated alongside coffee rec)
-├── VV. Paste-and-rank route (no caching, no scheduling)
-├── WW. Cold-start empty state (<3 sessions)
-└── XX. Graceful "AI not configured" when no provider enabled
+- Zero impact on `brew_sessions`. All existing analytics, AI signature computation, and scheduler logic are unaffected. Verified: `compute_input_signature()` queries `BrewSession` with no knowledge of any other table except `Bag` via outer join.
+- Zero impact on `compute_input_signature` — cafe logs do not feed AI recommendations by default. If a future milestone wants to incorporate cafe ratings into AI signals, that is an explicit design decision with a clear migration path, not an accident.
+- Per-user scoping is trivial: `user_id RESTRICT FK` mirrors `brew_sessions.user_id`.
+- The brew session fast path (prefill, sub-30s logging) is untouched.
+- Migration is purely additive: one new `CREATE TABLE cafe_logs` with no changes to existing tables.
+- Admin user-delete logic needs one additional `DELETE FROM cafe_logs WHERE user_id = ...` before deleting the user — same pattern as brew_sessions (which also uses RESTRICT and requires explicit handling before delete).
 
-PHASE 8 — Scheduler + backups (operational)
-DEPENDS ON: PHASE 7 (AI service needs to exist before its scheduled job)
-├── YY. services/scheduler.py — APScheduler AsyncIOScheduler, started in lifespan
-├── ZZ. nightly_ai_refresh job (00:00 APP_TIMEZONE, signature check, per-user loop)
-├── AAA. services/backup.py — pg_dump subprocess + photos tarball + retention
-├── BBB. nightly_backup job (02:00 APP_TIMEZONE)
-└── CCC. Admin backup UI (list, download, "Run backup now")
+### Recommended schema
 
-PHASE 9 — Admin
-DEPENDS ON: PHASE 2 (auth) + PHASE 3 (settings + encryption)
-├── DDD. /admin/users (CRUD)
-├── EEE. /admin/api-credentials (encrypted at rest, last-4 display)
-├── FFF. /admin/settings (value_type-driven inputs)
-├── GGG. /admin/system (versions, storage usage, session count)
-└── HHH. /admin/backups (depends on PHASE 8)
+```python
+class CafeLog(Base):
+    """A cafe or out-of-home coffee tasting. Per-user; no catalog FK. (v1.2)"""
+    __tablename__ = "cafe_logs"
 
-PHASE 10 — Search
-DEPENDS ON: PHASE 4 + PHASE 5
-├── III. Decide: Postgres FTS (tsvector) vs pg_trgm — prototype both, pick one
-├── JJJ. Index migration + search query builder in services/search.py
-├── KKK. /search route + live results partial
-└── LLL. Top-nav search input + mobile full-screen sheet
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    # Free text -- no FK to coffees; that is the point of this entity
+    brand: Mapped[str | None] = mapped_column(Text, nullable=True)       # roaster/cafe name
+    coffee_name: Mapped[str] = mapped_column(Text, nullable=False)
+    brew_method: Mapped[str | None] = mapped_column(Text, nullable=True)  # "V60", "espresso", etc.
+    rating: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)  # 0-5, 0.25 steps
+    notes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    logged_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
 
-PHASE 11 — PWA + responsive polish
-DEPENDS ON: PHASE 6 (home page renders) + most UI in place
-├── MMM. /manifest.json route (or static file with correct content-type)
-├── NNN. /sw.js route with Service-Worker-Allowed: / header
-├── OOO. App-shell precache (base.html, tailwind.css, icons, app/static/js)
-├── PPP. Stale-while-revalidate on the shell
-├── QQQ. Apple touch icon + iOS install meta tags
-├── RRR. Bottom-tab nav at <768px, top nav at ≥768px
-├── SSS. Card-list collapse for tables on mobile
-├── TTT. Guided Brew Mode (full-screen timer, wake lock, audio + haptic)
-└── UUU. Playwright smoke test at 375×667 and 390×844
-
-PHASE 12 — Hardening + smoke tests
-├── VVV. Pytest smoke covering acceptance-criteria happy path
-├── WWW. Unit tests: ai_service signature, encryption round-trip, analytics queries, CSRF middleware
-├── XXX. Audit-log review (auth events captured, no PII)
-├── YYY. CSP audit — confirm no inline-script-without-nonce in production templates
-└── ZZZ. README + .env.example + NGINX server block example
+    __table_args__ = (
+        Index("ix_cafe_logs_user_logged_at", "user_id", text("logged_at DESC")),
+    )
 ```
 
-**Why this order, in one sentence per phase:**
-- 0 → 1: middleware must exist before routers can rely on session/CSRF/CSP.
-- 1 → 2: auth needs session middleware.
-- 2 → 3: encryption + settings are tested infrastructure other features depend on.
-- 2 → 4: catalog routes need auth.
-- 4 → 5: brew sessions reference catalog entities.
-- 5 → 6: analytics aggregates sessions.
-- 6 → 7: AI consumes analytics-style queries and writes a card alongside the page.
-- 7 → 8: scheduled nightly AI refresh needs the AI service to exist.
-- 4 + 5 → 10: search indexes catalog + own sessions.
-- 6 + UI bulk → 11: PWA caches the shell that the UI has settled into.
+**FK asymmetry:** `user_id` uses `RESTRICT` (same as `brew_sessions.user_id`). No other FKs.
+
+**Intentionally omitted:** `coffee_id`, `bag_id`, `recipe_id`, `brewer_id`, `grinder_id`, `dose_grams`, `water_grams`, `tds_pct`, `extraction_yield_pct` — the brew session parameters that cafe quick-rate explicitly does not capture.
+
+**Analytics isolation (hard boundary):** Cafe logs do NOT feed `compute_input_signature`, `get_top_coffees`, `get_preference_profile`, `get_sweet_spots`, or any other analytics function. This is correct by design and must remain documented.
 
 ---
 
-## 4. Reverse Proxy + PWA Considerations
+## Q3: AI Research-a-Coffee + Predict Rating
 
-Real, specific, with config rather than handwaving.
+### Where it lives
 
-### 4.1 Uvicorn proxy headers — required flags
+**New function in `app/services/ai_service.py`: `research_coffee_predict_rating()`**
 
-```bash
-# Inside the container, in entrypoint.sh after migrations run:
-exec uvicorn app.main:app \
-  --host 0.0.0.0 \
-  --port 8080 \
-  --workers 1 \
-  --proxy-headers \
-  --forwarded-allow-ips "127.0.0.1"
+Do not extend the existing `regenerate()` entry point. That function runs the nightly bundle (coffee rec + sweet spots per user) and has its own signature-based skip logic, throttle, and advisory lock. `research_coffee_predict_rating` is on-demand, triggered by the user — follow the pattern of `generate_equipment_rec()` which is already on-demand and not nightly.
+
+Do not create a separate `ai_predict_service.py`. The AI provider abstraction, credential loading, client builders (`_build_anthropic_client`, `_build_openai_client`), the structured output pattern (`_project_tool_use_input`), and `_write_recommendation_row` all live in `ai_service.py`. Splitting would require reimporting most of that infrastructure into a new module. Follow the `generate_equipment_rec` pattern exactly.
+
+### How it uses analytics.py as input signal
+
+`analytics.py` functions are already pure read-only SQL: call them directly with no modification.
+
+```python
+async def research_coffee_predict_rating(
+    user_id: int,
+    coffee_name: str,
+    roaster_name: str | None,
+    db: Session,
+) -> tuple[str, AIRecommendation | None]:
+    # Read preference signals (all existing functions, no changes)
+    profile = analytics_service.get_preference_profile(db, user_id)
+    top_coffees = analytics_service.get_top_coffees(db, user_id)
+    flavor_descriptors = analytics_service.get_flavor_descriptors(db, user_id)
+    # Build prompt from preference data + coffee name/roaster
+    # Call provider with web_search (to look up the specific coffee) + structure_output
+    # Persist via _write_recommendation_row(..., rec_type="coffee_predict", ...)
+    # Return (status, row)
 ```
 
-- `--proxy-headers`: tells uvicorn to honor `X-Forwarded-Proto` and `X-Forwarded-For` from the trust list.
-- `--forwarded-allow-ips`: the **list of upstream IPs uvicorn will trust to set those headers**. From inside the container, NGINX on the Docker host appears via the Docker bridge gateway — but if you publish port 8080 only on `127.0.0.1` (i.e. `ports: ["127.0.0.1:8080:8080"]` in docker-compose.yml), the request enters the container with source IP `127.0.0.1`. That's what to trust.
-- If you bind on `0.0.0.0:8080` instead, the source IP is the Docker bridge gateway (commonly `172.17.0.1`); set the trust list accordingly. **Recommendation: bind to `127.0.0.1:8080:8080` in compose** so the container is never directly reachable from the public internet.
+### New Pydantic schema (add to `app/services/ai_schemas.py`)
 
-`TRUSTED_PROXY_IPS` env var should be a comma-separated string parsed into the uvicorn flag in `entrypoint.sh` so deployment topology can change without a code change.
+```python
+class CoffeePredictSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    predicted_rating: float        # 0.0-5.0
+    confidence: str                # "high" | "medium" | "low"
+    rationale: str                 # 2-3 sentences citing user preference signal
+    web_sources_used: list[str]    # URLs the LLM found for this specific coffee
+```
 
-**Source:** [Uvicorn Settings](https://uvicorn.dev/settings/) — proxy-headers and forwarded-allow-ips, [FastAPI Behind a Proxy](https://fastapi.tiangolo.com/advanced/behind-a-proxy/), [DeepWiki: Uvicorn Proxy Headers Middleware](https://deepwiki.com/encode/uvicorn/7.2-proxy-headers-middleware).
+### `recommendation_type` value
 
-### 4.2 FastAPI `root_path` — when needed
+Use `"coffee_predict"` as the `recommendation_type` string — the existing `ai_recommendations` table already uses text-as-enum for this column (values: `"coffee"`, `"equipment"`, `"paste_rank"`, `"sweet_spots"`). No schema change needed. Cost telemetry works automatically via the existing JSONB `response_json` + token columns. Persist with `generated_by="manual_refresh"`.
 
-`root_path` is only needed if the app is mounted at a subpath like `/snobbery/` rather than at a hostname's root. The spec says NGINX proxies a hostname to `localhost:8080`, which means **the app IS at root**, which means **`root_path=""` (default) is correct**. Do **not** set `root_path` unless you later move to a subpath deployment.
+### Route placement (add to `app/routers/ai.py`)
 
-If a future deployment puts this behind `/coffee/`, the change is:
-1. NGINX: `location /coffee/ { proxy_pass http://localhost:8080/; ... }`
-2. App: `FastAPI(root_path="/coffee")` — uvicorn `--root-path` flag also works.
+- `GET /ai/research` — page shell, renders `pages/ai_research.html` (form: coffee name + optional roaster; optionally shows user's wishlist so they can click "research this" on a wishlist entry)
+- `POST /ai/research` — calls `research_coffee_predict_rating()`, returns HTMX fragment (`fragments/ai/predict_result.html`) with predicted rating + rationale + web sources + "Add to wishlist" button
 
-### 4.3 NGINX server block — required headers
+The result card includes a "Add to wishlist" button that calls `POST /ai/wishlist/add` — the existing endpoint, unchanged.
 
-For documentation; the README must include a working example. Critical lines:
+### Throttle
 
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
+Apply the same 5-minute per-user throttle. Recommend sharing the existing `_THROTTLE` dict (any AI call within 5 minutes blocks another) — cost control simplicity at household scale. The `_evict_stale_throttle` call already runs on every throttle check.
 
-    # For SSE / long-running AI responses:
-    proxy_buffering off;
-    proxy_read_timeout 60s;
+---
+
+## Q4: IA Changes — Admin Off Bottom Nav, AI Tab In, PWA Implications
+
+### Current bottom nav (verified from `app/templates/base.html`)
+
+```
+Home | Log | Config | Admin (conditional: only if request.state.user.is_admin)
+```
+
+Four tabs. Admin tab is conditionally rendered via `{% if request.state.user.is_admin %}`. Top nav (>=768px) has the same conditional Admin link.
+
+### Target bottom nav for v1.2
+
+```
+Home | Log | Config | AI
+```
+
+Admin moves off the bottom nav to the Config hub page. AI replaces it as the fourth tab. All authenticated users see the AI tab (no is_admin condition).
+
+### Changes required — explicit file list
+
+**`app/templates/base.html` (MODIFIED):**
+- Bottom nav: remove the Admin tab block (`{% if request.state.user.is_admin %}<a href="/admin">Admin</a>{% endif %}`). Replace with unconditional AI tab (`<a href="/ai">AI</a>`).
+- Top nav links section: remove `{% if request.state.user.is_admin %}<a href="/admin">Admin</a>{% endif %}`. Add `<a href="/ai">AI</a>` to the nav links alongside Home, Log, Config.
+
+**`app/templates/pages/config_hub.html` (MODIFIED):**
+Add an Admin card in the grid, conditionally rendered for `is_admin`. The grid currently has 5 cards (Coffees, Equipment, Recipes, Roasters, Flavor Notes); Admin becomes a sixth card. Pattern is identical to existing cards:
+```html
+{% if user.is_admin %}
+<a href="/admin" class="flex items-center gap-3 rounded-xl border ... same style as others ...">
+  <!-- shield icon SVG -->
+  <span class="text-base font-semibold text-espresso-900 dark:text-cream-100">Admin</span>
+</a>
+{% endif %}
+```
+The config_hub handler already receives `user` in context — no handler change needed.
+
+**`app/static/js/alpine-components/nav-bar.js` (MODIFIED):**
+```javascript
+get activeTab() {
+  const p = window.location.pathname;
+  if (p === '/' || p.startsWith('/home')) return 'home';
+  if (p.startsWith('/brew')) return 'brew';
+  if (p.startsWith('/config') || p.startsWith('/coffees') ||
+      p.startsWith('/equipment') || p.startsWith('/recipes') ||
+      p.startsWith('/roasters') || p.startsWith('/flavor-notes')) return 'config';
+  if (p.startsWith('/ai')) return 'ai';
+  // '/admin' intentionally removed -- Admin is no longer a bottom-nav item
+  return '';
 }
 ```
 
-`proxy_buffering off` matters specifically if you choose SSE for AI streaming. Without it, NGINX buffers the whole response before sending it, defeating SSE. If you stick with HTMX polling, buffering is fine.
+**`tests/test_nav.py` (MODIFIED):**
 
-`Strict-Transport-Security` is set at the NGINX layer per spec — leave it out of the app.
+Current test assertions that will break or need updating:
 
-### 4.4 Session cookie + SameSite + reverse proxy
+1. `test_non_admin_home_has_no_admin_link`: Currently asserts `'href="/admin"' not in r.text` on the home page response. After the nav change this assertion will still pass on the home page (admin link is removed from nav). However, the admin link still appears on `/config` for admin users. The test remains valid but its intent should be clarified in the docstring.
 
-The session cookie is `HttpOnly; Secure; SameSite=Lax`. With reverse proxy:
+2. `test_admin_home_has_admin_link`: Currently asserts `'href="/admin"' in r.text` on the home page (`GET /`). This test WILL FAIL after the change because the home page response will no longer contain `href="/admin"` in the top or bottom nav. Update to assert on `GET /config` for admin user instead.
 
-- **`Secure` requires HTTPS.** If uvicorn doesn't believe the request is HTTPS (because `--proxy-headers` isn't on, or trust list is wrong, or NGINX isn't setting `X-Forwarded-Proto: https`), the browser sets the cookie over the apparent-HTTP connection but then refuses to send it back because the public URL is HTTPS. Result: invisible auth failures, redirect loops. **The single most common reverse-proxy bug.** Test path: GET `/setup` over public HTTPS, create user, POST `/login`, confirm cookie persists.
-- **`SameSite=Lax` is correct** for an app that's mostly internal links. It blocks cookies on cross-site POSTs (good CSRF defense layer on top of the explicit CSRF token). If you ever embed Snobbery in an iframe on another origin: don't, but if forced, `SameSite=None; Secure` is required.
+3. New test needed: `test_ai_tab_present_for_authenticated_users` — assert `href="/ai"` appears in any authenticated page response.
 
-### 4.5 CSP nonces + HTMX + Alpine — the inline-script trap
+4. New test needed: `test_config_hub_has_admin_link_for_admin` — assert `href="/admin"` appears in `GET /config` response for an admin user.
 
-The spec mandates a restrictive CSP with no inline scripts. HTMX and Alpine both have known interactions:
+5. New test needed: `test_config_hub_has_no_admin_link_for_non_admin` — assert `href="/admin"` does not appear in `GET /config` for a non-admin user.
 
-- **Alpine.js** uses `new Function()` to evaluate expressions in `x-data`, `x-show`, etc. This requires `'unsafe-eval'` in `script-src` — which **violates the spec's restrictive CSP intent**. The fix is to use the **Alpine CSP build** (`alpinejs/dist/cdn.csp.min.js` instead of the default). It supports almost all of the inline expression syntax but does not allow arbitrary JS in directives. Confirm any custom directives in advance — most everyday Alpine usage still works.
-- **HTMX** has an `htmx.config.inlineScriptNonce` option that auto-injects the page's CSP nonce into any inline scripts HTMX processes from server responses. **This is a security footgun**: it negates the protection the nonce was supposed to provide. Don't enable it unless absolutely necessary. Recommendation: **don't return inline `<script>` tags from HTMX partials.** Keep all JS in `app/static/js/*.js` files and use Alpine's `x-init` / `x-on` attributes for inline behaviors — those still work under Alpine CSP.
-- **Nonce generation**: middleware mints a per-request 16-byte random nonce, attaches to `request.state.csp_nonce`. Jinja `base.html` exposes it via a context processor as `{{ csp_nonce }}` and applies it to every legitimate `<script>` tag the app emits. CSP header: `script-src 'self' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; img-src 'self' data:; …`
+### PWA service worker implications
 
-**Source:** [Alpine.js CSP docs](https://alpinejs.dev/advanced/csp), [HTMX CSP discussion](https://www.sjoerdlangkemper.nl/2024/06/26/htmx-content-security-policy/), [DeepWiki: HTMX CSP and Script Handling](https://deepwiki.com/bigskysoftware/htmx/9.2-csp-and-script-handling).
+The service worker in `app/static/js/sw.js` is content-deterministic:
+- `APP_SHELL` array contains only: `/manifest.json`, `/static/img/icon-192.png`, `/static/img/icon-512.png`, `/static/img/apple-touch-icon.png`, `/static/img/logo-badge.png`. No nav-specific paths.
+- `/` is explicitly NOT precached (CR-02: authenticated shell must not be cached across users).
+- `nav-bar.js` lives under `/static/js/alpine-components/nav-bar.js` — served via `StaticFiles`, caught by the `isStatic` stale-while-revalidate branch.
 
-### 4.6 PWA service worker — scope, location, and update strategy
+**No changes needed to `sw.js` or `manifest.json` for the nav IA change.** The cache-name bump from `build_id.txt` (written unconditionally on every Docker build) will automatically invalidate the stale-while-revalidate cache for `nav-bar.js` on the next rebuild. The modified `nav-bar.js` reaches the browser on the next page load after the cache updates.
 
-- **Scope: the whole app.** The service worker must control every route. The default scope of a service worker is the directory it's served from. If you serve it from `/static/sw.js`, the scope is `/static/` — useless.
-  - **Fix:** serve `sw.js` from `/sw.js` (root path). Add a dedicated route `routers/pwa.py:sw` that returns the file with header `Service-Worker-Allowed: /`. Same for `/manifest.json`. Don't bury either under `/static/`.
-  - Register on the client: `navigator.serviceWorker.register('/sw.js', { scope: '/' })`.
-- **Strategy:** stale-while-revalidate on the app shell (`/`, `/static/css/tailwind.css`, `/static/js/*.js`, `/manifest.json`, icons). **Network-first** on every other GET, **bypass** on every non-GET. This matches the spec's "cached read-only pages — write operations still require connectivity."
-- **Update flow:** the service worker file's bytes act as the cache key for browsers. To force an update, embed a build hash in a comment: `// build: {{ BUILD_HASH }}`. Render `sw.js` via a Jinja template (yes, JS through Jinja) injected with the git SHA at container build time. When a new container deploys, the SHA changes, browsers detect the worker changed, install the new one. The new worker calls `self.skipWaiting()` and clients refresh on next navigation.
-- **Cache versioning:** name the cache `snobbery-shell-v{BUILD_HASH}` so each deploy uses a fresh cache. Worker's `activate` event purges any cache name that doesn't match.
+**QA caution (from project memory `[SW stale cache confounds UI verify]`):** The service worker SWRs `/static/`, so during verification the tester must "Clear site data" (not just bypass cache) to get the updated `nav-bar.js`. This is a testing discipline note, not an architecture change.
 
-**Source:** [MDN Using Service Workers](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers) — covers Service-Worker-Allowed header and scope rules.
-
-### 4.7 PWA + reverse proxy + camera
-
-`<input type="file" accept="image/*" capture="environment">` requires a **secure context** (HTTPS) on mobile. Since NGINX terminates TLS and the app receives `X-Forwarded-Proto: https`, the browser always sees HTTPS. No special config — but confirm during the responsive smoke test.
-
-The `Permissions-Policy: camera=(self)` header from the spec is exactly right for this; it allows the camera on same-origin only.
+The `manifest.json` `start_url: "/?source=pwa"` is unaffected. PWA install flow is unaffected. `pwa_router._BUILD_HASH` derivation is unaffected.
 
 ---
 
-## 5. Concurrency Model
+## Q5: Self-Host Packaging — Prebuilt Image and First-Run Integration
 
-### 5.1 Recommendation
+### Current build flow (operator today)
 
-**One uvicorn worker. Async everywhere FastAPI handlers touch the AI service or any external HTTP call. Synchronous handlers + sync SQLAlchemy session everywhere else.**
+Operator clones repo, runs `docker compose build coffee-snobbery` (multi-stage: Tailwind compile in stage 1, Python runtime in stage 2, pg_client-16 install), then `docker compose up -d`. Requires Docker build toolchain, Tailwind download, build wait (~2 min).
 
-### 5.2 Why one worker
+### Target flow for v1.2
 
-The spec mandates in-process APScheduler. APScheduler in-process with N workers fires every job N times. The spec also assumes module-level in-memory locks (per-user AI lock). Both require single-process.
+Operator pulls prebuilt image from registry (GHCR or Docker Hub), sets env vars in `.env`, runs `docker compose up -d`. No build step.
 
-Household scale (2 users) makes this a non-issue capacity-wise. A single uvicorn worker on a small VPS handles dozens of requests/second on this style of app. The cap is the LLM call latency, not the worker count.
+### Integration points (verified from actual code)
 
-**Document this in the README explicitly so a future operator doesn't `--workers 4` "for performance" and break the scheduler.**
-
-If/when scaling beyond a single household (not in scope), the fixes are:
-- APScheduler → external Postgres-backed job store + leader election OR move scheduled jobs to a separate sidecar container.
-- In-memory locks → Postgres advisory locks (`pg_try_advisory_lock`).
-- Single worker → multiple workers behind uvicorn's own loop.
-
-### 5.3 Async/sync mix — when to use which
-
-| Code path | Mode | Why |
-|---|---|---|
-| Routers calling `services/analytics`, `services/auth`, etc. | **`def` (sync)** | FastAPI runs sync handlers in a threadpool — fine. SQLAlchemy 2.0 sync `Session` is simpler than `AsyncSession` and the DB calls are local + fast. |
-| Routes calling `ai_service.*` | **`async def`** | AI calls are 10–30s with web search. Blocking a worker thread that long is wasteful. The AI service exposes async methods; routes await them. |
-| Routes returning SSE streams (`/ai/stream`) | **`async def`** | `sse-starlette` requires async generators. |
-| Routes that just kick off background work (`/ai/refresh`) | **`async def`** | Uses `asyncio.create_task(...)` to run the AI call without blocking the response. Returns 202 immediately. |
-| `ai_service.compute_input_signature` | **sync** | It's a single SQL aggregate. Wrap in `await asyncio.to_thread(...)` if called from an async context, or just call from a sync helper. |
-| `services/photos.py` (Pillow) | **sync** | Pillow is sync. CPU-bound thumbnail generation runs in the threadpool when called from a sync handler — that's fine. |
-| `services/backup.py` (pg_dump) | **sync** | `subprocess.run`. Called only from APScheduler, never from a request handler. |
-| APScheduler job functions | **async** | `AsyncIOScheduler` runs jobs in the same event loop. AI refresh job is async (it calls ai_service async). Backup job is async but does sync work via `await asyncio.to_thread(run_pg_dump)`. |
-
-**Anti-pattern to refuse:** `async def` handler that calls a sync `Session.execute()`. Blocks the event loop. If a handler must be async (because it awaits something), make sure DB calls go through `await asyncio.to_thread(...)` or use an async SQLAlchemy session for that path. **Do not mix.**
-
-### 5.4 APScheduler specifics — what to set
-
-```python
-# services/scheduler.py
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-scheduler = AsyncIOScheduler(
-    timezone=settings.APP_TIMEZONE,
-    job_defaults={
-        "misfire_grace_time": 60 * 30,   # 30 min — if app was down at fire time, run if it comes up within 30
-        "coalesce": True,                # if we missed N firings, run once not N times
-        "max_instances": 1,              # never run a job in parallel with itself
-    },
-)
+**`entrypoint.sh` (UNCHANGED in behavior):**
+```bash
+alembic upgrade head   # idempotent -- runs on every container start
+exec uvicorn app.main:app --workers 1 ...
 ```
+`alembic upgrade head` is already idempotent. On a fresh database it runs all migrations sequentially and sets up the full schema. On an existing database it runs only the delta since last deployed version. This is exactly correct for a prebuilt image: the operator starts the container, migrations run automatically, zero manual DB setup.
 
-- **`misfire_grace_time`**: if the container was restarting during the scheduled fire, run on next start as long as <30 minutes have passed. After that, skip — wait for the next nightly run. This avoids a 4-hour-late nightly run after a long outage.
-- **`coalesce: True`**: if the container was down for two nightly cycles, run once not twice.
-- **`max_instances: 1`**: if a nightly run takes longer than 24h (it shouldn't, but defensive), the next fire skips.
+**First-run `/setup` flow (UNCHANGED):**
+The `/setup` route in `app/routers/auth.py` gates on zero-users-exist. A brand-new operator hits `https://their-domain.com/setup`, creates the first admin account, redirects to `/login`. Works identically whether the image is built locally or pulled from a registry.
 
-**Start the scheduler in the lifespan**, not in a module side effect:
+**Startup checks (from `app/main.py lifespan`):**
+1. `engine.connect()` + `SELECT 1` — DB smoke check
+2. `encryption_startup_check()` — validates `APP_ENCRYPTION_KEY` format, raises `EncryptionStartupError` on failure → uvicorn exits non-zero → HEALTHCHECK trips → container shows unhealthy
+3. `credentials.rewrap_if_needed(db)` — MultiFernet key rotation
+4. `settings_service.prewarm_cache(db)` — warms settings cache
 
-```python
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    scheduler.start()
-    yield
-    scheduler.shutdown(wait=True)
-```
+All four steps run before uvicorn starts accepting requests. A misconfigured `.env` (bad `APP_ENCRYPTION_KEY`, missing `APP_SECRET_KEY`) surfaces as an unhealthy container within 20 seconds (HEALTHCHECK `--start-period=20s`). This is a good operator experience for a prebuilt image: clear failure, not a silent error.
 
-### 5.5 In-memory AI lock
+**Build pipeline integration points:**
 
-```python
-# services/ai_service.py
-_locks: dict[tuple[UUID, RecType], asyncio.Lock] = {}
-_locks_guard = asyncio.Lock()
+The Dockerfile stage 1 (Tailwind builder) compiles `tailwind.src.css` and writes `app/static/build_id.txt` with a UTC timestamp on every build. Stage 2 `COPY --from=tailwind-builder` pulls both the compiled CSS and `build_id.txt` into the runtime image. The service worker `CACHE_NAME` is set from `build_id.txt` via `pwa_router._get_build_hash()`. A prebuilt image correctly includes this file — the Dockerfile already handles it.
 
-async def _get_lock(user_id: UUID, rec_type: RecType) -> asyncio.Lock:
-    async with _locks_guard:
-        if (user_id, rec_type) not in _locks:
-            _locks[(user_id, rec_type)] = asyncio.Lock()
-        return _locks[(user_id, rec_type)]
-```
+**`docker-compose.yml` changes for self-host distribution:**
 
-Single-process means a single `_locks` dict. The scheduler's nightly run and a user's manual refresh contend on the same `asyncio.Lock` and exactly one wins. Document the single-worker requirement in the docstring of `_get_lock` so the constraint is visible at the code site.
+The compose file must switch from `build: .` to `image: ghcr.io/owner/snobbery:latest` (or a pinned semver tag) for the `coffee-snobbery` service. A separate `docker-compose.build.yml` or `docker-compose.override.yml` should be provided for contributors who need to build locally. The operator compose file should contain no build context.
+
+**`.env` documentation:**
+
+`.env.example` already documents all required env vars. The new deploy doc must guide the operator through generating `APP_SECRET_KEY` (random 32-byte hex) and `APP_ENCRYPTION_KEY` (valid Fernet key from `cryptography.fernet.Fernet.generate_key()`). These two are the only non-obvious secrets — all others (`POSTGRES_*`, `TRUSTED_PROXY_IPS`, `APP_TIMEZONE`) are self-explanatory.
+
+### Suggested build order for v1.2 phases
+
+Dependencies must be respected; otherwise build here is "build/phase order for milestone planning":
+
+1. **Cafe log data model** (`p12_cafe_logs.py` migration + `CafeLog` model) — purely additive, no existing table changes. First because other feature work (cafe router, analytics isolation) depends on the schema existing.
+
+2. **Nav / IA restructuring** (`base.html`, `config_hub.html`, `nav-bar.js`, admin link relocation, nav test updates) — no data model dependency; unblocks AI page and mobile audit work. Do early.
+
+3. **AI page consolidation** (new `GET /ai` page shell + `pages/ai.html`, move/rename fragments, update `home.html` and `home.py`) — depends on nav change so AI tab exists. Fragment URL migration can be phased: keep old URLs working via redirect if needed.
+
+4. **AI research-a-coffee + predict rating** (new `research_coffee_predict_rating()` in `ai_service.py`, new `CoffeePredictSchema`, new routes in `ai.py`, new templates) — depends on AI page existing (it lives there). Uses `analytics.py` unmodified.
+
+5. **Self-host packaging** (compose file update, GHCR CI workflow for image push, deploy docs, README update, NPM setup guide) — can be done in parallel with features; no feature dependency. The Dockerfile is already correct.
+
+6. **v1.1 debt cleanup** (G-01 VPS chown, T-INFRA-1 test isolation, human UAT sign-offs) — interleave throughout; G-01 is a VPS one-time operation, T-INFRA-1 is test-code-only.
 
 ---
 
-## 6. Open Questions
+## Component Inventory: New vs Modified vs Unchanged
 
-1. **SSE vs polling for AI streaming.** Recommendation: **start with polling** (simpler, no NGINX buffering issue, easier to debug). Revisit during the AI flow phase. The stack supports both (sse-starlette + htmx-ext-sse already in STACK.md).
-2. **Where to render the CSRF token in HTMX partials.** Each partial swap may need a fresh token. Options: (a) HTMX `hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'` interpolated into every partial — verbose. (b) Single global config in `base.html` reading the cookie value via JS at request time — cleaner. Recommendation: (b), set once via `htmx.config.headers['X-CSRF-Token'] = getCookie('csrftoken')` in a small inline-with-nonce script in `base.html`.
-3. **Photo route caching with private content.** If a future feature shares photos between users, the `Cache-Control: private` might bite. For v1 the catalog is shared but the user is always authenticated, so private caching is fine and avoids stale shared caches.
-4. **Backup file location vs Docker volume layout.** Spec says `/app/data/backups`. Confirm the named volume `coffee_snobbery_backups` is mounted there in compose. Also confirm photos at `/app/data/photos` (named volume `coffee_snobbery_photos`). Trivial but explicit in the compose plan-phase.
-5. **Search choice deferred.** STACK.md surfaces this as plan-phase decision. Both options are pure-Postgres. No architecture impact — both go through `services/search.py`.
-6. **Service-worker update during long-running session.** If a user is mid-Guided-Brew when a new SW activates, the page is forcibly refreshed → timer state is lost. Mitigation: don't activate during navigation if `document.visibilityState === 'visible'` and a `data-brew-active` attribute is set on `<body>`. Implementation detail for PHASE 11.
+### NEW components (v1.2 additions)
+
+| Component | Type | Notes |
+|-----------|------|-------|
+| `app/models/cafe_log.py` | New model | Separate entity for cafe quick-rate |
+| `app/migrations/versions/p12_cafe_logs.py` | New migration | `CREATE TABLE cafe_logs (...)`, additive only |
+| `app/routers/cafe.py` | New router (suggested) | CRUD for cafe_logs; OR extend `brew.py` with a `/cafe` prefix sub-router |
+| `app/templates/pages/ai.html` | New template | AI destination page shell |
+| `app/templates/pages/ai_research.html` | New template | Coffee research + predict form/result |
+| `app/templates/fragments/ai/recommendation_hero.html` | New fragment | Relocated hero card for AI page (may rename from `fragments/home/ai_rec_hero.html`) |
+| `app/templates/fragments/ai/equipment_rec.html` | New fragment | Relocated equipment rec (optional rename from `fragments/home/`) |
+| `app/templates/fragments/ai/predict_result.html` | New fragment | Coffee predict result card |
+| `app/services/ai_schemas.py: CoffeePredictSchema` | New Pydantic class | Structured output for predict flow |
+
+### MODIFIED components (v1.2 changes to existing code)
+
+| Component | What Changes |
+|-----------|-------------|
+| `app/routers/ai.py` | Add `GET /ai` page shell, `GET /ai/cards/recommendation` (five-branch state machine), `GET /ai/research` page, `POST /ai/research` handler |
+| `app/routers/home.py` | Add `GET /ai/cards/recommendation`; strip `get_latest_recommendation` from `card_sweet_spots()`; update/remove AI hero card endpoint |
+| `app/templates/pages/home.html` | Remove AI rec hero section; add teaser or link to /ai page |
+| `app/templates/fragments/home/sweet_spots.html` | Remove `sweet_spots_prose` rendering block |
+| `app/templates/base.html` | Bottom nav: Admin tab -> AI tab; top nav: remove conditional Admin link, add AI link |
+| `app/templates/pages/config_hub.html` | Add admin card (conditional on `user.is_admin`) in catalog grid |
+| `app/static/js/alpine-components/nav-bar.js` | Add `/ai` path -> `'ai'` tab; remove `/admin` -> `'admin'` mapping |
+| `app/services/ai_service.py` | Add `research_coffee_predict_rating()` function |
+| `app/services/ai_schemas.py` | Add `CoffeePredictSchema` |
+| `tests/test_nav.py` | Update `test_admin_home_has_admin_link` (now checks /config, not /); add 3 new nav tests |
+| `docker-compose.yml` | Switch `build: .` to `image: ghcr.io/...` for self-host distribution |
+
+### UNCHANGED components (confirmed by code reading)
+
+| Component | Why Unchanged |
+|-----------|--------------|
+| `app/services/analytics.py` | Pure read-only SQL; no changes for any v1.2 feature |
+| `app/services/ai_service.py` (existing functions) | `regenerate`, `generate_equipment_rec`, `rank_pasted_coffees`, `suggest_recipe`, `alt_brewer_callout`, `get_latest_recommendation`, `is_stale`, `in_flight` — all unchanged |
+| `app/services/scheduler.py` | Nightly AI bundle (coffee + sweet_spots rec_types only) unchanged |
+| `app/models/brew_session.py` | Cafe quick-rate uses separate table |
+| `app/models/ai_recommendation.py` | `"coffee_predict"` is just a new string value for `recommendation_type` (already text-as-enum) |
+| `app/services/encryption.py` | Untouched |
+| `app/services/credentials.py` | Untouched |
+| `app/services/settings.py` | Untouched |
+| `entrypoint.sh` | Already correct for auto-migrate-on-start |
+| `Dockerfile` | Already correct for prebuilt image build including `build_id.txt` |
+| `app/static/js/sw.js` | No `APP_SHELL` changes needed for nav IA change |
+| `app/routers/pwa.py` | No changes needed |
+| `app/routers/admin.py` | Admin functionality and routes unchanged; only nav entry point moves |
+| `app/templates/admin_base.html` | Unchanged |
+| All other existing fragment templates | Unchanged except `sweet_spots.html` and `home.html` |
+
+---
+
+## Data Flow: New AI Research + Predict
+
+```
+User fills form on GET /ai/research (coffee name + optional roaster)
+    |
+    v
+POST /ai/research (CSRF-protected, require_user, 5-min throttle)
+    |
+    v
+ai_service.research_coffee_predict_rating(user_id, coffee_name, roaster_name, db)
+    |
+    +-- reads (sync, no changes to these functions):
+    |   analytics.get_preference_profile(db, user_id)
+    |   analytics.get_top_coffees(db, user_id)
+    |   analytics.get_flavor_descriptors(db, user_id)
+    |
+    +-- builds prompt: user profile + "what do you know about [coffee_name] by [roaster_name]?"
+    |
+    +-- async LLM call (Anthropic primary / OpenAI fallback, same pattern as generate_equipment_rec)
+    |   Provider web-searches for the specific coffee + roaster
+    |   Returns CoffeePredictSchema JSON via structure_output tool
+    |
+    +-- _write_recommendation_row(db, user_id, rec_type="coffee_predict", generated_by="manual_refresh", ...)
+    |
+    v
+HTMX fragment: fragments/ai/predict_result.html
+    - predicted rating + confidence + rationale
+    - web sources used (URLs, autoescaped)
+    - "Add to wishlist" button -> POST /ai/wishlist/add (existing, unchanged)
+```
+
+---
+
+## Architectural Invariants: All Preserved by v1.2 Design
+
+| Invariant | How v1.2 Preserves It |
+|-----------|----------------------|
+| Single uvicorn worker | No new process-level state added; `research_coffee_predict_rating` uses same module-level `_THROTTLE` dict; `_LOCKS` keyed by `(user_id, rec_type)` — adding `"coffee_predict"` is naturally isolated |
+| Auto-migrate on start | `p12_cafe_logs` migration is additive; `alembic upgrade head` in `entrypoint.sh` applies it idempotently on first container start |
+| Nonce-CSP | All new templates extend `base.html`; `RequestContextMiddleware` mints nonce per request; no inline scripts without nonce |
+| Double-submit CSRF | All new POST handlers gated by `Depends(require_user)` and `Depends(get_session)`; `CSRFMiddleware` + `CSRFFormFieldShim` run globally |
+| Signature-based regen | `research_coffee_predict_rating` writes `rec_type="coffee_predict"`, not `"coffee"`. The nightly scheduler iterates `rec_type="coffee"` only (verified in `scheduler.py`). Zero interference |
+| Per-user scoping | `cafe_logs.user_id RESTRICT FK`; all new AI route handlers read `user_id` from `request.state.user.id` exclusively |
+| Cost discipline | On-demand research uses 5-min throttle (same mechanism as `/ai/refresh`); nightly scheduler unchanged; cafe logs do not trigger AI calls |
+| Analytics isolation | `cafe_logs` does not appear in any `analytics.py` function; analytics functions are unchanged |
+| Mobile-first | New pages extend `base.html` with bottom/top nav; test all new pages at 375px |
+| PWA offline shell | No new `APP_SHELL` entries needed; `nav-bar.js` is under `/static/` (SWR branch); `build_id.txt` cache-bust covers the updated file |
+| MultiFernet encryption | AI keys continue to flow through `services/encryption.py`; new predict route uses `credentials_service.get_provider_credential` (same as existing AI routes) |
 
 ---
 
 ## Sources
 
-- [FastAPI Behind a Proxy](https://fastapi.tiangolo.com/advanced/behind-a-proxy/) — `root_path`, X-Forwarded-* trust.
-- [Uvicorn Settings](https://uvicorn.dev/settings/) — `--proxy-headers`, `--forwarded-allow-ips`.
-- [DeepWiki: Uvicorn Proxy Headers Middleware](https://deepwiki.com/encode/uvicorn/7.2-proxy-headers-middleware) — trust-list semantics.
-- [MDN — Using Service Workers](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers) — scope, Service-Worker-Allowed header.
-- [MDN — ServiceWorkerContainer.register()](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/register) — registration scope rules.
-- [Alpine.js CSP docs](https://alpinejs.dev/advanced/csp) — Alpine CSP build, expression evaluator.
-- [HTMX and Content Security Policy](https://www.sjoerdlangkemper.nl/2024/06/26/htmx-content-security-policy/) — nonce injection footgun.
-- [DeepWiki: HTMX CSP and Script Handling](https://deepwiki.com/bigskysoftware/htmx/9.2-csp-and-script-handling) — `inlineScriptNonce` config.
-- [FastAPI Lifespan Events](https://fastapi.tiangolo.com/advanced/events/) — APScheduler start/stop pattern.
+All findings are HIGH confidence — grounded in direct reads of the actual codebase:
 
-**Confidence assessment:**
-- HIGH for component boundaries, request flow, middleware ordering, and the reverse-proxy + service-worker scope guidance (all verified against official docs).
-- HIGH for the single-worker APScheduler rule (canonical pattern documented across multiple sources).
-- HIGH for the CSP + Alpine + HTMX trap (Alpine's own docs are explicit; HTMX footgun documented in their wiki).
-- MEDIUM for the build-order DAG (it's defensible but reflects judgment about phase boundaries — alternative orderings could work).
-- MEDIUM for the SSE-vs-polling recommendation (genuine trade-off; revisit in plan-phase).
+- `app/main.py` — middleware stack order, router registration sequence, lifespan hooks
+- `app/routers/ai.py` — existing AI routes, handler patterns, throttle implementation
+- `app/routers/home.py` — AI rec card polling endpoint (`card_ai_recommendation`), five-branch state machine, `card_sweet_spots` sweet_spots_prose loading
+- `app/routers/config_hub.py` — handler simplicity (no DB queries, user in context)
+- `app/models/brew_session.py` — FK structure (`RESTRICT` on `user_id` and `coffee_id`, `SET NULL` on optional refs), analytics join implications
+- `app/models/ai_recommendation.py` — `recommendation_type` text-as-enum pattern, JSONB `response_json`, cost telemetry columns
+- `app/models/wishlist_entry.py` — per-user per-source pattern for reference
+- `app/services/ai_service.py` — `regenerate()` flow, `generate_equipment_rec()` on-demand pattern, `_write_recommendation_row`, `_LOCKS`, `_THROTTLE`, `_evict_stale_throttle`
+- `app/services/analytics.py` — `compute_input_signature()`, all analytics functions, pure-SQL-no-side-effects guarantee
+- `app/services/scheduler.py` — nightly job rec_type scope (`"coffee"` + `"sweet_spots"` only)
+- `app/templates/base.html` — full nav structure (bottom + top), Alpine component loading order, `{% if request.state.user.is_admin %}` guards
+- `app/templates/pages/config_hub.html` — catalog grid card pattern, existing Admin/export links
+- `app/static/js/alpine-components/nav-bar.js` — active tab path matching logic
+- `app/static/js/sw.js` — `APP_SHELL` array contents, cache strategy (SWR vs network-first)
+- `app/routers/pwa.py` — `build_id.txt` hash derivation, `_BUILD_HASH` module var
+- `entrypoint.sh` — `alembic upgrade head` + `--workers 1`
+- `Dockerfile` — multi-stage build, `build_id.txt` timestamp write, stage-2 `COPY --from`
+- `tests/test_nav.py` — existing test assertions verbatim (admin link checks, navBar component check)
+- `.planning/PROJECT.md` — v1.2 scope, key decisions table, architectural invariants
+
+---
+
+*Architecture research for: Snobbery v1.2 feature integration into existing FastAPI app*
+*Researched: 2026-05-25*

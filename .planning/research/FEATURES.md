@@ -1,140 +1,494 @@
-# Feature Landscape: Snobbery
+# Feature Research: Snobbery v1.2 New Capabilities
 
-**Domain:** Phone-first self-hosted household coffee log for serious pour-over enthusiasts (multiple brews per day)
-**Researched:** 2026-05-16
-**Source posture:** Spec (`snobbery-gsd-prompt.md`) cross-checked against shipping competitors — Beanconqueror, Filtru, Bloom, Brewd, iBrewCoffee, BeanBook, Extraction, Tasting Grounds, Brew Logs, Coffee Book, Press, Angels' Cup, Fellow Aiden, Trade Coffee, Crema. Goal: surface gaps and UX traps, not restate spec.
-
----
-
-## 1. Table Stakes — Covered by Spec (with UX traps to defuse)
-
-| Feature | UX trap | Mitigation |
-|---|---|---|
-| Add brew session form (12+ fields) | "Too many fields" is the #1 cited reason competitors get abandoned (Press, BeanBook reviews). Single-scroll-with-prefill is the right call — but only if prefill is visibly indicated. | Show prefilled values as muted/ghost text or with a "from last brew" pill so the user trusts what's there and only edits deltas. Otherwise users re-type everything "to be safe" and rage-quit. |
-| Roaster + flavor note autocomplete with create-on-save | Mobile keyboards aggressively autocorrect — "Onyx" becomes "Onyx Coffee Roasters" or "onyx" (lowercase) before user notices. Creates fragmentation in the very table you're trying to dedupe. | Case-insensitive match (citext is in spec — good). Also: when a new entry is about to be created, prompt "Add 'onyx coffee' as a new roaster?" instead of silent-creating. The spec's "type new value creates on save" is the trap door if there's no confirmation. |
-| Tag input for flavor notes (comma/enter to commit) | Mobile-keyboard comma is buried two layers deep on iOS. "Enter" inserts a newline in some browsers if the input is a textarea. | Use a single-line input, commit on `enter` AND `space-after-comma`, AND tap-to-add from autocomplete suggestion chips. Make sure the keyboard has a visible "Done" key. |
-| Photo upload with `capture="environment"` + client-side downscale | iOS Safari ignores `capture` if the file input is hidden via CSS in some HTMX swap orders. EXIF orientation handling — if you downscale via Canvas you'll silently rotate landscape photos on some Android devices. | Test on iOS 17/18 Safari standalone PWA mode (different from in-Safari). Read EXIF orientation before drawing to canvas; bake rotation in. Spec already says strip EXIF — strip *after* baking. |
-| Rating 0–5 in 0.25 steps, thumb-operable | Slider with 21 discrete steps is hard to land on a thumb. Star-with-quarter-fills is visually noisy. | Recommend hybrid: large tap-on-star (full + half) for fast input + a "+/- 0.25" nudge for power users. Quarters are a power-user need; defaulting to halves is fine for 90% of brews. |
-| LocalStorage draft persistence | **Critical iOS trap**: WebKit ITP clears localStorage after 7 days of no interaction with the site. For an installed PWA, the timer resets on each launch, so this is mostly OK *if installed*. In-browser users will lose drafts. Also: localStorage is cleared when iOS device runs low on storage. | Two safeguards: (1) save draft to server on input blur for logged-in users (small POST every 2–3s debounced); (2) only show "we restored your draft" prompt — don't silently overwrite a fresh form, because users will think the form is broken. |
-| Guided Brew Mode wake lock | **Critical iOS trap**: Wake Lock API works in Safari 16.4+ in-browser, but until very recently was broken in installed PWAs (WebKit bug 254545). | Detect support, fall back to: a) keep a silent audio loop playing (legacy iOS wake-lock hack), or b) NoSleep.js. At minimum, warn user "screen may sleep on your device" with a settings toggle to disable auto-lock. Do NOT assume wake lock works. |
-| Quick re-log ("Brew again") | Spec is correct — this is the highest-frequency action when working through a bag (mirrors iBrewCoffee's "duplicate" and Coffee Book's long-press-clone). Trap: which fields to clear vs keep is opinionated. Spec gets it right (clear rating/notes/observed flavor; keep everything else). | Protect this scope — don't let scope creep add a "smart re-log" that tries to vary one parameter. Keep it dumb and fast. |
-| Days-off-roast computed at query time | Spec gets this right (not stored). Trap: if `roast_date` is null, UI must show "—" cleanly, not "NaN days" or "since the dawn of time". | Render `roast_date` as required when adding a coffee but nullable in schema (so user can save and come back). Show a yellow nudge on coffee detail page if missing. |
-| Sweet spots (origin × process × brewer × recipe) | Trap: with 2 users × <50 sessions, GROUP BY HAVING min_sessions=3 will return empty for weeks. Empty state will dominate the home page early. | Show a progress meter: "You've logged 12 sessions across 4 origins. Sweet spots unlock with 3+ sessions per combination." Don't just show "no data". |
-| Global search | Trap: live search on every keystroke (even debounced 250ms) hammers the DB and feels janky on a 3G phone. Spec is reasonable but watch for trigram index bloat at scale. | Don't query for <3 characters. Return only top 5 per entity type. |
-| Nightly AI regen via signature hash | Trap: signature based only on `brew_session_count + max(updated_at) + equipment/recipe counts` misses the case where a user *edits* a session (rating change) — `updated_at` catches it, good. But misses: if they archive a coffee, signature doesn't change. | Add `coffees_archived_count` or `coffees_active_count` to the signature. Otherwise a recently archived coffee can still be re-recommended. |
+**Domain:** Self-hosted household coffee log, pour-over-primary, 2-user, phone-first
+**Researched:** 2026-05-25
+**Confidence:** HIGH (Beanconqueror sourced from repo + official site); MEDIUM (cafe quick-rate and AI predict-rating modeled from competitor UX + design reasoning)
 
 ---
 
-## 2. Table Stakes — Missing from Spec
+## Scope of this Document
 
-| Feature | Why it matters for this audience | Complexity | Fit for v1? |
+This is a v1.2-specific research artifact focused on three new capabilities proposed for the milestone:
+
+1. Beanconqueror feature parity audit — what to adopt, adapt, or skip
+2. Cafe quick-rate — logging a coffee you did not brew yourself
+3. AI research-a-coffee + predict-rating — predict a user's rating for a coffee they haven't brewed yet
+
+Existing v1.1 features are already built. This document does not propose rebuilding them.
+
+---
+
+## Section 1: Beanconqueror Feature Parity Audit
+
+### Source inventory
+
+Beanconqueror is an open-source Ionic/Angular mobile coffee tracker (iOS + Android).
+Repository: https://github.com/graphefruit/Beanconqueror
+Changelog: https://beanconqueror.com/changelog/
+Data/tracking page: https://beanconqueror.com/data-tracking/
+
+### Complete feature inventory with Snobbery fit judgment
+
+#### Bean / Bag Management
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Coffee catalog with roaster info | Name, origin, process, roaster, variety, altitude, notes | **Already exists** (shared catalog: coffees + roasters tables) | ALREADY SHIPPED | v1.1 |
+| Bag-as-instance (per-roast-date purchases) | Each purchase is a separate bag with its own roast date, weight, open/finish dates | **Already exists** (bags table, v1.1 Foundation) | ALREADY SHIPPED | v1.1 migration 1 |
+| Bag depletion / archive | Track remaining weight; "finish" a bag to archive it, leaving the coffee row intact for reorders | **Already exists** (archived flag on bags) | ALREADY SHIPPED | v1.1 |
+| Running total / inventory weight | Track grams remaining per bag against a starting weight; alert when low | **Partially built** — weight_grams column exists; no "low stock" alert or running depletion UI | SKIP FOR v1.2 | Inventory management explicitly deferred to v2 in PROJECT.md. Two-user household; bags run out fast enough that alerts add complexity without value. |
+| Freeze/unfreeze portions | Track sub-portions of a bag in the freezer with separate open dates | SKIP | Anti-feature for Snobbery's minimalist identity. Real use case for competition-circuit espresso folks, not pour-over households. |
+| Purchase price / FOB price tracking | Price paid per bag, cost-per-brew analytics | **Already exists** (coffees.price_usd; cost-per-brew derived) | ALREADY SHIPPED (price field) | v1.1 analytics |
+| Buy date / best-by date tracking | Date bag purchased; best-before date | SKIP | Roast date is the signal for pour-over. Best-by is marketing; days-off-roast already surfaces this. Buy date adds no analytics value for household use. |
+| QR code / NFC scanning to import bean data from roasters | Scan roaster-printed QR on bag packaging to auto-populate catalog entry | SKIP | Requires roaster partnership ecosystem Beanconqueror has built. Not available for arbitrary specialty roasters. Brittle for a two-user household with a rotating roster of indie roasters. Beanconqueror FAQ notes the ecosystem is limited to partner roasters. |
+| Bean favoriting + filtering | Star a coffee as favorite; filter catalog by favorites | ADAPT — map to wishlist or a "house staple" flag | DEFER | Two-user household; the catalog is small enough to navigate without filtering. Wishlist is already built (v1.1). Revisit if catalog exceeds 50 coffees. |
+| Roasting section (green bean + roast batch tracking) | Log green bean purchases, track roast profiles through the roasting process | SKIP | Out of domain. Neither user is a home roaster. Beanconqueror added this for prosumer users. Hard skip. |
+| Package-level rating | Rate the whole bag/coffee at purchase vs per-session rating | SKIP | The existing per-session rating aggregation already serves this purpose via analytics. A separate bag-level rating adds data duplication. |
+
+#### Brew Tracking Parameters
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Core brew params (dose, water, grind, time) | All four captured with freetext grind setting | **Already exists** | ALREADY SHIPPED | v1.1 |
+| First drip timing | Time from start to first drops falling | ADAPT as optional field | CONSIDER | Medium complexity (single nullable int column). Useful signal for pour-over — indicates bloom saturation and grind consistency. Low-friction add if it fits in the brew form without crowding. |
+| Bloom time / bloom water | Separate tracking of pre-infusion bloom: amount poured, duration | ADAPT as optional field | CONSIDER | Same reasoning as first drip. Bloom is the primary quality lever for most pour-over recipes. One nullable int column (bloom_duration_sec) and one nullable numeric (bloom_water_grams). |
+| Yield / brew-out weight | Weight of liquid in the cup after brewing | **Already exists** (brew_sessions.yield_grams per v1.1 spec) | ALREADY SHIPPED | v1.1 |
+| TDS and extraction yield | Refractometer TDS%; computed EY% from dose/yield/TDS | **Already exists** (tds_pct, extraction_yield_pct columns, v1.1) | ALREADY SHIPPED | v1.1 |
+| Brew ratio (live display) | Dose:water ratio displayed reactively in form | Spec calls for Alpine.js reactive ratio display | ALREADY SHIPPED | v1.1 (Alpine.js reactive field) |
+| 30+ customizable brew parameters | App has a parameter system where users can enable/disable which fields show, in which order | SKIP | Over-engineering for a 2-user household. The single-scroll form with sensible defaults already optimizes for sub-30s re-log. Per-user parameter ordering would add admin complexity for zero gain. |
+| Beverage-level cupping / SCA aroma scoring | Structured cupping evaluation using SCA categories (fragrance, aroma, flavor, aftertaste, acidity, body, balance, overall) | SKIP | Snobbery's rating is intentionally simple (0-5, 0.25 steps) + free-text flavor notes from a shared vocabulary. SCA cupping is a professional workflow, not a home-brewer-at-the-kettle workflow. It would compete with and confuse the existing rating + flavor note model. |
+| Brix measurement / TDS from brix | Convert refractometer Brix reading to estimated TDS | SKIP | Edge case. The TDS field already accepts direct TDS%; brix conversion is a niche within a niche. |
+| Per-step pour logging (multiple pours timed) | Log each pour separately (pour 1: 50g at 0:30, pour 2: 100g at 1:30) | CONSIDER as stretch | DEFER to v1.3 | Medium complexity. Genuinely valuable for Tetsu Kasuya-style multi-pour analysis, but adds significant form complexity. Phase it if Guided Brew Mode gets a multi-step timer (natural coupling point). Not a v1.2 priority. |
+
+#### Brew Timer
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Basic countdown / count-up timer | Start/stop timer visible during brewing | **Already exists** (Guided Brew Mode, v1.1) | ALREADY SHIPPED | v1.1 |
+| Background timer (continues when phone sleeps) | Timer keeps running even if screen goes dark | ADOPT | HIGH value. Kettle-side use means the phone WILL sleep. The v1.1 implementation should be verified against iOS background timer behavior. If not already using a Web Worker timer, this is a real gap to plug in Guided Brew Mode polish. Complexity: LOW if using a Web Worker (system clock-based, survives sleep); HIGH if using setInterval. |
+| Auto-start timer on weight detection | BLE scale triggers timer start when first grams detected | SKIP | Requires BLE scale integration (anti-feature, see Section 4). |
+| Pressure-threshold timer start | Espresso-specific; pressure reading triggers start | SKIP | Espresso-primary feature; not pour-over relevant. |
+| Phase-based step timer (bloom, pour1, pour2…) | Recipe steps each have their own timer target | CONSIDER | MEDIUM complexity. Snobbery already has Guided Brew Mode — whether it already supports multi-step timers from recipe steps should be verified. If not, this is the natural v1.2 polish direction for Guided Brew Mode. Worth adopting as part of the Guided Brew polish work. |
+| Customizable timer display (hours/min toggle) | Display format options for the running timer | SKIP | Trivial cosmetic; not worth a phase of work. If Guided Brew Mode is polished, this is a one-line change, not a researched feature. |
+
+#### Flow / Pressure Profiling (Bluetooth Scales)
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| BLE scale integration (Acaia, Felicita, Decent, Hiroia, Skale2, Eureka Precisa, Smart Espresso Profiler, Pressensor) | Real-time weight streaming over Bluetooth Web/Native | SKIP | Anti-feature for Snobbery. Web Bluetooth is unreliable across PWA contexts. Pour-over weights are slow enough to enter manually. This is Beanconqueror's primary differentiator; it is not Snobbery's. Weeks of device-specific work for a feature the spec explicitly excludes. |
+| Live brew graph (weight vs time) | Real-time graph generated from scale data during brew | SKIP | Depends on BLE; SKIP follows BLE skip. |
+| Visualizer.coffee integration | Export/sync to Visualizer for advanced shot analysis | SKIP | Espresso-primary; requires BLE; out of domain. |
+| Average flow quantity display | Derived metric from scale data: grams/second average | SKIP | Requires BLE. |
+| Pressure profiling (Smart Espresso Profiler, Pressensor) | Real-time pressure data from compatible sensors | SKIP | Espresso-primary hardware. Hard skip. |
+
+#### Water Recipes
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Named water profiles (stored recipe) | Save a named water profile with optional parameters | **Partially exists** — water_type is freetext on brew sessions | ADOPT (lightweight) | Adding a shared `water_profiles` lookup table (id, name, notes) and FK from brew_sessions gives water profiles the same first-class autocomplete treatment as flavor notes. LOW complexity (one table, one FK, one autocomplete field). Enables water as a sweet-spot dimension later. No need for mineral breakdown in v1.2. |
+| Water mineral parameters (GH, KH, Na, Ca, Mg, potassium) | Store exact mineral content per profile | SKIP for v1.2 | Niche within pour-over niche. The named profile alone satisfies the UX requirement (Third Wave Water, Lotus Water, Tap). Mineral breakdown adds form complexity with no analytics payoff at 2-user scale. Revisit for v2 if users request it. |
+| TDS from water | Track water TDS independently | SKIP | Covered adequately by a named profile. Adding a TDS field to water profiles is trivial if requested; don't pre-build it. |
+
+#### Statistics / Graphs
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Bean statistics (sessions per bean, avg rating per bean) | Per-coffee aggregated stats | **Already exists** (analytics home page, sweet spots) | ALREADY SHIPPED | v1.1 |
+| Consumption statistics (grams used, cost tracking) | How much coffee used over time; spend | **Partially exists** (cost-per-brew; no consumption over time graph) | CONSIDER | A simple "grams consumed this month" derived from dose_grams × session count is cheap to add to the analytics page. Useful for "how long does a bag last?" question. LOW complexity. |
+| Brew ratio analytics | Ratio distribution across sessions | SKIP | Derivable from existing data; the SQL analytics page can surface this as a stat line without a dedicated chart. Not a v1.2 priority. |
+| Full graph suite (SVG/canvas charts per stat) | Chart.js or similar for brew graphs, consumption trends, etc. | SKIP as a framework | Snobbery's analytics home page is pure SQL + prose, no charting library. Adding a charting library violates KISS; the text-based sweet spots + AI prose is the differentiator. If a specific stat warrants a chart, add a single sparkline via inline SVG, not a library dependency. |
+
+#### Archiving
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Archive beans / grinders / prep methods | Hide finished items from active lists without deleting | **Already exists** (archived flag on coffees, equipment, etc.) | ALREADY SHIPPED | v1.1 |
+| Sort by remaining weight / last-used / best-by date | Multiple sort options for the bag list | SKIP | Two-user household; catalog is small. Sort complexity adds nav overhead. |
+
+#### Photos
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Photo per brew session | Capture + store brew photo | **Already exists** (hardened photo upload, v1.1) | ALREADY SHIPPED | v1.1 |
+| Photo per bean / bag | Store a bag photo (label scan) | SKIP | Not implemented in v1.1 and not prioritized. Adding photo to the coffee/bag catalog is a nice-to-have; the brew session photo is the higher-value capture. |
+
+#### QR Code / NFC Sharing
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Share bean as QR code | Generate a QR code for a bean entry that another app user can scan to import | SKIP | Snobbery is a household app. No other Snobbery instance exists to scan the QR. Social/sharing is an explicit out-of-scope. This is Beanconqueror's multi-user onboarding mechanism — not needed here. |
+| Share brew as image card | Generate a styled image card of your brew stats to share on social media | SKIP | Anti-feature. Counter to Snobbery's private household identity. |
+| NFC tag write | Write bean data to an NFC tag, physically attach to a bag | SKIP | Hardware-bound and boutique. |
+
+#### Multiple Prep Methods
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Support for V60, Aeropress, Espresso, Mokapot, Chemex, etc. | Prep method is a first-class entity with its own parameter configuration | **Already exists** (equipment table + recipes, multiple method support) | ALREADY SHIPPED | v1.1 |
+| Method-specific parameter visibility | Hide espresso-specific fields when logging a V60 brew | SKIP for v1.2 | Worth considering if the brew form gets crowded, but at 2-user household scale with primarily pour-over use, a single-scroll form covers all methods adequately. Not a priority. |
+
+#### Other Capabilities
+
+| Feature | Beanconqueror Description | Snobbery Fit | Verdict | Reason |
+|---|---|---|---|---|
+| Repeat brew with saved settings ("brew again") | One-tap re-log a previous session, inheriting all parameters | **Already exists** (sub-30s re-log with prefill) | ALREADY SHIPPED | v1.1 |
+| Apple Health caffeine integration | Log caffeine intake to Apple Health via HealthKit | SKIP | Requires native iOS API; not available in a web PWA without a bridge app. Not the product's purpose. |
+| Multi-language support | App UI in 5+ languages | SKIP | Household app, English-only household. Internationalizing a Jinja2 app requires a proper i18n library (babel/flask-babel pattern). Not worth the complexity for 2 users. |
+| CSV export / import | Export all data as CSV; import from CSV | **Already exists** (brew session CSV export + import, v1.1) | ALREADY SHIPPED | v1.1 |
+| Backup / restore | Full data backup | **Already exists** (pg_dump nightly + photos tar, v1.1) | ALREADY SHIPPED | v1.1 |
+| Community / Discord | Public community for help and feature requests | SKIP | Not a product feature. |
+
+### Beanconqueror parity summary: what to carry into v1.2
+
+Adopting (priority order):
+
+1. **Background timer in Guided Brew Mode** — verify Web Worker timer implementation survives iOS screen sleep. LOW complexity. HIGH value for the core use case.
+2. **Water profiles lookup table** — replace freetext water_type with a shared named-profile table, FK from brew_sessions. LOW complexity. Enables future sweet-spot analytics on water.
+3. **Phase-based step timer** — adopt as part of Guided Brew Mode polish if not already multi-step. MEDIUM complexity. Natural fit given the v1.2 Guided Brew polish goal.
+4. **First drip time + bloom time/water optional fields** — two nullable columns on brew_sessions. LOW complexity. Signals pour-over depth to the audience.
+
+Skip (firm reasoning above):
+- BLE scale integration — weeks of work, hardware dependency, anti-feature for this product
+- QR/NFC sharing — anti-social, no other Snobbery instances to share with
+- SCA cupping — professional workflow that competes with existing simpler rating model
+- Roasting section — out of domain
+- Freeze portions — espresso competition feature, not household pour-over
+- Multi-language — not needed for this household
+
+---
+
+## Section 2: Cafe Quick-Rate
+
+### What it is
+
+A lightweight log entry for a coffee experienced outside the home: at a cafe, a cupping, or while traveling. The user did NOT brew this themselves — no recipe, no dose, no grind, no timer. They just drank it and have an opinion.
+
+### How comparable apps model cafe logs
+
+**CafeConnections**: Drop a pin at a cafe, rate 1-5 stars, tag flavors, note the drink type (latte, pour-over, etc.), add a photo. Geo-anchored.
+
+**Roastguide**: Find the coffee, add a rating, add a note. No parameters. Purely about the coffee's identity, not the brew.
+
+**Tasting Grounds**: Optionally captures brew parameters but allows a "no-recipe" tasting entry.
+
+**Press app (2015, influential)**: Explicitly moved away from regimented forms — coffee name, origin, optional notes; no forced parameters.
+
+The pattern that works: **minimum required fields are the coffee identity (name / brand) and a rating. Everything else is optional.** Apps that force full brew parameters for a cafe entry get skipped in the moment.
+
+### Minimum viable field set
+
+Required:
+- Coffee name or description (free text or link to catalog entry if the coffee exists)
+- Rating (0-5, same scale as brew sessions)
+
+Optional, tappable-to-add:
+- Roaster / brand (autocomplete from catalog or freetext)
+- Brew method (autocomplete from equipment catalog or freetext like "pour-over" / "espresso" / "filter")
+- Flavor notes (same chip-autocomplete as brew sessions)
+- Cafe name (free text; geo-pin explicitly out of scope per Snobbery's no-social-features rule)
+- Photo (same upload flow as brew sessions)
+- Free-text notes
+
+Explicitly NOT included (anti-pattern for quick-rate):
+- Dose / water / grind / time — they don't know these
+- Recipe FK — there is no recipe
+- Refractometer fields — they don't have one at the cafe
+- Bag FK — this coffee is probably not in their bag catalog
+
+### Data model approach
+
+Two options:
+
+**Option A: Unified brew_sessions with null recipe/bag** — a cafe log is a brew_session with `bag_id = NULL`, `recipe_id = NULL`, `is_cafe_log = TRUE`, and a new `cafe_coffee_name` text field for the freetext coffee identity when it's not in the catalog. Filter the brew list to split "home brews" from "cafe tastings."
+
+**Option B: Separate `cafe_logs` table** — distinct entity with its own simpler schema.
+
+Recommendation: **Option A (unified table)**. Rationale:
+- The AI analytics and preference derivation should be able to learn from cafe logs too (a 4.5 rating on a washed Kenyan at a cafe is valid signal)
+- Avoids duplicating the rating + flavor note + photo infrastructure
+- A boolean `is_cafe_log` is a cheap discriminator; NULL bag/recipe is already handled
+- Option B would require forking the analytics queries, the flavor note many-to-many, and the photo storage — disproportionate cost
+
+Schema additions needed:
+- `brew_sessions.is_cafe_log` boolean default false
+- `brew_sessions.cafe_name` nullable text (name of the cafe or event)
+- `brew_sessions.cafe_coffee_name` nullable text (freetext coffee description if not in catalog)
+- `brew_sessions.bag_id` already nullable — stays nullable for cafe logs
+- `brew_sessions.recipe_id` already nullable — stays nullable for cafe logs
+- All existing optional fields (flavor notes, photo, notes) work unchanged
+
+### How it feeds analytics and AI
+
+Cafe logs SHOULD contribute to:
+- User flavor profile (flavor notes from cafe logs are valid preference signal)
+- Origin / process preference derivation (a 4.5 on a washed Ethiopian at a cafe counts)
+- AI recommendation input (the user's full taste history, not just home brews)
+
+Cafe logs SHOULD NOT contribute to:
+- Recipe sweet spots (no recipe; would pollute brew parameter analytics)
+- Grinder-specific analytics (no grind setting)
+- Freshness analytics (no roast date)
+- Bag depletion / inventory
+
+The analytics queries in `services/analytics.py` that compute sweet spots by recipe/grinder should filter `WHERE is_cafe_log = FALSE`. The AI signature and flavor profile queries should include all logs.
+
+### UX fast-entry path
+
+The goal is: phone out at the cafe table, logged in 20 seconds, before the coffee gets cold.
+
+Entry point options:
+- A "Tasted at a cafe" button on the home page or a quick-entry fab
+- Or: the existing "Log Brew" form with a "This was at a cafe" toggle at the top that collapses the recipe/dose/grind/time fields
+
+Recommendation: **toggle on the existing Log Brew form**, not a separate entry point. Rationale:
+- Avoids a third separate flow (home brew log, cafe log, guided brew) cluttering the nav
+- The form already has HTMX — collapsing sections on a toggle is a small Alpine.js add
+- Keeps the codebase's CRUD in one place (brew_sessions CRUD)
+
+The toggle should collapse: bag, recipe, dose, water, grind, time, refractometer fields.
+The toggle should reveal: cafe_name, cafe_coffee_name text fields.
+
+Rating and flavor notes stay visible in both modes — they're the point.
+
+### Complexity
+
+MEDIUM overall:
+- Schema migration: LOW (3 nullable columns + 1 boolean)
+- Analytics query updates: LOW (add `WHERE NOT is_cafe_log` in 3-4 places)
+- Form UI: MEDIUM (Alpine.js toggle + conditional field visibility + HTMX form handling)
+- AI signature: LOW (cafe_log_count added to signature inputs so adding cafe logs triggers regen consideration)
+
+Dependencies: brew_sessions table (v1.1), flavor note M2M (v1.1), photo upload (v1.1), analytics service (v1.1). All dependencies already shipped.
+
+---
+
+## Section 3: AI Research-a-Coffee + Predict Rating
+
+### What it does
+
+The user types a coffee name (e.g., "Onyx Coffee Lab Colombia Huila Natural") into a search box. The AI:
+1. Researches the coffee via web search (same mechanism as the existing recommendation flow)
+2. Retrieves the user's derived preference profile from the analytics service
+3. Produces a predicted rating (e.g., "3.5–4.0 / 5") with a prose explanation of why
+
+This is a new AI interaction, distinct from the existing "what to buy next" recommendation.
+
+### Relationship to existing AI features
+
+The existing AI recommendation flow answers: "Based on my history, what should I buy next?" and returns a specific vetted buy URL.
+
+The predict-rating flow answers: "Here's a specific coffee I'm considering — how will I like it?" and returns a prediction without a buy URL.
+
+They are complementary:
+- Recommendation: unprompted, AI chooses the coffee, outputs a buy link
+- Predict-rating: user-initiated, user names the coffee, outputs a rating prediction + reasoning
+
+The predict-rating flow should live on the new AI page (v1.2 IA restructure). It does not replace the recommendation — it adds an on-demand research mode alongside it.
+
+### What good UX looks like
+
+The interaction should be:
+1. Single text input, prominent "Research this coffee" button
+2. Loading state: "Researching [coffee name] and comparing to your taste profile..." — 5-15 seconds is realistic
+3. Output card:
+
+```
+Onyx Colombia Huila Natural
+
+Predicted rating: 3.5 – 4.0 / 5
+Confidence: moderate
+
+Why: Your highest-rated coffees are naturals (avg 4.2) and your top origin
+is Ethiopia and Colombia. This Colombian natural aligns well. You've rated
+fruity/boozy notes like "blueberry" and "wine" highly. This coffee is
+described as having those profiles. Main uncertainty: you've logged only
+2 Colombian coffees, so origin data is thin.
+
+What reviewers say: [prose from web search, 2-3 sentences]
+Known roasters offering this: [optional, if found via web search]
+```
+
+Key UX decisions:
+- **Range, not point estimate** — "3.5–4.0" not "3.7". A point estimate implies false precision. The range signals honest uncertainty. Industry research on food preference modeling (see sources) confirms even well-fitted models have ±0.5 typical error.
+- **Reasoning is required** — the user must see WHY, not just a number. Without reasoning the feature is a black-box oracle, which erodes trust immediately when it's wrong.
+- **Confidence level is explicit** — "high / moderate / low" with a one-line explanation of the basis. Low confidence = fewer logged sessions, thin data for this origin or process. High confidence = extensive data, strong pattern match.
+- **Caveats are first-class, not footnote** — display the uncertainty as a primary element of the card, not fine print. "This prediction is based on 23 of your brew sessions" is part of the answer, not a disclaimer.
+- **No guarantee language** — "Predicted" not "You'll rate" or "AI says you'll love it". Framing matters.
+
+### Realistic accuracy expectations
+
+Based on research:
+
+- The existing preference derivation (pure SQL, group-by origin/process/rating) provides a reliable signal when the user has ≥10 sessions on that dimension. It degrades to noise below 5.
+- LLM prediction for novel inputs (a coffee the user has never tried from an unfamiliar origin/roaster) will have ±1.0 typical error — meaning the prediction is a rough directional signal, not a prescription.
+- The AI's main value is the research (pulling roaster descriptions, known tasting notes from reviews, brewing recommendations) combined with matching those descriptors to the user's stated flavor preferences. The prediction number is secondary to the prose reasoning.
+
+Accuracy framing for the user:
+- "High confidence" → 4+ sessions matching this origin + process; model predicts within ±0.5 reliably
+- "Moderate confidence" → 2-3 matching sessions; ±1.0 typical error
+- "Low confidence" → 0-1 matching sessions; directional only; prediction based on flavor descriptor matching, not personal history
+
+Cold-start gate: apply the same ≥3-session gate as the existing recommendation. Below that threshold, show a "Log more brews to unlock" message rather than a low-confidence prediction that could mislead.
+
+### AI implementation approach
+
+Reuse the existing AI service architecture:
+- Same provider abstraction (Anthropic primary, OpenAI fallback)
+- Same web search tool invocation
+- New prompt template: include the user's preference profile summary (already generated by analytics service), the coffee name as the research subject, and instructions to output a structured prediction
+
+The prompt should pass to the model:
+- The user's top-5 origins by average rating
+- The user's top-5 processes by average rating
+- Their top-rated flavor notes (top 10 by frequency among high-rated sessions)
+- The input coffee name
+- Instruction to research via web search and produce a prediction with reasoning + explicit uncertainty
+
+Output format: structured (JSON schema), same pattern as the existing recommendation flow. Parse to a `CoffeePrediction` Pydantic schema before rendering.
+
+Do NOT stream the output for v1.2 — same reasoning as the existing recommendation (polling is simpler, avoids `proxy_buffering off`, easier to debug). If SSE is added in a future phase, extend both flows together.
+
+### Cost and rate limiting
+
+A predict-rating call uses the web search tool (same cost driver as the recommendation). At 2-user scale this is not a budget concern, but:
+- The call is on-demand (user-initiated), so there is no nightly signature gate
+- A per-user rate limit of 5 predict calls per hour is reasonable to prevent accidental hammering
+- Log each call in a new `ai_coffee_predictions` table (user_id, coffee_name_input, predicted_rating_low, predicted_rating_high, confidence, reasoning_prose, created_at, model_used) for auditability and future analytics
+
+The `ai_coffee_predictions` table also feeds future features:
+- "Did the prediction hold up?" — after the user brews the coffee and logs a session, compare prediction vs actual
+- Aggregate: "Your AI predictions are ±0.4 accurate over 12 predictions" — trust-building transparency
+
+### Complexity
+
+MEDIUM-HIGH overall:
+- AI service: MEDIUM (new prompt template + new Pydantic schema; same provider/web-search infrastructure)
+- New DB table: LOW (ai_coffee_predictions, ~8 columns)
+- UI: MEDIUM (new component on the AI page, text input + loading state + result card)
+- Rate limiting: LOW (slowapi decorator, same as login rate limit)
+- Analytics integration: LOW (read existing preference derivation; no new queries needed)
+
+Dependencies:
+- Analytics service preference derivation (v1.1 — already ships this)
+- AI service provider abstraction (v1.1 — already ships this)
+- Web search tool (v1.1 — already ships this)
+- New AI page (v1.2 IA restructure — must be built first or concurrently)
+
+---
+
+## Feature Landscape (Template Format)
+
+### Table Stakes for v1.2 (Users Expect These Given v1.1 Shipped)
+
+| Feature | Why Expected | Complexity | Notes |
 |---|---|---|---|
-| **Bag-as-instance separate from coffee-as-catalog** | The spec models a "coffee" as one row. In practice, John reorders the same Onyx Geometry bean 3 times a year; each bag has a different roast date, possibly a different lot. Today the spec would force editing the single coffee row's `roast_date` each time, losing history. Beanconqueror, Extraction, BeanBook all model bag-instances separately. | **Medium** — add `bags` (FK coffee, roast_date, weight_grams_remaining, opened_at, finished_at). Brew session FKs to `bag_id` instead of (or in addition to) `coffee_id`. | **Yes, v1.** This is a foundational data-model decision; retrofitting later is a migration headache. Without it, sweet-spots-by-roast-date is unreliable. |
-| **"Want to try" / wishlist** | The home page shows AI coffee recommendations — but where does the user *put* a recommendation they want to remember without ordering today? Trade Coffee, Crema, Angels' Cup all have this. Without it, the AI rec card has nowhere to land. | **Low** — boolean on `coffees` plus a `wishlist_entries` table for things not yet in catalog (just URL + note). | **Yes, v1.** Pairs directly with the AI flow; without it the AI rec is a dead end. |
-| **Bag depletion / "this bag is done"** | Spec has `archived` on coffees but no concept of "this bag is empty, archive the bag instance, leave the coffee row alive for future re-orders". Closely tied to bag-as-instance above. | **Low** if bags table exists. **High** if not — you end up archiving the coffee then un-archiving it on reorder. | **Yes, v1**, follows from bag-as-instance. |
-| **Brew ratio displayed live in the form** | Spec captures dose + water grams but doesn't compute ratio (1:16) in the UI. This is the #1 number pour-over enthusiasts care about; every competitor app shows it live. Spec hides it. | **Low** — Alpine.js reactive expression. | **Yes, v1.** Trivial add, big perceived value. |
-| **Brew yield (cup-out weight) field** | Spec captures dose and water in, but not what came out the bottom. For pour-over the difference (retained liquid in slurry) and the yield ratio are key. Beanconqueror, Filtru, Bloom all capture yield. | **Low** — single nullable numeric column. | **Yes, v1.** |
-| **TDS / extraction yield (optional field)** | Niche but real for "serious pour-over enthusiasts." If the user has a refractometer (VST, DiFluid R2, Atago), they will want to log TDS. Beanconqueror explicitly supports it; users have requested it across forums. Don't have to build a refractometer integration — just expose the field. | **Low** — two nullable numerics (`tds_pct`, optionally computed `extraction_yield_pct`). | **Yes, v1.** Cheap; signals the app understands the audience. |
-| **Water recipe / mineral profile** | Spec has `water_type` as free text. Specialty pour-over crowd cares about water — Third Wave Water profiles, Lotus, custom mineral recipes. Free text is fine to start, but a `water_profiles` shared table (name + optional gh/kh/tds_ppm) is a one-table upgrade that lets sweet-spots include water as a dimension. | **Medium** — one new table, optional FK on brew session. | **No to full mineral profile in v1**, **yes to a `water_profiles` lookup table with just `name`** so it joins the autocomplete-shared-vocabulary pattern. Adds analytics value, almost zero cost. |
-| **Grinder-setting reference per grinder** | Spec stores `grind_setting_actual` as free text on each session. "23 clicks" means nothing without knowing it was on a Comandante. Tasting Grounds and similar apps tie settings to a grinder reference. Since `grinder_id` is already captured per session, the grind setting context is implied — but a per-grinder default/reference (e.g. "Comandante C40 = clicks 0–40, V60 range 18–24") makes future cross-session comparison usable. | **Low** — two text fields on `equipment` rows of type=grinder: `grind_min`, `grind_max`. | **Maybe v1.5.** Helpful but not critical for two-person household. Defer. |
-| **Cost per brew / "what did this cup cost"** | Spec captures `coffees.price_usd` and `weight_grams`. Combined with `dose_grams_actual` you can derive cost-per-brew. Multiple apps surface this — useful sanity check ("you've brewed $4.20 of Heart Coffee today"). | **Low** — derived field, no schema change. | **Yes, v1.** Cheap analytics win. |
-| **Brew session edit history / "what changed"** | Spec has `updated_at` but no audit trail on session edits. With two users sharing a catalog and AI signature based on `max(updated_at)`, an inadvertent rating change by one user can silently trigger an AI regen. Not critical, but a per-session history table or a soft event log helps debug "why did the home page change?" | **Medium** — separate event log table. | **No, defer to v2.** Useful for postmortem; not v1 critical. |
-| **Brew comparison view (A vs B)** | Power-user feature: pick two sessions side by side to spot what changed. Several competitors (Bloom, iBrewCoffee) have this. With <50 sessions this is overkill — when sessions count grows past a few hundred, becomes very useful. | **Medium** — new page, two-up template. | **No, defer to v1.5–v2.** |
-| **Empty-state "Add 3 sample brew sessions" onboarding** | AI recs are gated at 3+ sessions. New user lands on a sparse home page with "log 3 brews to unlock." That's *correct* but harsh. Consider: import-from-CSV or a "Start with my last 5 brews" template that pre-fills realistic shapes for John & Farrah specifically. | **Low** — single seed form. | **Maybe v1.** John is initial user — he can manually backfill. But it's an obvious cliff. |
-| **CSV import (mirror of CSV export)** | Spec has CSV export, no import. John may have a spreadsheet history. Import lets the AI work on day one. | **Medium** — schema mapping, dedup of coffees by name+roaster. | **Maybe v1.** Trivial if scope-limited to "import your prior brew sessions, refusing if coffee doesn't exist in catalog yet." Don't try to auto-create catalog entries from CSV — fragmentation risk. |
-| **Two-tap "I'm brewing this now" from a coffee card** | Coffee card already exists; adding a "Brew this" button that jumps to the brew form with `coffee_id` prefilled is one button. Already implied by spec's flow but worth calling out as a deliberate addition because Home page "unrated coffees" should also expose it. | **Low** — link to `/log/new?coffee_id=X`. | **Yes, v1.** Pairs with "unrated coffees" feature. |
-| **Notification when a roast hits its sweet window** | Extraction app's marquee feature: "peak alerts fire when a bean enters its sweet window." Spec has no notifications by design (no SMTP, no push). Push notifications via PWA are now possible on iOS 16.4+ but require server keys. | **High** — push infra, opt-in. | **No, v2.** Out of v1 scope; spec explicitly excludes email/notification plumbing. But worth flagging because users *will* ask for it. |
-| **AI "why this rating" sanity check** | Subtle one: a user logs a 4.5 on Friday and a 2.0 on Saturday for the same coffee+recipe. The AI's profile will swing wildly. A gentle "your ratings for this coffee have varied a lot — is one of these an outlier?" nudge before the nightly run protects AI quality. | **Medium** — analytics query + non-AI prompt. | **No, defer.** Nice-to-have. |
-| **Recipe versioning** | Spec: edit a recipe and all historical sessions still FK to it — but the recipe content has changed. Sweet-spots analysis silently becomes inaccurate. Brewfather solves this with recipe snapshots. | **Medium** — version column or copy-on-edit. | **No, v1**: instead, document the "edit recipe = rewrites history" trade-off, and encourage users to duplicate recipe rather than edit when iterating. Spec already has duplicate-recipe action — good. Just flag this convention in UI. |
+| Background timer survives phone sleep | Kettle-side brews require the phone to dim; a timer that stops is useless | LOW | Verify Web Worker vs setInterval; fix if needed |
+| Cafe quick-rate form toggle | 90% phone-first users will want to capture a cafe tasting; missing it means rating goes unlogged | MEDIUM | Toggle on existing brew form; schema migration |
+| Water profiles as named lookup | Freetext water_type is already there; named profiles are the natural next step for serious users | LOW | One table, one FK, autocomplete |
 
----
+### Differentiators for v1.2
 
-## 3. Differentiators in Spec (protect from scope creep)
+| Feature | Value Proposition | Complexity | Notes |
+|---|---|---|---|
+| AI predict-rating for a named coffee | No other self-hosted household coffee log does this; turns the preference engine into an interactive research tool | MEDIUM-HIGH | New AI flow; on-demand web search; honesty about uncertainty is the differentiator |
+| Cafe logs feed AI preference profile | Taste data from outside home brews makes the AI recommendation smarter; cross-context preference learning | LOW (once cafe log schema exists) | Filter cafe logs from recipe analytics; include in flavor/origin analytics |
+| Phase-based step timer in Guided Brew Mode | Transforms Guided Brew from a stopwatch into a brewing coach | MEDIUM | Natural v1.2 polish direction for Guided Brew |
+| First drip + bloom time optional fields | Signals the app understands the specific craft of pour-over at a depth competitors miss | LOW | 2 nullable columns; add to Guided Brew Mode as captured data points |
 
-| Differentiator | Why it matters | What dilutes it |
+### Anti-Features (Do Not Build in v1.2)
+
+| Feature | Why Not | What to Do Instead |
 |---|---|---|
-| **Live AI coffee recommendation with verified product URL + tier-aware fallback** | This is the headline. Generic AI suggestions are commodity ("try a washed Ethiopian"); a *specific in-stock SKU at a roaster you've bought from before, with the URL HEAD-verified* is the moat. | Adding a "list of 5 alternatives" view dilutes the single-best-answer punch. Allowing AI to suggest a coffee not currently for sale ruins trust. Hide the temptation to make this a marketplace integration. |
-| **Recipe suggestion drawn from user's existing recipe library, never invented** | This is the brilliant constraint. The AI is grounded — it can't hallucinate a recipe that doesn't exist in your kitchen. Builds trust. | Letting the AI "suggest a new recipe" if no existing match exists would re-introduce hallucination risk. The spec's "if no match, link to recipe builder" is correct. Protect it. |
-| **Alternative-brewer callout (>0.5 rating delta)** | This is a real insight nobody else surfaces — your data shows you'd do better on the V60 than the Switch for this profile. Subtle, defensible. | Threshold-tuning over time should stay aggressive (≥0.5). Don't water it down to "0.2" or it becomes noise. |
-| **Sweet spots (cross-dimensional SQL, no AI)** | Pure SQL on the user's own data, with optional AI prose narration. Competitors either don't surface multi-dimensional patterns at all, or do it as AI-only (less trustworthy, more expensive). | Don't replace the SQL with AI. Don't expand beyond `(origin × process × brewer × recipe)` — adding more dimensions makes empty-set the default for small datasets. |
-| **Signature-based regen** | Cost control that's also a UX feature (stale badge). | Don't add a "manual regen daily quota" — the household scale makes this premature. Don't auto-regen on every page load. |
-| **Mobile-first with bottom tab nav and aggressive prefill** | 90% phone usage assumption. Most competing web apps (vs native apps) feel desktop-first. | Don't ship "responsive desktop-first" templates because they were faster to build. The 375px viewport is the design target, not the fallback. |
-| **Guided Brew Mode with wake lock + audio + haptic cues** | Differentiates from "log after the fact" apps. Active assistant during brewing. | Don't bury the entry point. Should be a prominent button on the recipe page and the brew-session form, not three taps deep. |
-| **Shared catalog + per-user logs in a single deployment** | Most apps are either fully shared (community) or fully personal. The household model is genuinely underserved. | Don't add a "make this coffee private" toggle — undermines the shared catalog premise. The spec's design (catalog shared, sessions private) is right. |
-| **Self-aware "snobbery" tone in empty states** | Brand differentiation in a sea of beige coffee apps. | Don't make every UI string a joke. Tone lives in empty states and confirmations, not in field labels or error messages. |
+| BLE scale integration (Acaia, Felicita, Decent) | Weeks of device-specific work; Web Bluetooth fragile in PWA; pour-over weights are hand-entered; explicitly out of scope | Manual dose + water entry already works; Guided Brew Mode timer covers the timing need |
+| QR code / NFC bean sharing | No other Snobbery instances to share with; social/sharing is an explicit out-of-scope | Share via catalog description text or a bag note |
+| SCA cupping scoresheet | Competes with and complicates the existing simple rating + flavor note model; professional workflow, not home-brewer-at-the-kettle | The existing 0-5 rating + flavor notes already captures the signal needed |
+| AI auto-generated tasting notes | Trains users to trust the AI's palate instead of developing their own; undermines the core value of the log | Let the AI describe the coffee's expected profile (research), but the user's own notes remain user-authored |
+| Social sharing of brew cards | Counter to the private household identity; adds no household value | The log is the output; no sharing needed |
+| Roasting section (green bean to roast batch) | Out of domain; neither user is a home roaster | Skip entirely |
+| Coffee finder / cafe discovery map | Out of domain per PROJECT.md; brings in mapping infra | The cafe quick-rate covers "I was at a cafe" without becoming a discovery tool |
+| Point-estimate AI rating ("you'll rate this 4.2") | False precision destroys trust when wrong | Use range + confidence level; require reasoning prose |
+| Per-user brew parameter field ordering | Configuration complexity for zero practical gain at 2-user scale | Single-scroll form with sensible pour-over defaults covers both users |
 
 ---
 
-## 4. Anti-Features (do not build, with reasoning)
+## Feature Dependencies
 
-| Anti-feature | Why not | Industry pressure to re-include |
-|---|---|---|
-| **Public social feed / community sharing** | Spec already excludes; protect it. Tasting Grounds, CafeConnections, Angels' Cup all built social and it adds noise without depth. The "snobbery" tone is *because* it's a private household tool. | Strong industry pressure — every competitor adds social eventually. Stay disciplined. |
-| **Gamification (streaks, badges, "you brewed 7 days in a row")** | Coffee enthusiasts are *not* an audience that needs nudging. The brew log is the reward. Streaks specifically punish travel / illness / a weekend off — exactly the wrong incentive. | Moderate pressure — every consumer app has this. Resist. |
-| **Coffee shop / cafe finder integration** | Spec excludes; protect it. Out of domain; brings in mapping infra, scraping, and a "your reviews of cafes" data model. | Low pressure; clearly out of scope. |
-| **Decent Espresso / Acaia / Felicita BLE scale integration** | Spec doesn't mention; correct to exclude. Beanconqueror invested heavily here, it's a long tail of device support, and pour-over weights are slow enough to enter manually. Espresso is where BLE actually pays off. | Moderate pressure — power users will ask. Answer: out of scope; this is a log, not a brewing platform. |
-| **AI-written tasting notes (auto-generate "this coffee tastes like…")** | Tempting because AI is cheap text. But the *point* of the log is the user's own palate development. Auto-generated notes train the user to trust the AI rather than their tongue. | High pressure — AI feature creep is rampant. Resist; the AI's job is to recommend bean-buying and brewer-pairing, not to taste for you. |
-| **Continuous live BLE scale streaming to graph pour profile** | Beanconqueror does this; it's cool. It's also weeks of work for one feature, and most pour-over users don't have BLE scales. | Low immediate pressure; flag for v3 conversation. |
-| **"Coffee score" composite metric** | Some apps compute a single "Coffee Index" out of multiple dimensions. It collapses information and feels reductive — the rating + flavor notes + sweet spots already capture this. | Low pressure. |
-| **Public profile / username sharing** | Spec excludes. Household scope makes this an anti-pattern. | Low pressure. |
-| **"Discover new roasters" curated feed** | The live AI recommendation IS this feature, but personalized. A curated feed competes with it and dilutes the AI as the source of truth for "what next." | Moderate pressure (sounds nice). Resist. |
-| **Auto-detect bean from photo (OCR roaster bag)** | Slick demo; flaky in practice. Tasting Grounds and Beanconqueror have experimented. Bag designs vary wildly, OCR fails on textured paper, and the time saved (one form, two minutes per bag) doesn't justify the brittleness. | Moderate pressure (every "AI app" demo has this). Resist for v1; revisit only if AI OCR materially improves and the household catalog grows past 50 coffees. |
-| **Subscription billing / tiered pro features** | Self-hosted, household, no revenue model. Spec excludes. | Low pressure for self-hosted. |
+```
+AI predict-rating
+    requires --> Analytics preference derivation (SHIPPED v1.1)
+    requires --> AI service abstraction (SHIPPED v1.1)
+    requires --> Web search tool (SHIPPED v1.1)
+    requires --> New AI page (v1.2 IA restructure)
+    optional -> Cafe log ratings (enriches prediction accuracy)
+
+Cafe quick-rate
+    requires --> brew_sessions table (SHIPPED v1.1)
+    requires --> Flavor note M2M (SHIPPED v1.1)
+    requires --> Photo upload (SHIPPED v1.1)
+    feeds ---> AI preference derivation (origin/process/flavor signal)
+
+Phase-based step timer
+    requires --> Guided Brew Mode (SHIPPED v1.1)
+    requires --> Recipes with step definitions (SHIPPED v1.1)
+
+Water profiles lookup
+    requires --> brew_sessions table (SHIPPED v1.1)
+    feeds ---> Sweet spots analytics (future dimension)
+
+First drip + bloom fields
+    requires --> brew_sessions schema migration
+    optional -> Guided Brew Mode (natural place to capture these mid-brew)
+```
 
 ---
 
-## 5. Closing Assessment
+## Feature Prioritization Matrix
 
-The spec's feature scope is **right-sized for v1 in volume but has three foundational gaps** that will hurt if deferred:
-
-1. **Bag-as-instance vs coffee-as-catalog** — biggest single gap. Without it, `roast_date` lives on the coffee row and every reorder loses the prior bag's date. Sweet-spots-by-freshness becomes unreliable as soon as a coffee is reordered. Cheap to add now, expensive to retrofit once there are 500 sessions. **Strongly recommend adding to v1.**
-
-2. **Brew yield + ratio display + optional TDS** — these are the difference between "a log" and "a log for serious pour-over people." All three are cheap (1 column, 1 reactive expression, 2 columns). Signal that the app knows its audience.
-
-3. **Wishlist / "want to try"** — the AI recommendation card has nowhere to land. Without a wishlist, the AI feature is suggest-and-forget; with it, the AI flow becomes a closing-the-loop ritual.
-
-Everything else (comparison view, recipe versioning, BLE scales, push notifications) is genuinely fine to defer. The spec correctly resists feature creep on the high-pressure-but-low-value items (social, gamification, cafe finder). The differentiators (live AI coffee rec, alternative-brewer callout, sweet spots, signature-based regen) are well-protected by the explicit Out of Scope list — keep that list aggressive at every phase boundary.
-
-**One additional UX trap worth highlighting at the project level:** the spec defers PWA offline write queue to v2. That's defensible *but* combined with the localStorage 7-day ITP clearance in iOS Safari (not installed), a non-installed iOS user logging a session on cell data could lose their draft if the network fails *and* they don't return for a week. The installed-PWA caveat protects most use, but consider a server-side autosave-on-blur as belt-and-suspenders — see Section 1 traps.
+| Feature | User Value | Implementation Cost | Priority |
+|---|---|---|---|
+| Background timer (Web Worker) | HIGH | LOW | P1 |
+| Cafe quick-rate (form toggle + schema) | HIGH | MEDIUM | P1 |
+| AI predict-rating | HIGH | MEDIUM-HIGH | P1 |
+| Water profiles lookup table | MEDIUM | LOW | P2 |
+| First drip + bloom optional fields | MEDIUM | LOW | P2 |
+| Phase-based step timer in Guided Brew | MEDIUM | MEDIUM | P2 |
+| Consumption stats (grams/month) | LOW | LOW | P3 |
 
 ---
 
 ## Sources
 
-### Coffee log apps reviewed
-- [Beanconqueror](https://beanconqueror.com/) — open-source, 30+ brew parameters, BLE scale/refractometer support, bag depletion tracking. Sets the "comprehensive" bar.
-- [Beanconqueror changelog](https://github.com/graphefruit/Beanconqueror/blob/master/changelog.md) — feature evolution over time.
-- [Filtru](https://getfiltru.com/) — strong pour-over timer, BLE scales (Acaia/Decent/Felicita), pro-tier brew logs.
-- [Bloom Coffee Timer & Journal](https://apps.apple.com/us/app/bloom-coffee-timer-journal/id6759914524) — per-step timers, live extraction ratio.
-- [Brewd](https://brewdcoffee.app/) — specialty bean catalog + taste profile build-up.
-- [iBrewCoffee](https://ibrew.coffee/) — bag duplication ("Product" model), PDF export, recipe library.
-- [BeanBook](https://www.beanbook.app/) — specialty tracker, bean exploration.
-- [Extraction](https://extrctn.com/) — freshness tracker, sweet-window peak alerts (push notification differentiator).
-- [Brew Logs](https://www.brewlog.app/en) — markets "30-second first brew, one-tap subsequent."
-- [Coffee Book: Brew Timer](https://apps.apple.com/us/app/coffee-book-brew-timer/id1512681263) — long-press to clone coffee.
-- [Tasting Grounds](https://apps.apple.com/us/app/tasting-grounds/id1526958511) — community + grind-size references per grinder.
-- [Fellow Aiden](https://apps.apple.com/us/app/fellow-brew-with-aiden/id6612024910) — hardware-bound but instructive on log UX.
-- [Trade Coffee](https://www.cnn.com/cnn-underscored/reviews/best-coffee-subscription-boxes) — rating-driven preference learning.
-- [Crema Coffee playlist model](https://drippedcoffee.com/best-coffee-subscription/) — wishlist UX precedent.
-- [Press app (DailyCoffeeNews)](https://dailycoffeenews.com/2015/02/03/meet-press-a-new-coffee-brewing-and-origin-logging-app/) — explicit critique of "too regimented" forms; market evidence for user complaints about long forms.
+### Beanconqueror
+- [Beanconqueror GitHub repository](https://github.com/graphefruit/Beanconqueror) — feature inventory, open-source code inspection
+- [Beanconqueror official site](https://beanconqueror.com/) — marketing feature list
+- [Beanconqueror changelog](https://beanconqueror.com/changelog/) — feature evolution history
+- [Beanconqueror data tracking page](https://beanconqueror.com/data-tracking/) — tracked brew actions
+- [Beanconqueror FAQ (Gitbook)](https://beanconqueror.gitbook.io/beanconqueror/resources/faq) — QR/NFC ecosystem notes, scale limitations
+- [Release v6.1.0 notes](https://github.com/graphefruit/Beanconqueror/releases/tag/v.6.1.0) — QR scan, scale integrations, graph overhaul, purchase tracking
+- [Beanconqueror + Decent Scale blog](https://decentespresso.com/blog/beanconqueror_and_the_decent_scale) — BLE scale integration detail
+- [Home-barista.com Beanconqueror thread](https://www.home-barista.com/knockbox/beanconqueror-app-t68236-170.html) — user critique of pour-over parameter coverage
 
-### UX traps & technical pitfalls
-- [WebKit ITP 7-day localStorage expiry (NEAR wallet issue)](https://github.com/near/near-wallet/issues/479) — confirms 7-day localStorage clearance in iOS Safari.
-- [Tealium on ITP 2.3 localStorage workaround](https://tealium.com/blog/data-governance-privacy/safari-itp-2-3-update-hamstrings-localstorage-workaround-as-expected/) — confirms it applies to in-Safari, installed PWA resets the timer.
-- [WebKit bug 254545 — Wake Lock broken in installed iOS PWAs](https://bugs.webkit.org/show_bug.cgi?id=254545) — guided brew wake lock pitfall.
-- [Screen Wake Lock browser support (caniuse)](https://caniuse.com/wake-lock) — confirms Safari 16.4+ in-Safari; PWA install nuance.
-- [Beanconqueror critique — missing per-pour weight/time](https://www.home-barista.com/knockbox/beanconqueror-app-t68236-70.html) — even comprehensive apps miss things; informs per-pour capture decisions.
+### Cafe log / quick-rate research
+- [CafeConnections App Store](https://apps.apple.com/us/app/cafeconnections-coffee-log/id6756827606) — drop-pin + rate + flavor tag model
+- [Tasting Grounds App Store](https://apps.apple.com/us/app/tasting-grounds/id1526958511) — optional params on tasting entries
+- [Roastguide App Store](https://apps.apple.com/us/app/roastguide/id1454418262) — search-and-rate minimal model
+- [Press app (DailyCoffeeNews)](https://dailycoffeenews.com/2015/02/03/meet-press-a-new-coffee-brewing-and-origin-logging-app/) — explicit philosophy of avoiding regimented forms
+- [iBrewCoffee](https://ibrew.coffee/) — tasting profile fields (aroma, sweetness, acidity, body, bitterness)
 
-### Domain / audience
-- [SCA Coffee Taster's Flavor Wheel](https://sca.coffee/research/coffee-tasters-flavor-wheel) — vocabulary standard for flavor notes.
-- [Interactive SCA Flavor Wheel (Not Bad Coffee)](https://notbadcoffee.com/flavor-wheel-en/) — UX precedent for navigating a hierarchical flavor vocabulary.
-- [Coffee roast freshness windows](https://achillescoffeeroasters.com/blogs/specialty-coffee-blog/the-science-of-freshness-why-roast-date-matters-more-than-you-think) — validates the spec's days-off-roast bucket choices (0-3 / 4-14 / 15-30 / 30+).
-- [TDS measurement & extraction yield context](https://fellowproducts.com/blogs/learn/the-beginner-s-guide-to-total-dissolved-solids-and-coffee) — domain justification for optional TDS field.
-- [Best coffee apps roundup (Home Grounds)](https://www.homegrounds.co/best-coffee-apps/) — broad market scan.
-- [Coffee apps for enthusiasts (CartaCoffee)](https://www.cartacoffee.com/blogs/island-blog/8-best-apps-for-coffee-enthusiasts) — feature comparison across category.
+### AI prediction / recommendation UX
+- [arxiv: Coffee bean recommendation from robot assistant](https://arxiv.org/pdf/2008.13585) — preference vector approach; directional accuracy claims
+- [Nature: AI-driven prediction of consumer liking from sensory data](https://www.nature.com/articles/s41538-026-00779-7) — ±0.5 typical model error; ensemble methods; confidence calibration importance
+- [arxiv: Coffee ratings prediction from attributes](https://arxiv.org/pdf/2509.18124) — feature importance for rating prediction; Extra Trees / XGBoost outperform simpler models
+- [ResearchGate: Coffee recommendations from search/preference history](https://www.researchgate.net/publication/361291090_An_approach_to_coffee_recommendations_according_to_the_history_of_searches_and_preferences) — collaborative filtering vs content-based; hybrid approach
 
-### Confidence
-- **HIGH** on UX traps (multiple confirmed sources for ITP, Wake Lock, form-length abandonment).
-- **HIGH** on bag-as-instance gap (Beanconqueror, BeanBook, Extraction, iBrewCoffee all confirm this is the prevailing data model).
-- **MEDIUM** on differentiator analysis (qualitative competitor comparison; no quantitative user survey).
-- **HIGH** on anti-features (each one tied to a named competitor that shipped and either underperformed or diluted focus).
+### Confidence assessment
+- **HIGH** — Beanconqueror feature inventory (sourced directly from repo, official site, changelogs)
+- **HIGH** — Adopt/skip verdicts for BLE/social/cupping (anti-features confirmed by competitor outcomes + Snobbery's explicit out-of-scope list)
+- **MEDIUM** — Cafe quick-rate data model recommendation (Option A vs B reasoning is sound but not validated against existing schema in production)
+- **MEDIUM** — AI predict-rating accuracy claims (academic sources; real-world accuracy in this specific household context is unknown until shipped)
+- **HIGH** — Anti-feature calls (each tied to a specific Snobbery out-of-scope constraint or confirmed competitor failure mode)
+
+---
+
+*Feature research for: Snobbery v1.2 new capabilities (Beanconqueror parity, cafe quick-rate, AI predict-rating)*
+*Researched: 2026-05-25*
