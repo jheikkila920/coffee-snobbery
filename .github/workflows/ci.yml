@@ -67,3 +67,19 @@ jobs:
           APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789a=' }}
           SNOB_CI: "1"
         run: python -m pytest tests/ -rs --tb=short --ignore=tests/e2e
+
+      - name: Pytest isolation double-run
+        env:
+          DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/snobbery
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: snobbery
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY || 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }}
+          APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789a=' }}
+          SNOB_CI: "1"
+        run: |
+          # Second run against the SAME database (no drop/recreate).
+          # Teardown residue from run 1 surfaces here as cross-module state pollution.
+          # _provision_test_db is idempotent (checks existence before creating) so
+          # run 2 reuses the existing DB — proving teardown actually fires (D-07).
+          python -m pytest tests/ -rs --tb=short --ignore=tests/e2e
