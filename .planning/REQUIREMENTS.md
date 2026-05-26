@@ -121,17 +121,58 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Populated during roadmap creation. Each requirement maps to exactly one phase.
+Every v1.2 requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | | |
+| DEBT-01 | Phase 15 | Pending |
+| DEBT-02 | Phase 15 | Pending |
+| DEBT-03 | Phase 15 | Pending |
+| DEBT-04 | Phase 15 | Pending |
+| DEBT-05 | Phase 15 | Pending |
+| DIST-01 | Phase 18 | Pending |
+| DIST-02 | Phase 18 | Pending |
+| DIST-03 | Phase 18 | Pending |
+| DIST-04 | Phase 18 | Pending |
+| DIST-05 | Phase 18 | Pending |
+| DIST-06 | Phase 18 | Pending |
+| DIST-07 | Phase 17 | Pending |
+| IA-01 | Phase 17 | Pending |
+| IA-02 | Phase 17 | Pending |
+| IA-03 | Phase 17 | Pending |
+| IA-04 | Phase 17 | Pending |
+| IA-05 | Phase 17 | Pending |
+| CAFE-01 | Phase 16 | Pending |
+| CAFE-02 | Phase 16 | Pending |
+| CAFE-03 | Phase 16 | Pending |
+| CAFE-04 | Phase 16 | Pending |
+| CAFE-05 | Phase 16 | Pending |
+| CAFE-06 | Phase 16 | Pending |
+| AIX-01 | Phase 19 | Pending |
+| AIX-02 | Phase 19 | Pending |
+| AIX-03 | Phase 19 | Pending |
+| AIX-04 | Phase 19 | Pending |
+| AIX-05 | Phase 19 | Pending |
+| AIX-06 | Phase 19 | Pending |
+| AIX-07 | Phase 19 | Pending |
+| AIX-08 | Phase 17 | Pending |
+| GBREW-01 | Phase 20 | Pending |
+| GBREW-02 | Phase 20 | Pending |
+| GBREW-03 | Phase 20 | Pending |
+| GBREW-04 | Phase 20 | Pending |
+| GBREW-05 | Phase 20 | Pending |
+| MOBILE-01 | Phase 21 | Pending |
+| MOBILE-02 | Phase 21 | Pending |
+| MOBILE-03 | Phase 21 | Pending |
+| MOBILE-04 | Phase 21 | Pending |
+| MOBILE-05 | Phase 21 | Pending |
+| VIZ-01 | Phase 19 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 42 total (DEBT 5, DIST 7, IA 5, CAFE 6, AIX 8, GBREW 5, MOBILE 5, VIZ 1)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 42 ⚠️
+- Mapped to phases: 42/42 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-25*
-*Last updated: 2026-05-25 after initial v1.2 definition*
+*Last updated: 2026-05-25 — traceability table populated by roadmapper (phases 15–22)*
