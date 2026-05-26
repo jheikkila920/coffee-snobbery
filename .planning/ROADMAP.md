@@ -62,8 +62,11 @@ other households.
   5. Every `human_needed` verification is either closed with evidence or explicitly re-deferred with a written reason
 **Plans**: 3 plans
 Plans:
+**Wave 1**
 - [ ] 15-01-PLAN.md — DEBT-01: entrypoint root→chown→gosu privilege drop (G-01 fix)
 - [ ] 15-02-PLAN.md — DEBT-02: test_setup_concurrent_race fix + CI double-run isolation guard
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 15-03-PLAN.md — DEBT-03/04/05: on-device nav/sign-out + human-UAT + human_needed closure ledger (incl. D-13 safe-area)
 
 ### Phase 16: Cafe Quick-Rate
