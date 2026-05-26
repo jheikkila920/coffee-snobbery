@@ -82,7 +82,7 @@ RUN set -eux; \
     echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list; \
     apt-get update; \
-    apt-get install -y --no-install-recommends postgresql-client-16; \
+    apt-get install -y --no-install-recommends postgresql-client-16 gosu; \
     # Keep curl (HEALTHCHECK + ad-hoc debugging — RESEARCH Open Question #5).
     apt-get purge -y --auto-remove gnupg lsb-release; \
     rm -rf /var/lib/apt/lists/*
@@ -119,7 +119,6 @@ RUN chmod +x entrypoint.sh
 # write here.
 RUN mkdir -p /app/data/photos /app/data/backups && chown -R app:app /app/data
 
-USER app
 EXPOSE 8000
 
 # HEALTHCHECK calls our /healthz endpoint (CONTEXT D-08). The endpoint is
