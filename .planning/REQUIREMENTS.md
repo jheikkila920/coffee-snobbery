@@ -11,11 +11,11 @@ REQ-IDs use v1.2-specific category prefixes. v1.1 requirements are archived in `
 
 Carried v1.1 debt, folded in early so new work sits on a clean base.
 
-- [ ] **DEBT-01**: A new operator's first deploy can write backups and photos with no manual `chown` (G-01 fixed via runtime `chown -R app:app /app/data` in `entrypoint.sh` before dropping to the app user)
-- [ ] **DEBT-02**: The full `pytest tests/` suite runs green twice in a row with no cross-module isolation failures (T-INFRA-1: catalog-table teardown + settings-cache clear in root conftest)
-- [ ] **DEBT-03**: Every authenticated page shows persistent nav with user identity and a working sign-out (verify/close the Phase 11 gap)
-- [ ] **DEBT-04**: Outstanding v1.1 human-UAT scenarios are executed and recorded (Phases 01/02/07/11 + the Phase 14 375px search-sheet UAT)
-- [ ] **DEBT-05**: Outstanding `human_needed` verifications (Phases 01/02/07/09/10/11) are resolved or explicitly re-deferred with a reason
+- [x] **DEBT-01**: A new operator's first deploy can write backups and photos with no manual `chown` (G-01 fixed via runtime `chown -R app:app /app/data` in `entrypoint.sh` before dropping to the app user)
+- [x] **DEBT-02**: The full `pytest tests/` suite runs green twice in a row with no cross-module isolation failures (T-INFRA-1: catalog-table teardown + settings-cache clear in root conftest)
+- [x] **DEBT-03**: Every authenticated page shows persistent nav with user identity and a working sign-out (verify/close the Phase 11 gap)
+- [x] **DEBT-04**: Outstanding v1.1 human-UAT scenarios are executed and recorded (Phases 01/02/07/11 + the Phase 14 375px search-sheet UAT)
+- [x] **DEBT-05**: Outstanding `human_needed` verifications (Phases 01/02/07/09/10/11) are resolved or explicitly re-deferred with a reason
 
 ### Self-Host Distribution (DIST)
 
@@ -125,11 +125,11 @@ Every v1.2 requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEBT-01 | Phase 15 | Pending |
-| DEBT-02 | Phase 15 | Pending |
-| DEBT-03 | Phase 15 | Pending |
-| DEBT-04 | Phase 15 | Pending |
-| DEBT-05 | Phase 15 | Pending |
+| DEBT-01 | Phase 15 | Complete |
+| DEBT-02 | Phase 15 | Complete |
+| DEBT-03 | Phase 15 | Complete |
+| DEBT-04 | Phase 15 | Complete |
+| DEBT-05 | Phase 15 | Complete |
 | DIST-01 | Phase 18 | Pending |
 | DIST-02 | Phase 18 | Pending |
 | DIST-03 | Phase 18 | Pending |
