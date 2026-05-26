@@ -39,7 +39,7 @@ are archived in [`milestones/v1.1-ROADMAP.md`](./milestones/v1.1-ROADMAP.md).
 mobile-first, AI consolidated into its own nav destination, and cleanly self-hostable by
 other households.
 
-- [ ] **Phase 15: v1.1 Debt Cleanup** - Close carried debt so new v1.2 work sits on a clean, verified base
+- [x] **Phase 15: v1.1 Debt Cleanup** - Close carried debt so new v1.2 work sits on a clean, verified base (completed 2026-05-26)
 - [ ] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration
 - [ ] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page
 - [ ] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation
@@ -67,7 +67,7 @@ Plans:
 - [x] 15-02-PLAN.md — DEBT-02: test_setup_concurrent_race fix + CI double-run isolation guard
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 15-03-PLAN.md — DEBT-03/04/05: on-device nav/sign-out + human-UAT + human_needed closure ledger (incl. D-13 safe-area)
+- [x] 15-03-PLAN.md — DEBT-03/04/05: on-device nav/sign-out + human-UAT + human_needed closure ledger (incl. D-13 safe-area)
 
 ### Phase 16: Cafe Quick-Rate
 **Goal**: Users can log coffees tasted outside the home in ~20 seconds; those logs shape taste preferences and AI recommendations, while staying isolated from brew-parameter analytics
@@ -184,7 +184,7 @@ Plans:
 | 12. Hardening + Tests | v1.1 | 7/7 | Complete | 2026-05-24 |
 | 13. PWA UX Fixes | v1.1 | 6/6 | Complete | 2026-05-25 |
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
-| 15. v1.1 Debt Cleanup | v1.2 | 2/3 | In Progress|  |
+| 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete   | 2026-05-26 |
 | 16. Cafe Quick-Rate | v1.2 | 0/TBD | Not started | - |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
