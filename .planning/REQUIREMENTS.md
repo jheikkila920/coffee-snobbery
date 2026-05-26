@@ -17,6 +17,18 @@ Carried v1.1 debt, folded in early so new work sits on a clean base.
 - [x] **DEBT-04**: Outstanding v1.1 human-UAT scenarios are executed and recorded (Phases 01/02/07/11 + the Phase 14 375px search-sheet UAT)
 - [x] **DEBT-05**: Outstanding `human_needed` verifications (Phases 01/02/07/09/10/11) are resolved or explicitly re-deferred with a reason
 
+### Catalog & Session Polish (CATALOG)
+
+Inserted phase (Phase 15.1). Coffee catalog and brew session form cleanup surfaced during Phase 15 use of the live app. Lands before any v1.2 feature work that touches the shared coffee schema or AI inputs.
+
+- [ ] **CATALOG-01**: The edit-coffee modal renders at the same width as the create-coffee modal on desktop, and a coffee edit submits and persists end-to-end (item #2 -- Save/Cancel breakage -- is scoped via `/gsd-debug` and may add a `CATALOG-08` if the fix turns out broader than this edit-coffee surface)
+- [ ] **CATALOG-02**: The `coffees.country` column is removed via a safe Alembic migration that merges any existing data into `origin`, and no UI surface, form, AI prompt, or analytics query references country thereafter
+- [ ] **CATALOG-03**: A coffee can be flagged single-origin or blend, blends accept multiple structured origins (not a free-text comma string), and the form UI toggles cleanly between the two modes
+- [ ] **CATALOG-04**: The roast-level enum gains Nordic Light and Ultra Light values (ordering placed at the lighter end), with a forward-compatible migration that preserves existing values
+- [ ] **CATALOG-05**: Varietal stays optional, supports multi-select, and autocompletes from a seeded varietal catalog (Bourbon, Typica, Caturra, Catuai, Geisha, Pacamara, SL28, SL34, etc.); a coffee may have zero, one, or many varietals
+- [ ] **CATALOG-06**: A new brew session prefills its flavor-note chips from the parent coffee, the user can remove inherited chips before saving, and any flavor-note add or remove on the session is mirrored back to the parent coffee (bidirectional sync)
+- [ ] **CATALOG-07**: Roast-freshness tracking is removed app-wide -- the `roast_date`/freshness column is dropped via safe migration, AI prompts no longer mention freshness, the scheduler no longer flags stale coffees, and every UI element is removed
+
 ### Self-Host Distribution (DIST)
 
 Make Snobbery cleanly runnable by other households on their own VPS.
@@ -38,6 +50,7 @@ Restructure navigation so AI gets a home and admin gets out of the way. Exact pl
 - [ ] **IA-03**: AI surfaces (coffee recommendation, equipment callout, sweet-spots prose) are consolidated onto the AI page and removed from other pages
 - [ ] **IA-04**: The home page is simplified to primary action affordances (e.g. rate a coffee, log a session, top coffees, wishlist)
 - [ ] **IA-05**: Nav and asset changes reach installed PWAs without a manual cache clear (cache-bust verified after deploy)
+- [ ] **IA-06**: The home page's "top coffees" lists the top 5 rated coffees with no minimum-star or minimum-session-count floor (item #9)
 
 ### Cafe Quick-Rate (CAFE)
 
@@ -62,6 +75,11 @@ The differentiator. A dedicated AI page hosting the consolidated recommendations
 - [ ] **AIX-06**: User can add a researched coffee to the wishlist directly from the result
 - [ ] **AIX-07**: AI responses on the AI page stream to the user (SSE) instead of polling
 - [ ] **AIX-08**: When a user meets the cold-start threshold but no AI API key is configured, the AI page shows a prominent button/banner linking to the Admin page to add a key (distinct from the not-enough-data empty state)
+- [ ] **AIX-09**: The preference profile contains an in-depth AI-generated prose summary that cross-cuts flavor descriptors against process (e.g., "fruity in washed but nutty in natural"), origin, varietal, and rating -- no descriptor count cap; flavor descriptors are not shown as a standalone "top descriptors" widget (item #11)
+- [ ] **AIX-10**: Every user-triggered AI action shows visible progress feedback while it runs -- AI Refresh, Force Refresh, and Refresh Recommendation buttons disable + display a spinner/state until the request completes or errors (items #12 + #15)
+- [ ] **AIX-11**: The "what to buy next" recommendation always returns a concrete brew recipe (either an existing recipe or a generated one) plus actionable brew suggestions (ratio, temperature, grind hint) -- "no matching recipe found" is treated as a bug (item #13)
+- [ ] **AIX-12**: User can request AI improvement suggestions on any logged brew session; the AI is aware of the user's prior sessions for that coffee and proposes changes (grind, ratio, temperature, brewer, recipe) that have not already been tried (item #14)
+- [ ] **AIX-13**: AI page interactions meet documented latency targets; an investigation captures current p50/p95 for each AI flow and either fixes regressions or documents why the current latency is fundamental (item #16)
 
 ### Guided Brew & Brew Data (GBREW)
 
@@ -72,6 +90,7 @@ Make Guided Brew feel like a purpose-built mobile brewing coach, plus the brew-d
 - [ ] **GBREW-03**: User can optionally record first-drip time and bloom time on a brew session
 - [ ] **GBREW-04**: User selects water type from a managed water-profiles catalog (named profiles) instead of freetext
 - [ ] **GBREW-05**: Guided Brew Mode meets the purpose-built mobile polish bar end to end
+- [ ] **GBREW-06**: Recipe step builder supports per-step notes (e.g., "Hario Switch closed for immersion") AND supports timed steps that have neither coffee nor water (e.g., "open switch for drawdown") -- both inheritable into Guided Brew as coached steps (item #7)
 
 ### Mobile-First Polish (MOBILE)
 
@@ -130,6 +149,13 @@ Every v1.2 requirement maps to exactly one phase.
 | DEBT-03 | Phase 15 | Complete |
 | DEBT-04 | Phase 15 | Complete |
 | DEBT-05 | Phase 15 | Complete |
+| CATALOG-01 | Phase 15.1 | Pending |
+| CATALOG-02 | Phase 15.1 | Pending |
+| CATALOG-03 | Phase 15.1 | Pending |
+| CATALOG-04 | Phase 15.1 | Pending |
+| CATALOG-05 | Phase 15.1 | Pending |
+| CATALOG-06 | Phase 15.1 | Pending |
+| CATALOG-07 | Phase 15.1 | Pending |
 | DIST-01 | Phase 18 | Pending |
 | DIST-02 | Phase 18 | Pending |
 | DIST-03 | Phase 18 | Pending |
@@ -142,6 +168,7 @@ Every v1.2 requirement maps to exactly one phase.
 | IA-03 | Phase 17 | Pending |
 | IA-04 | Phase 17 | Pending |
 | IA-05 | Phase 17 | Pending |
+| IA-06 | Phase 17 | Pending |
 | CAFE-01 | Phase 16 | Pending |
 | CAFE-02 | Phase 16 | Pending |
 | CAFE-03 | Phase 16 | Pending |
@@ -156,11 +183,17 @@ Every v1.2 requirement maps to exactly one phase.
 | AIX-06 | Phase 19 | Pending |
 | AIX-07 | Phase 19 | Pending |
 | AIX-08 | Phase 17 | Pending |
+| AIX-09 | Phase 19 | Pending |
+| AIX-10 | Phase 19 | Pending |
+| AIX-11 | Phase 19 | Pending |
+| AIX-12 | Phase 19 | Pending |
+| AIX-13 | Phase 19 | Pending |
 | GBREW-01 | Phase 20 | Pending |
 | GBREW-02 | Phase 20 | Pending |
 | GBREW-03 | Phase 20 | Pending |
 | GBREW-04 | Phase 20 | Pending |
 | GBREW-05 | Phase 20 | Pending |
+| GBREW-06 | Phase 20 | Pending |
 | MOBILE-01 | Phase 21 | Pending |
 | MOBILE-02 | Phase 21 | Pending |
 | MOBILE-03 | Phase 21 | Pending |
@@ -169,10 +202,10 @@ Every v1.2 requirement maps to exactly one phase.
 | VIZ-01 | Phase 19 | Pending |
 
 **Coverage:**
-- v1.2 requirements: 42 total (DEBT 5, DIST 7, IA 5, CAFE 6, AIX 8, GBREW 5, MOBILE 5, VIZ 1)
-- Mapped to phases: 42/42 ✓
+- v1.2 requirements: 56 total (DEBT 5, CATALOG 7, DIST 7, IA 6, CAFE 6, AIX 13, GBREW 6, MOBILE 5, VIZ 1)
+- Mapped to phases: 56/56 ✓
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-25*
-*Last updated: 2026-05-25 — traceability table populated by roadmapper (phases 15–22)*
+*Last updated: 2026-05-26 — added CATALOG-01..07 (Phase 15.1 inserted), IA-06, AIX-09..13, GBREW-06 from post-Phase-15 capture*

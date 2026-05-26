@@ -40,6 +40,7 @@ mobile-first, AI consolidated into its own nav destination, and cleanly self-hos
 other households.
 
 - [x] **Phase 15: v1.1 Debt Cleanup** - Close carried debt so new v1.2 work sits on a clean, verified base (completed 2026-05-26)
+- [ ] **Phase 15.1: Catalog & Session Polish** (INSERTED) - Coffee catalog + brew session form cleanup: drop dead fields, fix edit, add multi-origin
 - [ ] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration
 - [ ] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page
 - [ ] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation
@@ -69,9 +70,25 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 15-03-PLAN.md — DEBT-03/04/05: on-device nav/sign-out + human-UAT + human_needed closure ledger (incl. D-13 safe-area)
 
+### Phase 15.1: Catalog & Session Polish (INSERTED)
+**Goal**: The coffee catalog and brew session form are simplified, correct, and free of dead or redundant fields, so all downstream v1.2 feature work builds on a clean data model
+**Depends on**: Phase 15
+**Requirements**: CATALOG-01, CATALOG-02, CATALOG-03, CATALOG-04, CATALOG-05, CATALOG-06, CATALOG-07
+**Success Criteria** (what must be TRUE):
+  1. The edit-coffee modal renders at the same width as the create-coffee modal on desktop and all coffee edits save successfully (CATALOG-01; item #2 Save/Cancel may add CATALOG-08 after `/gsd-debug` scopes it)
+  2. The `country` column is removed from `coffees` with a safe data migration into `origin`, and no UI exposes it (CATALOG-02)
+  3. A coffee can be flagged as single-origin or blend and supports multiple structured origins, not a free-text string (CATALOG-03)
+  4. The roast-level enum includes Nordic Light and Ultra Light (CATALOG-04)
+  5. Varietal stays optional and supports multi-select with autocomplete from a seeded varietal list (CATALOG-05)
+  6. A new brew session inherits the parent coffee's flavor notes by default, the user can remove inherited chips, and any flavor-note add or remove on the session is mirrored back to the parent coffee (CATALOG-06)
+  7. Roast-freshness tracking is removed app-wide: schema column dropped, AI prompts cleaned, every UI surface scrubbed (CATALOG-07)
+**Plans**: TBD
+**UI hint**: yes
+**Insertion reason**: items surfaced during Phase 15 use of the live app — see commit log + post-Phase-15 capture
+
 ### Phase 16: Cafe Quick-Rate
 **Goal**: Users can log coffees tasted outside the home in ~20 seconds; those logs shape taste preferences and AI recommendations, while staying isolated from brew-parameter analytics
-**Depends on**: Phase 15
+**Depends on**: Phase 15, Phase 15.1 (shared coffee schema must be clean before adding cafe_logs that mirror its fields)
 **Requirements**: CAFE-01, CAFE-02, CAFE-03, CAFE-04, CAFE-05, CAFE-06
 **Success Criteria** (what must be TRUE):
   1. User can log a cafe coffee with just a name and a rating in roughly 20 seconds
@@ -86,7 +103,7 @@ Plans:
 ### Phase 17: IA Restructure
 **Goal**: Navigation reflects usage priority — Admin is out of the daily-use path, AI has a dedicated bottom-nav tab, and home is simplified to primary action affordances
 **Depends on**: Phase 15
-**Requirements**: IA-01, IA-02, IA-03, IA-04, IA-05, DIST-07, AIX-08
+**Requirements**: IA-01, IA-02, IA-03, IA-04, IA-05, IA-06, DIST-07, AIX-08
 **Success Criteria** (what must be TRUE):
   1. The bottom nav has no Admin tab; Admin is reachable via a button on the config/settings page only
   2. A new AI tab is present in the bottom nav and opens an AI page (shell wired; content completed in Phase 19)
@@ -112,8 +129,8 @@ Plans:
 
 ### Phase 19: AI Page & Research/Predict
 **Goal**: The AI page is fully wired with consolidated recommendations, on-demand coffee research, predicted personal rating, and trend charts — with cost controls that are non-negotiable
-**Depends on**: Phase 17 (AI page shell and nav exist), Phase 16 (cafe logs feed preference derivation)
-**Requirements**: AIX-01, AIX-02, AIX-03, AIX-04, AIX-05, AIX-06, AIX-07, VIZ-01
+**Depends on**: Phase 17 (AI page shell and nav exist), Phase 16 (cafe logs feed preference derivation), Phase 15.1 (roast-freshness removed from AI inputs; multi-origin and varietal shape new preference prose)
+**Requirements**: AIX-01, AIX-02, AIX-03, AIX-04, AIX-05, AIX-06, AIX-07, AIX-09, AIX-10, AIX-11, AIX-12, AIX-13, VIZ-01
 **Success Criteria** (what must be TRUE):
   1. The AI page shows the coffee recommendation, equipment callout, and sweet-spots prose (relocated from home and other pages)
   2. User can type a coffee name and receive an AI-researched profile (origin, tasting notes, cited sources) grounded in live web search
@@ -129,7 +146,7 @@ Plans:
 ### Phase 20: Guided Brew Polish
 **Goal**: Guided Brew Mode feels like a purpose-built mobile brewing coach — timer survives phone sleep, phases are coached step-by-step, and water is selected from named profiles
 **Depends on**: Phase 15 (safe-area fix verified on-device before spreading to Guided Brew)
-**Requirements**: GBREW-01, GBREW-02, GBREW-03, GBREW-04, GBREW-05
+**Requirements**: GBREW-01, GBREW-02, GBREW-03, GBREW-04, GBREW-05, GBREW-06
 **Success Criteria** (what must be TRUE):
   1. The Guided Brew timer continues counting accurately when the phone screen sleeps during a brew
   2. Guided Brew steps through recipe phases (bloom, pours) as timed, coached steps with phase-specific cues
@@ -165,7 +182,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 15 → 16 and 17 and 18 (16/17/18 can be sequenced or parallelized; 17 must precede 19; 16 must precede 19) → 19 and 20 (parallel) → 21 → 22
+**Execution Order:** 15 → 15.1 → 16 and 17 and 18 (16/17/18 can be sequenced or parallelized; 17 must precede 19; 16 must precede 19; 15.1 must precede 16 and 19) → 19 and 20 (parallel) → 21 → 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -185,6 +202,7 @@ Plans:
 | 13. PWA UX Fixes | v1.1 | 6/6 | Complete | 2026-05-25 |
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
+| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 0/TBD | Not started | - |
 | 16. Cafe Quick-Rate | v1.2 | 0/TBD | Not started | - |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
