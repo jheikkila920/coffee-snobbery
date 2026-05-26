@@ -14,6 +14,7 @@ Endpoints
 * ``POST /roasters`` — create. Validation errors → 200 + form-fragment
   re-render with errors. ``as_modal=true`` → empty body + ``HX-Trigger``
   ``roaster-created`` header (D-15 substrate for plan 04-11's mini-modal).
+* ``GET /roasters/{id}/row`` — row fragment; used by Cancel button in edit mode.
 * ``GET /roasters/{id}/edit`` — form fragment pre-populated with the row.
 * ``POST /roasters/{id}`` — update. Same validation re-render pattern.
 * ``POST /roasters/{id}/archive`` — soft-delete; returns updated row.
@@ -293,6 +294,24 @@ async def create_roaster(
 # --------------------------------------------------------------------------- #
 # Edit / Update / Archive                                                     #
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/{roaster_id}/row", response_class=HTMLResponse)
+def roaster_row(
+    roaster_id: int,
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Row fragment served to the Cancel button in edit mode."""
+    roaster = roasters_service.get_roaster(db, roaster_id=roaster_id)
+    if roaster is None:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/roaster_row.html",
+        context={"roaster": roaster, "mode": "row"},
+    )
 
 
 @router.get("/{roaster_id}/edit", response_class=HTMLResponse)

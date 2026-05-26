@@ -30,6 +30,7 @@ Endpoints
   with one "Bloom" step via ``steps_json``.
 * ``GET /recipes/empty-form`` — empty fragment served to Cancel.
 * ``POST /recipes`` — create. Validation errors → 200 + form re-render.
+* ``GET /recipes/{id}/row`` — row fragment; used by Cancel button in edit mode.
 * ``GET /recipes/{id}/edit`` — form fragment pre-populated; seeds the
   Alpine builder via ``data-initial-steps="{{ recipe.steps | tojson }}"``.
 * ``POST /recipes/{id}`` — update. Same validation re-render pattern.
@@ -317,6 +318,24 @@ async def create_recipe(
 # --------------------------------------------------------------------------- #
 # Edit / Update / Archive / Duplicate                                         #
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/{recipe_id}/row", response_class=HTMLResponse)
+def recipe_row(
+    recipe_id: int,
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Row fragment served to the Cancel button in edit mode."""
+    recipe = recipes_service.get_recipe(db, recipe_id=recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/recipe_row.html",
+        context={"recipe": recipe, "mode": "row"},
+    )
 
 
 @router.get("/{recipe_id}/edit", response_class=HTMLResponse)

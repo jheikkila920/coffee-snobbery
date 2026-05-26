@@ -19,7 +19,7 @@
   {% set form_target = "#equipment-form-mount" %}
   {% set form_swap = "innerHTML" %}
 {% endif %}
-<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+<div {% if is_edit %}data-row {% endif %}class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
   <form hx-post="{{ form_action }}"
         hx-target="{{ form_target }}"
         hx-swap="{{ form_swap }}"
@@ -77,6 +77,15 @@
       <p class="text-sm text-red-700">{{ errors['_form'] }}</p>
     {% endif %}
     <div class="flex gap-3 mt-2">
+      {% if is_edit %}
+      <button type="button"
+              hx-get="/equipment/{{ equipment_id }}/row"
+              hx-target="closest [data-row]"
+              hx-swap="outerHTML"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      {% else %}
       <button type="button"
               hx-get="/equipment/empty-form"
               hx-target="#equipment-form-mount"
@@ -84,6 +93,7 @@
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>
+      {% endif %}
       <button type="submit"
               class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
         Save

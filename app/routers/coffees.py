@@ -35,6 +35,7 @@ Endpoints
   re-render with errors.
 * ``GET /coffees/{id}`` — coffee detail page (renders bags + "Open new
   bag" affordance).
+* ``GET /coffees/{id}/row`` — row fragment; used by Cancel button in edit mode.
 * ``GET /coffees/{id}/edit`` — form fragment pre-populated with row.
 * ``POST /coffees/{id}`` — update. Same validation re-render pattern.
 * ``POST /coffees/{id}/archive`` — soft-delete; returns updated row.
@@ -508,6 +509,37 @@ def coffee_detail(
 # --------------------------------------------------------------------------- #
 # Edit / Update / Archive                                                     #
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/{coffee_id}/row", response_class=HTMLResponse)
+def coffee_row(
+    coffee_id: int,
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Row fragment served to the Cancel button in edit mode."""
+    coffee = coffees_service.get_coffee(db, coffee_id=coffee_id)
+    if coffee is None:
+        raise HTTPException(status_code=404)
+    flavor_note_names = coffees_service.flavor_note_name_map(
+        db, ids=coffee.advertised_flavor_note_ids or []
+    )
+    roaster_name_map: dict[int, str] = {}
+    if coffee.roaster_id is not None:
+        roaster = roasters_service.get_roaster(db, roaster_id=coffee.roaster_id)
+        if roaster is not None:
+            roaster_name_map[coffee.roaster_id] = roaster.name
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/coffee_row.html",
+        context={
+            "coffee": coffee,
+            "mode": "row",
+            "flavor_note_names": flavor_note_names,
+            "roaster_name_map": roaster_name_map,
+        },
+    )
 
 
 @router.get("/{coffee_id}/edit", response_class=HTMLResponse)

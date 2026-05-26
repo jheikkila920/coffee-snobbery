@@ -25,6 +25,7 @@ Endpoints
 * ``GET /equipment/empty-form`` — empty fragment used by Cancel buttons.
 * ``POST /equipment`` — create. Validation errors → 200 + form-fragment
   re-render with errors.
+* ``GET /equipment/{id}/row`` — row fragment; used by Cancel button in edit mode.
 * ``GET /equipment/{id}/edit`` — form fragment pre-populated with the row.
 * ``POST /equipment/{id}`` — update. Same validation re-render pattern.
 * ``POST /equipment/{id}/archive`` — soft-delete; returns updated row.
@@ -229,6 +230,24 @@ async def create_equipment(
 # --------------------------------------------------------------------------- #
 # Edit / Update / Archive                                                     #
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/{equipment_id}/row", response_class=HTMLResponse)
+def equipment_row(
+    equipment_id: int,
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Row fragment served to the Cancel button in edit mode."""
+    equipment = equipment_service.get_equipment(db, equipment_id=equipment_id)
+    if equipment is None:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/equipment_row.html",
+        context={"equipment": equipment, "mode": "row"},
+    )
 
 
 @router.get("/{equipment_id}/edit", response_class=HTMLResponse)
