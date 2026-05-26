@@ -139,6 +139,19 @@ async def test_setup_concurrent_race(async_client) -> None:
     """AUTH-02: two concurrent POST /setups → exactly one 303→/ + one 303→/login."""
     _require_auth_router()
 
+    # Ensure the in-memory settings cache is clean before async_client's lifespan
+    # prewarm_cache fires. test_setup_blocked_after_completion updates setup_completed
+    # via raw engine.begin() (bypassing set_setting()), so _svc._cache is not
+    # invalidated. Without this clear, a stale _cache['setup_completed']='true' from
+    # a prior test in the same module causes both concurrent POSTs to see true.
+    # Mirrors the existing module-teardown pattern in conftest._reset_catalog_tables.
+    try:
+        import app.services.settings as _svc_mod
+
+        _svc_mod._cache.clear()
+    except Exception:
+        pass
+
     # Prime the CSRF cookie via an async GET. httpx.AsyncClient stores cookies
     # in its own jar; explicit pass-through into both posts isolates the
     # contract.
