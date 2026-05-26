@@ -60,7 +60,11 @@ other households.
   3. Every authenticated page shows persistent nav with user identity and a working sign-out, confirmed on a physical device
   4. All outstanding v1.1 human-UAT scenarios (Phases 01/02/07/11 and the Phase 14 375px search-sheet UAT) are executed and recorded
   5. Every `human_needed` verification is either closed with evidence or explicitly re-deferred with a written reason
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 15-01-PLAN.md — DEBT-01: entrypoint root→chown→gosu privilege drop (G-01 fix)
+- [ ] 15-02-PLAN.md — DEBT-02: test_setup_concurrent_race fix + CI double-run isolation guard
+- [ ] 15-03-PLAN.md — DEBT-03/04/05: on-device nav/sign-out + human-UAT + human_needed closure ledger (incl. D-13 safe-area)
 
 ### Phase 16: Cafe Quick-Rate
 **Goal**: Users can log coffees tasted outside the home in ~20 seconds; those logs shape taste preferences and AI recommendations, while staying isolated from brew-parameter analytics
@@ -177,7 +181,7 @@ other households.
 | 12. Hardening + Tests | v1.1 | 7/7 | Complete | 2026-05-24 |
 | 13. PWA UX Fixes | v1.1 | 6/6 | Complete | 2026-05-25 |
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
-| 15. v1.1 Debt Cleanup | v1.2 | 0/TBD | Not started | - |
+| 15. v1.1 Debt Cleanup | v1.2 | 0/3 | Not started | - |
 | 16. Cafe Quick-Rate | v1.2 | 0/TBD | Not started | - |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
