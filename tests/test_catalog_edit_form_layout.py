@@ -15,11 +15,9 @@ All DB-touching tests are guarded by the postgres skip-gate.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -108,10 +106,10 @@ def _create_entity(client: Any, url_prefix: str) -> int:
             "origins_country": "Ethiopia",
             "origins_region": "",
         }
-        resp = client.post(f"/{url_prefix}", data=payload)
+        client.post(f"/{url_prefix}", data=payload)
     elif url_prefix == "roasters":
         payload = {**common_payload, "name": "Layout Test Roaster"}
-        resp = client.post(f"/{url_prefix}", data=payload)
+        client.post(f"/{url_prefix}", data=payload)
     elif url_prefix == "equipment":
         payload = {
             **common_payload,
@@ -119,10 +117,10 @@ def _create_entity(client: Any, url_prefix: str) -> int:
             "brand": "Layout",
             "model": "Test",
         }
-        resp = client.post(f"/{url_prefix}", data=payload)
+        client.post(f"/{url_prefix}", data=payload)
     elif url_prefix == "flavor-notes":
         payload = {**common_payload, "name": "layout-test-note", "category": "fruit"}
-        resp = client.post(f"/{url_prefix}", data=payload)
+        client.post(f"/{url_prefix}", data=payload)
     elif url_prefix == "recipes":
         import json
 
@@ -135,15 +133,16 @@ def _create_entity(client: Any, url_prefix: str) -> int:
             "water_temp_c": "93",
             "steps": steps,
         }
-        resp = client.post(f"/{url_prefix}", data=payload)
+        client.post(f"/{url_prefix}", data=payload)
     else:
         pytest.skip(f"Unknown entity prefix: {url_prefix}")
 
     # The response may be 200 (HTMX fragment) or 302. Either way, parse the
     # entity id from the DB rather than the response body to keep this simple.
     try:
-        from app.db import engine
         from sqlalchemy import text as sa_text
+
+        from app.db import engine
 
         table_map = {
             "coffees": "coffees",
@@ -154,7 +153,9 @@ def _create_entity(client: Any, url_prefix: str) -> int:
         }
         table = table_map[url_prefix]
         with engine.connect() as conn:
-            row = conn.execute(sa_text(f"SELECT id FROM {table} ORDER BY id DESC LIMIT 1")).fetchone()  # noqa: S608
+            row = conn.execute(  # noqa: S608
+                sa_text(f"SELECT id FROM {table} ORDER BY id DESC LIMIT 1")
+            ).fetchone()
         if row is None:
             pytest.skip(f"No {url_prefix} row found after create")
         return int(row[0])
@@ -180,10 +181,9 @@ def test_entity_row_has_two_edit_buttons(
     resp = client.get(f"/{url_prefix}", headers={"HX-Request": "true"})
     # Fragment may be 200 even with no rows — just check the page renders
     assert resp.status_code == 200, f"GET /{url_prefix} returned {resp.status_code}"
-    body = resp.text
     # These classes exist ONLY if at least one row was rendered.
     # If DB is empty this test is vacuously "structure present" — create one first.
-    entity_id = _create_entity(client, url_prefix)
+    _create_entity(client, url_prefix)
     resp2 = client.get(f"/{url_prefix}", headers={"HX-Request": "true"})
     body2 = resp2.text
     assert "md:hidden" in body2, f"Expected md:hidden class in {url_prefix} list response"
@@ -264,9 +264,7 @@ def test_entity_edit_with_layout_desktop_returns_form_with_desktop_targets(
         f"GET /{url_prefix}/{entity_id}/edit?layout=desktop returned {resp.status_code}"
     )
     body = resp.text
-    assert f"#{mount_id}" in body, (
-        f"Expected #{mount_id} in desktop edit form for {url_prefix}"
-    )
+    assert f"#{mount_id}" in body, f"Expected #{mount_id} in desktop edit form for {url_prefix}"
     assert 'hx-swap="innerHTML"' in body, (
         f"Expected innerHTML swap in desktop edit form for {url_prefix}"
     )
@@ -339,9 +337,7 @@ def test_entity_update_desktop_returns_oob_row_and_form_clear(
         f"Expected hx-swap-oob=outerHTML in OOB response for {url_prefix}"
     )
     # OOB form-mount clear: <div id="{mount_id}" hx-swap-oob="innerHTML"></div>
-    assert f'id="{mount_id}"' in body, (
-        f"Expected mount div id in OOB response for {url_prefix}"
-    )
+    assert f'id="{mount_id}"' in body, f"Expected mount div id in OOB response for {url_prefix}"
     assert 'hx-swap-oob="innerHTML"' in body, (
         f"Expected hx-swap-oob=innerHTML (mount clear) in OOB response for {url_prefix}"
     )
@@ -412,11 +408,13 @@ def _build_update_payload(
         base["layout"] = layout
 
     if url_prefix == "coffees":
-        base.update({
-            "name": f"Updated Coffee {entity_id}",
-            "origins_country": "Kenya",
-            "origins_region": "",
-        })
+        base.update(
+            {
+                "name": f"Updated Coffee {entity_id}",
+                "origins_country": "Kenya",
+                "origins_region": "",
+            }
+        )
     elif url_prefix == "roasters":
         base.update({"name": f"Updated Roaster {entity_id}"})
     elif url_prefix == "equipment":
@@ -425,11 +423,13 @@ def _build_update_payload(
         base.update({"name": f"updated-note-{entity_id}", "category": "floral"})
     elif url_prefix == "recipes":
         steps = json.dumps([{"water_grams": 50, "time_seconds": 45, "label": "Bloom"}])
-        base.update({
-            "name": f"Updated Recipe {entity_id}",
-            "dose_grams": "15",
-            "water_grams": "250",
-            "water_temp_c": "93",
-            "steps": steps,
-        })
+        base.update(
+            {
+                "name": f"Updated Recipe {entity_id}",
+                "dose_grams": "15",
+                "water_grams": "250",
+                "water_temp_c": "93",
+                "steps": steps,
+            }
+        )
     return base
