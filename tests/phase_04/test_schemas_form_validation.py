@@ -299,7 +299,6 @@ def test_bag_valid() -> None:
     bag = BagCreate(coffee_id=1)
     assert bag.coffee_id == 1
     assert bag.weight_grams is None
-    assert bag.roast_date is None
     assert bag.notes == ""
 
 

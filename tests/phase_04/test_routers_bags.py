@@ -157,7 +157,6 @@ def test_create_bag_valid(authed_client: Any, clean_catalog: None) -> None:
     resp = authed_client.post(
         f"/coffees/{cid}/bags",
         data={
-            "roast_date": "2026-05-01",
             "weight_grams": "250",
             "opened_at": "",
             "finished_at": "",
@@ -200,7 +199,6 @@ def test_create_bag_zero_weight_rejected(authed_client: Any, clean_catalog: None
     resp = authed_client.post(
         f"/coffees/{cid}/bags",
         data={
-            "roast_date": "",
             "weight_grams": "0",
             "opened_at": "",
             "finished_at": "",
@@ -263,7 +261,6 @@ def test_update_bag_persists(authed_client: Any, clean_catalog: None) -> None:
     resp = authed_client.post(
         f"/bags/{bid}",
         data={
-            "roast_date": "",
             "weight_grams": "500",
             "opened_at": "",
             "finished_at": "",

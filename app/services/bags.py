@@ -72,7 +72,6 @@ def create_bag(
     db: Session,
     *,
     coffee_id: int,
-    roast_date=None,
     weight_grams: int | None = None,
     opened_at=None,
     finished_at=None,
@@ -89,7 +88,6 @@ def create_bag(
     """
     bag = Bag(
         coffee_id=coffee_id,
-        roast_date=roast_date,
         weight_grams=weight_grams,
         opened_at=opened_at,
         finished_at=finished_at,
@@ -130,7 +128,6 @@ def update_bag(
     db: Session,
     *,
     bag_id: int,
-    roast_date=None,
     weight_grams: int | None = None,
     opened_at=None,
     finished_at=None,
@@ -146,7 +143,6 @@ def update_bag(
         update(Bag)
         .where(Bag.id == bag_id)
         .values(
-            roast_date=roast_date,
             weight_grams=weight_grams,
             opened_at=opened_at,
             finished_at=finished_at,

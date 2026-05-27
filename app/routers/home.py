@@ -10,7 +10,6 @@ Routes:
   GET /home/cards/top-coffees        — aggregate card (HOME-01)
   GET /home/cards/preference-profile — aggregate card (HOME-02)
   GET /home/cards/flavor-descriptors — aggregate card (HOME-03)
-  GET /home/cards/roast-freshness    — aggregate card (HOME-04)
   GET /home/cards/sweet-spots        — aggregate card (HOME-05)
 
 Every handler is gated by ``Depends(require_user)`` (T-06-04 / T-06-05).
@@ -189,25 +188,6 @@ def card_flavor_descriptors(
         request=request,
         name="fragments/home/flavor_descriptors.html",
         context={"rows": rows, "all_unrated": all_unrated},
-    )
-
-
-@router.get("/home/cards/roast-freshness", response_class=HTMLResponse)
-def card_roast_freshness(
-    request: Request,
-    user: User = Depends(require_user),  # noqa: B008
-    db: Session = Depends(get_session),  # noqa: B008
-) -> Response:
-    """Fragment endpoint for the roast-freshness card (HOME-04).
-
-    NOT rating-dependent for the D-05 nudge — freshness doesn't require ratings.
-    Always uses the generic sparse hint when empty.
-    """
-    rows = analytics.get_roast_freshness_buckets(db, user.id)
-    return templates.TemplateResponse(
-        request=request,
-        name="fragments/home/roast_freshness.html",
-        context={"rows": rows, "all_unrated": False},
     )
 
 
