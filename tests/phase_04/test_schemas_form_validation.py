@@ -80,13 +80,14 @@ def test_coffee_create_rejects_negative_flavor_id() -> None:
 
 
 def test_coffee_create_optional_fields_default_none() -> None:
-    """Optional fields default to None; notes defaults to empty string."""
+    """Optional fields default to None; notes defaults to empty string.
+
+    Note: country, origin, varietal removed in Plan 15.1-01 (D-05/D-22).
+    Origins are handled outside Pydantic via origins_country/origins_region getlist.
+    """
     coffee = CoffeeCreate(name="Geometry")
-    assert coffee.country is None
-    assert coffee.origin is None
     assert coffee.process is None
     assert coffee.roast_level is None
-    assert coffee.varietal is None
     assert coffee.notes == ""
     assert coffee.advertised_flavor_note_ids == []
 

@@ -1,0 +1,39 @@
+{# One origin entry row in the coffee form (Plan 15.1-01 D-22).
+   Context:
+     country  (str)  — pre-filled country value, or '' for a new empty row.
+     region   (str|None) — pre-filled region value, or '' for a new row.
+     removable (bool) — if True, render a Remove button (hidden on the first row
+                        so the user cannot remove down to zero origins).
+
+   Input names use the repeated-key wire format:
+     origins_country  (collected via form_data.getlist("origins_country"))
+     origins_region   (collected via form_data.getlist("origins_region"))
+
+   Remove button uses HTMX 2.x hx-on:click syntax (CSP-safe; no inline onclick).
+   The hx-on:click handler removes the closest [data-origin-row] ancestor from
+   the DOM without a server round-trip.
+
+   All inputs use min-h-[44px] for mobile touch-target compliance (CLAUDE.md).
+#}
+<div class="flex gap-2 items-end" data-origin-row>
+  <label class="flex flex-col gap-1 flex-1">
+    <span class="text-sm font-semibold">Country</span>
+    <input name="origins_country"
+           value="{{ country or '' }}"
+           required
+           class="rounded border px-2 py-2 text-base border-espresso-200 min-h-[44px] dark:border-espresso-700 dark:bg-espresso-900 dark:text-cream-50">
+  </label>
+  <label class="flex flex-col gap-1 flex-1">
+    <span class="text-sm font-semibold">Region <span class="font-normal text-espresso-500 dark:text-cream-400">(optional)</span></span>
+    <input name="origins_region"
+           value="{{ region or '' }}"
+           class="rounded border px-2 py-2 text-base border-espresso-200 min-h-[44px] dark:border-espresso-700 dark:bg-espresso-900 dark:text-cream-50">
+  </label>
+  {% if removable %}
+  <button type="button"
+          hx-on:click="this.closest('[data-origin-row]').remove()"
+          class="rounded border border-espresso-300 px-3 py-2 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] shrink-0">
+    Remove
+  </button>
+  {% endif %}
+</div>

@@ -326,7 +326,7 @@ def test_coffee_create_invalid_renders_form_not_list(
     - Response does NOT contain full-list-only markup (hidden md:block table
       wrapper that coffee_list.html renders but the form does not)
     - Response does NOT contain hx-swap-oob
-    - Submitted values preserved (D-04): submitted country value in body
+    - Submitted values preserved (D-04): submitted origin country value in body
     """
     _require_postgres()
     _require_catalog_tables()
@@ -337,7 +337,8 @@ def test_coffee_create_invalid_renders_form_not_list(
         "/coffees",
         data={
             "name": "",  # blank — triggers ValidationError
-            "country": "Ethiopia",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "notes": "",
         },
         headers={"HX-Request": "true"},
@@ -363,7 +364,7 @@ def test_coffee_create_invalid_renders_form_not_list(
     assert "hx-swap-oob" not in body, (
         "Validation error response must NOT contain hx-swap-oob — only success uses OOB"
     )
-    # Submitted country value preserved (D-04)
+    # Submitted origin country value preserved (D-04)
     assert "Ethiopia" in body, (
-        "Submitted country 'Ethiopia' must be preserved in error re-render (D-04)"
+        "Submitted origin country 'Ethiopia' must be preserved in error re-render (D-04)"
     )

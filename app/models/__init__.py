@@ -20,6 +20,7 @@ from app.models.base import Base
 from app.models.brew_draft import BrewDraft
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
+from app.models.coffee_origin import CoffeeOrigin
 from app.models.equipment import Equipment
 from app.models.flavor_note import FlavorNote
 from app.models.recipe import Recipe
@@ -37,6 +38,7 @@ __all__ = [
     "BrewDraft",
     "BrewSession",
     "Coffee",
+    "CoffeeOrigin",
     "Equipment",
     "FlavorNote",
     "Recipe",

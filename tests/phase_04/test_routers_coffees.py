@@ -119,14 +119,15 @@ def _seed_coffee(**kwargs: Any) -> int:
     from app.db import SessionLocal
     from app.services import coffees as coffees_service
 
+    country = kwargs.pop("country", None)
+    kwargs.pop("origin", None)
+    kwargs.pop("varietal", None)
     defaults: dict[str, Any] = {
         "name": kwargs.pop("name", "Geometry"),
         "roaster_id": kwargs.pop("roaster_id", None),
-        "country": kwargs.pop("country", None),
-        "origin": kwargs.pop("origin", None),
+        "origins": [(country, None)] if country else [],
         "process": kwargs.pop("process", None),
         "roast_level": kwargs.pop("roast_level", None),
-        "varietal": kwargs.pop("varietal", None),
         "notes": kwargs.pop("notes", ""),
         "advertised_flavor_note_ids": kwargs.pop("advertised_flavor_note_ids", []),
         "by_user_id": kwargs.pop("by_user_id", 0),
@@ -293,14 +294,15 @@ def test_create_coffee_rejects_blank_name(authed_client: Any, clean_catalog: Non
         "/coffees",
         data={
             "name": "",
-            "country": "Ethiopia",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "notes": "",
         },
     )
     assert resp.status_code == 200
     body = resp.text
     assert "text-red-700" in body
-    # Submitted country preserved on re-render (D-04).
+    # Submitted origin country preserved on re-render (D-04).
     assert "Ethiopia" in body
 
 
