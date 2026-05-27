@@ -85,8 +85,8 @@ Plans:
 **Plans**: 5 plans
 Plans:
 **Wave 1**
-- [ ] 15.1-01-PLAN.md — CATALOG-02/03: multi-origin schema (coffee_origins join table) + data migration + form repeating rows + filter bar
-- [ ] 15.1-02-PLAN.md — CATALOG-07: roast-freshness removal sweep (drop bags.roast_date, scrub analytics + AI prompts + home + CSV)
+- [x] 15.1-01-PLAN.md — CATALOG-02/03: multi-origin schema (coffee_origins join table) + data migration + form repeating rows + filter bar
+- [x] 15.1-02-PLAN.md — CATALOG-07: roast-freshness removal sweep (drop bags.roast_date, scrub analytics + AI prompts + home + CSV)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 15.1-03-PLAN.md — CATALOG-04/05: roast-level enum widening + varietal m2m + autocomplete + seed (depends on 01 for coffee model surface)
@@ -213,7 +213,7 @@ Plans:
 | 13. PWA UX Fixes | v1.1 | 6/6 | Complete | 2026-05-25 |
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
-| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 0/5 | Not started | - |
+| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 2/5 | In Progress|  |
 | 16. Cafe Quick-Rate | v1.2 | 0/TBD | Not started | - |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
