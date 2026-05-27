@@ -104,7 +104,8 @@ def upgrade() -> None:
 
     # 4. Drop coffees.varietal (replaced by the join table above).
     # The column was free-text; no data migration needed (D-02).
-    op.drop_column("coffees", "varietal")
+    # IF EXISTS guard: see p15_1_drop_roast_date for the test_migration rationale.
+    op.execute("ALTER TABLE coffees DROP COLUMN IF EXISTS varietal")
 
 
 def downgrade() -> None:

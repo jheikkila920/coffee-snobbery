@@ -30,7 +30,10 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # D-16: drop bags.roast_date with no data preservation.
     # pg_dump nightly backups are the recovery story (explicit project decision).
-    op.drop_column("bags", "roast_date")
+    # Guarded with IF EXISTS so test_alembic_downgrade_p4_then_upgrade can
+    # re-run upgrade chain even after a no-op downgrade pass — production
+    # only ever runs each migration once so the guard is harmless there.
+    op.execute("ALTER TABLE bags DROP COLUMN IF EXISTS roast_date")
 
 
 def downgrade() -> None:

@@ -76,11 +76,17 @@ def upgrade() -> None:
     """)
 
     # 3. Drop the source columns — forward-only (no data preservation; pg_dump is recovery).
-    op.drop_column("coffees", "country")
-    op.drop_column("coffees", "origin")
+    # Guarded with IF EXISTS so test_alembic_downgrade_p4_then_upgrade can
+    # re-run upgrade chain even after a no-op downgrade pass — production
+    # only ever runs each migration once so the guard is harmless there.
+    op.execute("ALTER TABLE coffees DROP COLUMN IF EXISTS country")
+    op.execute("ALTER TABLE coffees DROP COLUMN IF EXISTS origin")
 
 
 def downgrade() -> None:
-    """Forward-only migration — no rollback path per project policy."""
-    # Per project convention: forward-only migrations are no-ops in downgrade().
-    op.execute("SELECT 1")
+    """Forward-only for data (D-05 accepts data loss) but the SCHEMA downgrade
+    must succeed so the downgrade chain doesn't strand coffee_origins as an
+    orphaned FK to a coffees table that earlier migrations try to drop. Drops
+    the coffee_origins table here; restoring its rows requires a pg_dump.
+    """
+    op.drop_table("coffee_origins")
