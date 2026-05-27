@@ -45,7 +45,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, CITEXT, TIMESTAMP
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.models.base import Base
@@ -64,8 +64,8 @@ class Coffee(Base):
         ForeignKey("roasters.id", ondelete="SET NULL"),
         nullable=True,
     )
-    country: Mapped[str | None] = mapped_column(Text, nullable=True)
-    origin: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # country and origin columns removed in p15_1_multi_origin migration (D-05).
+    # Use coffee.origins (relationship to CoffeeOrigin) for origin data.
     process: Mapped[str | None] = mapped_column(Text, nullable=True)
     roast_level: Mapped[str | None] = mapped_column(Text, nullable=True)
     varietal: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -76,6 +76,15 @@ class Coffee(Base):
         server_default=text("'{}'::bigint[]"),
     )
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
+    # Origin rows — one per origin entry. A single-origin coffee has one row;
+    # a blend has >=2. is_blend is derived: len(coffee.origins) > 1 (D-22).
+    origins: Mapped[list["CoffeeOrigin"]] = relationship(  # type: ignore[name-defined]
+        "CoffeeOrigin",
+        cascade="all, delete-orphan",
+        order_by="CoffeeOrigin.sort_order",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
