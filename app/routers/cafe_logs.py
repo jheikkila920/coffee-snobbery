@@ -94,6 +94,9 @@ _INT_FIELDS = {"roaster_id"}
 # Stripping them keeps extra=forbid from tripping on a false positive.
 # CRITICAL: "layout" MUST be here (Pitfall 2 — ?layout=desktop driver field
 # trips extra="forbid" when the hidden input mirrors the query param).
+# CRITICAL: "photo" MUST be here — it is an UploadFile, not a string, and the
+# router reads it directly from form_data AFTER schema validation; passing it
+# to CafeLogCreate would trip extra="forbid" with an UploadFile value.
 _NON_SCHEMA_FORM_KEYS = {
     "X-CSRF-Token",
     "roaster_query",
@@ -101,6 +104,7 @@ _NON_SCHEMA_FORM_KEYS = {
     "origin_country_query",
     "layout",  # D-21: desktop layout param; stripped before Pydantic sees payload
     "_method",  # POST + _method=DELETE pattern (HTMX 2.x convention)
+    "photo",  # file upload — handled separately by the router, not a schema field
 }
 
 # Seeded country list for the origin-country autocomplete (RESEARCH Pattern 5).
@@ -606,8 +610,12 @@ async def update_cafe_log_handler(
         "brew_method": form.brew_method,
         "flavor_note_ids": form.flavor_note_ids,
         "notes": form.notes,
-        "logged_at": form.logged_at,
     }
+    # Only overwrite logged_at when the user explicitly submitted a date.
+    # Omitting it on the form (empty string → None) preserves the stored value.
+    # Avoids NOT NULL violation when the date input is blank during an update.
+    if form.logged_at is not None:
+        update_fields["logged_at"] = form.logged_at
     if photo_filename is not None:
         update_fields["photo_filename"] = photo_filename
 
