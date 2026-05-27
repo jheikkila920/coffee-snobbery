@@ -58,8 +58,6 @@ the new thumbnail; the rest of the row is untouched).
 
 from __future__ import annotations
 
-from datetime import date, datetime
-
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
@@ -82,7 +80,6 @@ router = APIRouter()
 # via :func:`_normalize_errors` so the user still sees the error rendered.
 _FORM_FIELDS = {
     "coffee_id",
-    "roast_date",
     "weight_grams",
     "opened_at",
     "finished_at",
@@ -90,11 +87,10 @@ _FORM_FIELDS = {
 }
 
 # Form keys where an empty form-string is semantically "no value" and must
-# coerce to ``None`` before Pydantic validation. The bag schema's date /
+# coerce to ``None`` before Pydantic validation. The bag schema's
 # datetime / int fields reject the empty string; only ``notes`` legitimately
 # accepts ``""`` (its default).
 _EMPTY_TO_NONE_FIELDS = {
-    "roast_date",
     "weight_grams",
     "opened_at",
     "finished_at",
@@ -207,7 +203,6 @@ async def create_bag_handler(
     bag = bags_service.create_bag(
         db,
         coffee_id=form.coffee_id,
-        roast_date=form.roast_date,
         weight_grams=form.weight_grams,
         opened_at=form.opened_at,
         finished_at=form.finished_at,
@@ -242,7 +237,6 @@ def edit_bag_form(
     if bag is None:
         raise HTTPException(status_code=404)
     values = {
-        "roast_date": bag.roast_date.isoformat() if bag.roast_date else "",
         "weight_grams": str(bag.weight_grams) if bag.weight_grams is not None else "",
         # datetime-local needs YYYY-MM-DDTHH:MM (no seconds, no tz).
         "opened_at": (bag.opened_at.strftime("%Y-%m-%dT%H:%M") if bag.opened_at else ""),
@@ -299,7 +293,6 @@ async def update_bag_handler(
     bag = bags_service.update_bag(
         db,
         bag_id=bag_id,
-        roast_date=form.roast_date,
         weight_grams=form.weight_grams,
         opened_at=form.opened_at,
         finished_at=form.finished_at,
@@ -438,12 +431,6 @@ def delete_photo_handler(
         raise HTTPException(status_code=404)
     bag = bags_service.delete_photo(db, bag_id=bag_id, by_user_id=user.id)
     return _zone_response(request, bag)
-
-
-# Silence unused-import linting: imports kept for forward type hints in
-# the service kwargs (`roast_date`, `opened_at`).
-_ = date
-_ = datetime
 
 
 __all__ = ["router"]

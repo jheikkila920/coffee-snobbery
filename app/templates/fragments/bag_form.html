@@ -26,16 +26,6 @@
     <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
     <input type="hidden" name="coffee_id" value="{{ coffee_id }}">
     <label class="flex flex-col gap-1">
-      <span class="text-sm font-semibold">Roast date</span>
-      <input type="date"
-             name="roast_date"
-             value="{{ values.get('roast_date', '') or '' }}"
-             class="rounded border px-2 py-2 text-base{% if errors.get('roast_date') %} border-red-300{% else %} border-espresso-200{% endif %}">
-      {% if errors.get('roast_date') %}
-        <p class="text-sm text-red-700 mt-1">{{ errors['roast_date'] }}</p>
-      {% endif %}
-    </label>
-    <label class="flex flex-col gap-1">
       <span class="text-sm font-semibold">Weight (grams)</span>
       <input type="number"
              inputmode="decimal"

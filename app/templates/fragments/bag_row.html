@@ -18,13 +18,12 @@
   <div class="flex items-start justify-between gap-3">
     <div class="flex flex-col">
       <div class="text-base font-semibold">
-        {% if bag.roast_date %}
-          Roasted {{ bag.roast_date.strftime('%Y-%m-%d') }}
-        {% else %}
-          Roast date unknown
-        {% endif %}
         {% if bag.weight_grams %}
-          · {{ bag.weight_grams }}g
+          {{ bag.weight_grams }}g bag
+        {% elif bag.opened_at %}
+          Bag opened {{ bag.opened_at.strftime('%Y-%m-%d') }}
+        {% else %}
+          Bag #{{ bag.id }}
         {% endif %}
         {% if is_finished %}
           <span class="ml-2 inline-block rounded-full bg-espresso-200 px-2 py-0.5 text-xs not-italic text-espresso-800 dark:bg-espresso-700 dark:text-cream-100">Finished</span>
