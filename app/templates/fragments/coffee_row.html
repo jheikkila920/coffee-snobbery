@@ -28,11 +28,20 @@
     {# Edit / Archive pinned to top-right (NEW-11). pr-24 on the card prevents
        the coffee name from sliding under these buttons. #}
     <div class="absolute top-3 right-3 flex gap-1">
+      {# mobile: existing a3a2f76 pattern, hidden at md+ #}
       <button type="button"
               hx-get="/coffees/{{ coffee.id }}/edit"
               hx-target="closest [data-row]"
               hx-swap="outerHTML"
-              class="inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+              class="md:hidden inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+        Edit
+      </button>
+      {# desktop: new D-21 pattern, hidden at <md #}
+      <button type="button"
+              hx-get="/coffees/{{ coffee.id }}/edit?layout=desktop"
+              hx-target="#coffee-form-mount"
+              hx-swap="innerHTML"
+              class="hidden md:inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
         Edit
       </button>
       {% if not coffee.archived %}
@@ -91,6 +100,7 @@
 {% else %}
   <tr id="coffee-{{ coffee.id }}"
       data-row
+      {% if include_desktop_oob %}hx-swap-oob="outerHTML"{% endif %}
       class="border-b border-espresso-100{% if coffee.archived %} italic text-espresso-600 dark:text-cream-300{% endif %}">
     <td class="py-2">
       <a href="/coffees/{{ coffee.id }}" class="hover:underline">{{ coffee.name }}</a>
@@ -133,11 +143,20 @@
       {% endif %}
     </td>
     <td class="py-2 text-right">
+      {# mobile: existing a3a2f76 pattern, hidden at md+ #}
       <button type="button"
               hx-get="/coffees/{{ coffee.id }}/edit"
               hx-target="closest [data-row]"
               hx-swap="outerHTML"
-              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+              class="md:hidden rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Edit
+      </button>
+      {# desktop: new D-21 pattern, hidden at <md #}
+      <button type="button"
+              hx-get="/coffees/{{ coffee.id }}/edit?layout=desktop"
+              hx-target="#coffee-form-mount"
+              hx-swap="innerHTML"
+              class="hidden md:inline-flex rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Edit
       </button>
       {% if not coffee.archived %}
@@ -155,5 +174,10 @@
 {% endif %}
 {% if include_oob_form_clear %}
   {# 04-RESEARCH Pattern 2: clear the form mount on successful create. #}
+  <div id="coffee-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}
+{% if include_desktop_oob %}
+  {# D-21: desktop edit success — row already has hx-swap-oob="outerHTML" above;
+     clear the form mount as the second OOB element. #}
   <div id="coffee-form-mount" hx-swap-oob="innerHTML"></div>
 {% endif %}

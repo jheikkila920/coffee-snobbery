@@ -110,6 +110,7 @@ _NON_SCHEMA_FORM_KEYS = {
     "roaster_query",  # autocomplete text input next to roaster_id
     "flavor_note_query",  # autocomplete text input for flavor-note chip-builder
     "varietal_query",  # autocomplete text input for varietal chip-builder (CATALOG-05)
+    "layout",  # D-21: desktop layout param; stripped before Pydantic sees payload
 }
 
 
@@ -240,6 +241,7 @@ def _hydrate_form_context(
     coffee_id: int | None = None,
     origins: list[tuple[str, str | None]] | None = None,
     selected_varietals: list[dict[str, object]] | None = None,
+    layout: str | None = None,
 ) -> dict[str, object]:
     """Build the form-template context with the lookup lists hydrated.
 
@@ -256,6 +258,10 @@ def _hydrate_form_context(
     varietal chip-builder seed (CATALOG-05). For create mode defaults to
     ``[]``. For edit mode, pass the coffee's current varietals list.
     If ``None``, returns empty list (no pre-selected chips).
+
+    ``layout`` is ``"desktop"`` when the edit request originated from the
+    desktop button (D-21). Controls ``form_target`` / ``form_swap`` so the
+    form renders into the mount div instead of swapping the row in-place.
     """
     roaster_id_raw = values.get("roaster_id")
     roaster_name = ""
@@ -294,6 +300,18 @@ def _hydrate_form_context(
     else:
         form_origins = origins if origins else [("", None)]
 
+    # D-21: compute form_target / form_swap based on mode + layout param.
+    if mode == "edit" and layout == "desktop":
+        form_target = "#coffee-form-mount"
+        form_swap = "innerHTML"
+    elif mode == "edit":
+        form_target = "closest [data-row]"
+        form_swap = "outerHTML"
+    else:
+        # create mode always targets the mount div
+        form_target = "#coffee-form-mount"
+        form_swap = "innerHTML"
+
     return {
         "values": values,
         "errors": errors,
@@ -305,6 +323,9 @@ def _hydrate_form_context(
         "selected_flavor_notes": selected_flavor_notes,
         "origins": form_origins,
         "selected_varietals": selected_varietals or [],
+        "layout": layout,
+        "form_target": form_target,
+        "form_swap": form_swap,
     }
 
 
@@ -479,6 +500,7 @@ def new_coffee_form(
         mode="create",
         origins=[("", None)],  # one empty row by default (D-22)
         selected_varietals=[],
+        layout=None,
     )
     return templates.TemplateResponse(
         request=request,
@@ -737,10 +759,19 @@ def coffee_row(
 def edit_coffee_form(
     coffee_id: int,
     request: Request,
+    layout: str | None = None,  # D-21: "desktop" or None
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Pre-populated form fragment for inline edit (swaps the row)."""
+    """Pre-populated form fragment for inline edit (swaps the row).
+
+    ``layout="desktop"`` (D-21) renders the form targeting #coffee-form-mount
+    with innerHTML; without it the form targets closest [data-row] outerHTML.
+    T-15.1-29: any value other than "desktop" falls back to mobile path.
+    """
+    # T-15.1-29: only accept the literal "desktop" value; reject everything else.
+    if layout != "desktop":
+        layout = None
     coffee = coffees_service.get_coffee(db, coffee_id=coffee_id)
     if coffee is None:
         raise HTTPException(status_code=404)
@@ -769,6 +800,7 @@ def edit_coffee_form(
         coffee_id=coffee_id,
         origins=edit_origins,
         selected_varietals=edit_varietals,
+        layout=layout,
     )
     return templates.TemplateResponse(
         request=request,
@@ -784,12 +816,22 @@ async def update_coffee_handler(
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Update a coffee. Validation errors → 200 + form re-render."""
+    """Update a coffee. Validation errors → 200 + form re-render.
+
+    D-21: reads ``layout`` from the form payload (stripped by _parse_form_payload
+    via _NON_SCHEMA_FORM_KEYS, so read it before calling that helper).
+    T-15.1-29: only the literal "desktop" is accepted; everything else → None.
+    On desktop success, returns an OOB response: updated row + empty mount div.
+    """
     existing = coffees_service.get_coffee(db, coffee_id=coffee_id)
     if existing is None:
         raise HTTPException(status_code=404)
 
     form_data = await request.form()
+    # D-21: read layout before _parse_form_payload strips it from the payload.
+    layout_raw = form_data.get("layout")
+    layout: str | None = "desktop" if layout_raw == "desktop" else None
+
     raw_view, schema_input, origins, varietal_ids = _parse_form_payload(form_data)
 
     # T-15.1-03: reject submissions with zero non-blank origins.
@@ -801,6 +843,7 @@ async def update_coffee_handler(
             mode="edit",
             coffee_id=coffee_id,
             origins=origins,
+            layout=layout,
         )
         return templates.TemplateResponse(
             request=request,
@@ -819,6 +862,7 @@ async def update_coffee_handler(
             mode="edit",
             coffee_id=coffee_id,
             origins=origins,
+            layout=layout,
         )
         return templates.TemplateResponse(
             request=request,
@@ -857,6 +901,7 @@ async def update_coffee_handler(
             "mode": "row",
             "flavor_note_names": flavor_note_names,
             "roaster_name_map": roaster_name_map,
+            "include_desktop_oob": layout == "desktop",
         },
     )
 

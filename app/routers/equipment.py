@@ -155,6 +155,9 @@ def new_equipment_form(
             "errors": {},
             "mode": "create",
             "types": EQUIPMENT_TYPES,
+            "layout": None,
+            "form_target": "#equipment-form-mount",
+            "form_swap": "innerHTML",
         },
     )
 
@@ -203,6 +206,9 @@ async def create_equipment(
                 "errors": _normalize_errors(errors_by_field(exc)),
                 "mode": "create",
                 "types": EQUIPMENT_TYPES,
+                "layout": None,
+                "form_target": "#equipment-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -254,10 +260,19 @@ def equipment_row(
 def edit_equipment_form(
     equipment_id: int,
     request: Request,
+    layout: str | None = None,  # D-21: "desktop" or None
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Pre-populated form fragment for inline edit (swaps the row)."""
+    """Pre-populated form fragment for inline edit (swaps the row).
+
+    ``layout="desktop"`` renders the form targeting #equipment-form-mount;
+    without it the form targets closest [data-row]. T-15.1-29: only the
+    literal "desktop" value is accepted.
+    """
+    # T-15.1-29: only accept the literal "desktop" value.
+    if layout != "desktop":
+        layout = None
     equipment = equipment_service.get_equipment(db, equipment_id=equipment_id)
     if equipment is None:
         raise HTTPException(status_code=404)
@@ -267,6 +282,10 @@ def edit_equipment_form(
         "model": equipment.model,
         "notes": equipment.notes or "",
     }
+    if layout == "desktop":
+        form_target, form_swap = "#equipment-form-mount", "innerHTML"
+    else:
+        form_target, form_swap = "closest [data-row]", "outerHTML"
     return templates.TemplateResponse(
         request=request,
         name="fragments/equipment_form.html",
@@ -276,6 +295,9 @@ def edit_equipment_form(
             "mode": "edit",
             "equipment_id": equipment_id,
             "types": EQUIPMENT_TYPES,
+            "layout": layout,
+            "form_target": form_target,
+            "form_swap": form_swap,
         },
     )
 
@@ -299,6 +321,14 @@ async def update_equipment_handler(
     form_data = await request.form()
     skip = {"X-CSRF-Token"}
     raw = {k: v for k, v in form_data.items() if k not in skip}
+    # D-21: read layout from hidden form field; only "desktop" is accepted (T-15.1-29).
+    layout = raw.pop("layout", None)
+    if layout != "desktop":
+        layout = None
+    if layout == "desktop":
+        form_target, form_swap = "#equipment-form-mount", "innerHTML"
+    else:
+        form_target, form_swap = "closest [data-row]", "outerHTML"
     try:
         form = EquipmentCreate(**raw)
     except ValidationError as exc:
@@ -311,6 +341,9 @@ async def update_equipment_handler(
                 "mode": "edit",
                 "equipment_id": equipment_id,
                 "types": EQUIPMENT_TYPES,
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
         )
@@ -324,6 +357,12 @@ async def update_equipment_handler(
         notes=form.notes,
         by_user_id=user.id,
     )
+    if layout == "desktop":
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/equipment_row.html",
+            context={"equipment": equipment, "mode": "row", "include_desktop_oob": True},
+        )
     return templates.TemplateResponse(
         request=request,
         name="fragments/equipment_row.html",
