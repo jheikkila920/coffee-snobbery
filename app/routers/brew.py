@@ -51,10 +51,12 @@ from starlette.datastructures import UploadFile
 from app.config import settings
 from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
+from app.models.roaster import Roaster
 from app.models.user import User
 from app.schemas.brew_session import BrewSessionCreate, BrewSessionUpdate
 from app.services import brew_drafts as brew_drafts_service
 from app.services import brew_sessions as brew_sessions_service
+from app.services import cafe_logs as cafe_logs_service
 from app.services import coffees as coffees_service
 from app.services import csv_io as csv_io_service
 from app.services import equipment as equipment_service
@@ -429,6 +431,70 @@ def _raw_filters(qp: Any) -> dict[str, str]:
     return {key: (qp.get(key) or "") for key in _LIST_FILTER_KEYS}
 
 
+# Cafe tab filter keys — only rating + date (D-06 tab-scoped filter carve-out).
+# Brew-only filters (coffee_id, brewer_id, recipe_id) MUST NOT appear here.
+_CAFE_FILTER_KEYS = (
+    "rating_min",
+    "rating_max",
+    "date_from",
+    "date_to",
+)
+
+
+def _parse_cafe_list_filters(qp: Any) -> dict[str, Any]:
+    """Parse cafe tab query params into typed service kwargs (D-06 scoped).
+
+    Only reads rating + date inputs — brew-only filter keys are intentionally
+    absent (UI-SPEC § Risks item 4 / D-06 carve-out).
+    """
+    parsed: dict[str, Any] = {
+        "rating_min": _decimal_or_none(qp.get("rating_min")),
+        "rating_max": _decimal_or_none(qp.get("rating_max")),
+        "date_from": _date_or_none(qp.get("date_from")),
+        "date_to": _date_or_none(qp.get("date_to"), end_of_day=True),
+    }
+    return {k: v for k, v in parsed.items() if v is not None}
+
+
+def _raw_cafe_filters(qp: Any) -> dict[str, str]:
+    """Echo the raw cafe filter strings back to the template (D-06 tab-scoped)."""
+    return {key: (qp.get(key) or "") for key in _CAFE_FILTER_KEYS}
+
+
+def _cafe_view_rows(db: Session, logs: list[Any]) -> list[dict[str, Any]]:
+    """Resolve each cafe log's display fields (roaster name) without N+1 queries.
+
+    Builds a roaster_id → name cache in one SELECT then composes view dicts for
+    the cafe_log_list / cafe_log_row / cafe_log_card templates.
+    """
+    from sqlalchemy import select as sa_select
+
+    roaster_ids = {lg.roaster_id for lg in logs if lg.roaster_id is not None}
+    roaster_name_map: dict[int, str] = {}
+    if roaster_ids:
+        rows = db.execute(
+            sa_select(Roaster.id, Roaster.name).where(Roaster.id.in_(roaster_ids))
+        ).all()
+        roaster_name_map = {r.id: r.name for r in rows}
+
+    return [
+        {
+            "id": lg.id,
+            "cafe_name": lg.cafe_name,
+            "rating": lg.rating,
+            "roaster_id": lg.roaster_id,
+            "roaster_name": roaster_name_map.get(lg.roaster_id, "") if lg.roaster_id else "",
+            "origin_country": lg.origin_country,
+            "brew_method": lg.brew_method,
+            "flavor_note_ids": lg.flavor_note_ids or [],
+            "logged_at": lg.logged_at,
+            "notes": lg.notes,
+            "photo_filename": lg.photo_filename,
+        }
+        for lg in logs
+    ]
+
+
 def _local_dt(value: datetime | None) -> datetime | None:
     """Render a stored-UTC timestamp in ``APP_TIMEZONE`` for display."""
     if value is None:
@@ -482,14 +548,56 @@ def list_sessions(
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Per-user sessions list (BREW-10). Page or HTMX fragment, filtered.
+    """Per-user sessions list (BREW-10 / CAFE-03). Page or HTMX fragment, filtered.
 
-    Returns ONLY the authed user's sessions, newest first (T-05-24 IDOR).
-    With an ``HX-Request`` header → the ``#session-list`` fragment (filter
-    swap); otherwise the full page. ``FragmentCacheHeadersMiddleware`` adds
-    ``no-store + Vary: HX-Request`` to the fragment for free.
+    ``?tab=cafe`` → cafe log list; default (``?tab=brew`` or omitted) → brew
+    sessions list. Both branches return ONLY the authed user's data, newest
+    first (T-05-24 / T-16-02-03 IDOR). With an ``HX-Request`` header → the
+    ``#session-list`` fragment; otherwise the full ``pages/sessions.html`` page.
+    ``FragmentCacheHeadersMiddleware`` adds ``no-store + Vary: HX-Request`` for free.
+
+    D-06 tab-scoped filters: the cafe branch reads only rating + date params;
+    brew-only filter keys (coffee_id, brewer_id) are never forwarded to the
+    cafe service.
     """
     qp = request.query_params
+    tab = qp.get("tab", "brew")
+
+    if tab == "cafe":
+        cafe_filters = _parse_cafe_list_filters(qp)
+        logs = cafe_logs_service.list_cafe_logs(db, by_user_id=user.id, **cafe_filters)
+        raw_cafe_filters = _raw_cafe_filters(qp)
+        cafe_context = {
+            "rows": _cafe_view_rows(db, logs),
+            "filters": raw_cafe_filters,
+            "active_filter_count": sum(1 for v in raw_cafe_filters.values() if v),
+            "flavor_note_names": {},
+            "active_tab": "cafe",
+        }
+        if request.headers.get("HX-Request") == "true":
+            return templates.TemplateResponse(
+                request=request,
+                name="fragments/cafe_log_list.html",
+                context={**cafe_context, "is_fragment": True},
+            )
+        # Full page — brew dropdown sources not needed on cafe tab, but
+        # sessions.html still needs coffees/brewers for the brew filter block
+        # (gated by {% if active_tab != 'cafe' %} in the template, so they
+        # will not render; pass empty lists to avoid UndefinedError).
+        equipment = equipment_service.list_equipment(db)
+        brewers = [eq for eq in equipment if eq.type == "brewer"]
+        return templates.TemplateResponse(
+            request=request,
+            name="pages/sessions.html",
+            context={
+                **cafe_context,
+                "coffees": coffees_service.list_coffees(db),
+                "brewers": brewers,
+                "equipment_name_map": _name_map(brewers),
+            },
+        )
+
+    # --- brew tab (default) ---
     service_filters = _parse_list_filters(qp)
     sessions = brew_sessions_service.list_brew_sessions(db, by_user_id=user.id, **service_filters)
     raw_filters = _raw_filters(qp)
@@ -498,6 +606,7 @@ def list_sessions(
         "filters": raw_filters,
         "active_filter_count": sum(1 for v in raw_filters.values() if v),
         "export_query": request.url.query,
+        "active_tab": "brew",
     }
 
     if request.headers.get("HX-Request") == "true":
