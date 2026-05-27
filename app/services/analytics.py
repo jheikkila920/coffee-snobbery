@@ -51,6 +51,9 @@ def get_top_coffees(db: Session, user_id: int) -> list[Row]:
     Excludes NULL ratings (Pitfall 1). Tie-broken avg_rating DESC, then
     session_count DESC (Claude's Discretion).
     """
+    # CAFE-04 not applicable: cafe coffees have no row in coffees table by design (D-14).
+    # Do not UNION cafe data into this query — a future "Top cafe tastings" widget
+    # belongs in Phase 17 (IA restructure) or Phase 19 (AI page), not here.
     stmt = (
         select(
             Coffee.id,
@@ -264,6 +267,9 @@ def get_sweet_spots(db: Session, user_id: int) -> list[Row]:
     Origin now joins coffee_origins (D-01); a blend session contributes one
     row per origin so the per-origin sweet-spot stays truthful.
     """
+    # NOTE (CAFE-05 / D-16): Cafe logs are intentionally excluded — they have no
+    # brew-parameter fields (no recipe_id, brewer_id, dose, yield, water_temp_c,
+    # or grind setting). Do not UNION cafe data into this query.
     brewer = aliased(Equipment, name="brewer")
 
     stmt = (
