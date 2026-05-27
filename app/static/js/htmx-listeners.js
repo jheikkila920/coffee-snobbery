@@ -65,3 +65,20 @@ document.body.addEventListener('htmx:afterSettle', (evt) => {
     Alpine.initTree(evt.target);
   }
 });
+
+// Coffee form: Remove-origin button delegation (D-04, Phase 15.1).
+// The coffee_origin_row.html fragment carries data-action="remove-origin-row"
+// on each row's Remove button (first row is non-removable so the user cannot
+// drop to zero origins). On click, remove the closest [data-origin-row]
+// ancestor from the DOM — purely client-side, no server round-trip.
+//
+// Delegated on document.body so rows appended via HTMX (the "+ Add another
+// origin" hx-get) are covered without re-binding.
+document.body.addEventListener('click', (evt) => {
+  const target = evt.target;
+  if (!(target instanceof Element)) return;
+  const button = target.closest('[data-action="remove-origin-row"]');
+  if (!button) return;
+  const row = button.closest('[data-origin-row]');
+  if (row) row.remove();
+});

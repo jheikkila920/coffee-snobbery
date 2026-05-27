@@ -9,9 +9,9 @@
      origins_country  (collected via form_data.getlist("origins_country"))
      origins_region   (collected via form_data.getlist("origins_region"))
 
-   Remove button uses HTMX 2.x hx-on:click syntax (CSP-safe; no inline onclick).
-   The hx-on:click handler removes the closest [data-origin-row] ancestor from
-   the DOM without a server round-trip.
+   Remove button uses data-action="remove-origin-row" and is handled by an
+   event-delegation listener in app/static/js/htmx-listeners.js (D-04: no
+   inline hx-on:* handlers, which would require CSP 'unsafe-eval').
 
    All inputs use min-h-[44px] for mobile touch-target compliance (CLAUDE.md).
 #}
@@ -31,7 +31,7 @@
   </label>
   {% if removable %}
   <button type="button"
-          hx-on:click="this.closest('[data-origin-row]').remove()"
+          data-action="remove-origin-row"
           class="rounded border border-espresso-300 px-3 py-2 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] shrink-0">
     Remove
   </button>
