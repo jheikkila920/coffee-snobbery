@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
 stopped_at: Phase 15.1 context updated (D-20/D-21/D-22)
-last_updated: "2026-05-27T00:26:31.616Z"
-last_activity: 2026-05-27 -- Phase 15.1 planning complete
+last_updated: "2026-05-27T00:38:05.905Z"
+last_activity: 2026-05-27 -- Phase 15.1 execution started
 progress:
   total_phases: 9
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 15 — v1-1-debt-cleanup
+**Current focus:** Phase 15.1 — catalog-session-polish
 
 ## Current Position
 
-Phase: 15.1
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-27 -- Phase 15.1 planning complete
+Phase: 15.1 (catalog-session-polish) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 15.1
+Last activity: 2026-05-27 -- Phase 15.1 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
