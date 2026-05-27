@@ -89,6 +89,7 @@ from app.routers import auth as auth_router
 from app.routers import bags as bags_router
 from app.routers import brew as brew_router
 from app.routers import brew_guided as brew_guided_router
+from app.routers import cafe_logs as cafe_logs_router
 from app.routers import coffees as coffees_router
 from app.routers import config_hub as config_hub_router
 from app.routers import csp_report as csp_report_router
@@ -271,6 +272,7 @@ def create_app() -> FastAPI:
     )  # BEFORE brew_router — /brew/guided must not be captured by /brew/{session_id}
     app.include_router(brew_router.router)
     app.include_router(brew_router.data_router)  # /data-tools (C8, D-06)
+    app.include_router(cafe_logs_router.router)  # /cafe-logs (CAFE-01..06)
     app.include_router(home_router.router)
     app.include_router(config_hub_router.router)
     app.include_router(ai_router.router)
