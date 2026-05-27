@@ -35,11 +35,24 @@ def _require_postgres() -> None:
         pytest.skip("Postgres not reachable — CATALOG-01 layout test needs the DB")
 
 
+def _get_csrf_token(client: Any) -> str:
+    """Return the csrftoken value, handling potential duplicate-cookie conflicts."""
+    try:
+        return client.cookies.get("csrftoken", "")
+    except Exception:  # noqa: BLE001
+        # httpx raises CookieConflict when multiple cookies share the same name.
+        # Iterate and return the first match.
+        for cookie in client.cookies.jar:
+            if cookie.name == "csrftoken":
+                return cookie.value
+        return ""
+
+
 def _prime_csrf(client: Any) -> str:
     """Mint a real HMAC-signed csrftoken by hitting GET /."""
     client.cookies.delete("csrftoken")
     response = client.get("/")
-    token = response.cookies.get("csrftoken") or client.cookies.get("csrftoken")
+    token = response.cookies.get("csrftoken") or _get_csrf_token(client)
     if not token:
         pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
     client.cookies.set("csrftoken", token)
@@ -84,7 +97,7 @@ def _create_entity(client: Any, url_prefix: str) -> int:
     directly when the create response doesn't expose the id cleanly.
     """
     _require_postgres()
-    token = client.cookies.get("csrftoken", "")
+    token = _get_csrf_token(client)
 
     common_payload = {"X-CSRF-Token": token}
 
@@ -311,7 +324,7 @@ def test_entity_update_desktop_returns_oob_row_and_form_clear(
     _require_postgres()
     client = authed_client_with_csrf
     entity_id = _create_entity(client, url_prefix)
-    token = client.cookies.get("csrftoken", "")
+    token = _get_csrf_token(client)
     payload = _build_update_payload(url_prefix, entity_id, token, layout="desktop")
     resp = client.post(f"/{url_prefix}/{entity_id}", data=payload)
     assert resp.status_code == 200, (
@@ -350,7 +363,7 @@ def test_entity_update_mobile_returns_plain_row(
     _require_postgres()
     client = authed_client_with_csrf
     entity_id = _create_entity(client, url_prefix)
-    token = client.cookies.get("csrftoken", "")
+    token = _get_csrf_token(client)
     payload = _build_update_payload(url_prefix, entity_id, token, layout=None)
     resp = client.post(f"/{url_prefix}/{entity_id}", data=payload)
     assert resp.status_code == 200, (
@@ -400,20 +413,20 @@ def _build_update_payload(
 
     if url_prefix == "coffees":
         base.update({
-            "name": "Updated Coffee",
+            "name": f"Updated Coffee {entity_id}",
             "origins_country": "Kenya",
             "origins_region": "",
         })
     elif url_prefix == "roasters":
-        base.update({"name": "Updated Roaster"})
+        base.update({"name": f"Updated Roaster {entity_id}"})
     elif url_prefix == "equipment":
-        base.update({"type": "grinder", "brand": "Updated", "model": "Model"})
+        base.update({"type": "grinder", "brand": "Updated", "model": f"Model {entity_id}"})
     elif url_prefix == "flavor-notes":
-        base.update({"name": "updated-note", "category": "floral"})
+        base.update({"name": f"updated-note-{entity_id}", "category": "floral"})
     elif url_prefix == "recipes":
         steps = json.dumps([{"water_grams": 50, "time_seconds": 45, "label": "Bloom"}])
         base.update({
-            "name": "Updated Recipe",
+            "name": f"Updated Recipe {entity_id}",
             "dose_grams": "15",
             "water_grams": "250",
             "water_temp_c": "93",

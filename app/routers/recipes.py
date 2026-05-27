@@ -218,6 +218,9 @@ def new_recipe_form(
             "errors": {},
             "mode": "create",
             "steps_json": json.dumps(_DEFAULT_NEW_STEPS),
+            "layout": None,
+            "form_target": "#recipe-form-mount",
+            "form_swap": "innerHTML",
         },
     )
 
@@ -257,6 +260,8 @@ async def create_recipe(
     # Parse the steps JSON before handing to the schema. A decode failure
     # is a user-visible error (banner above the step builder).
     steps_raw = raw.pop("steps", "[]")
+    # D-21: strip layout from raw before Pydantic sees it (extra="forbid" guard).
+    raw.pop("layout", None)
     try:
         steps_list = json.loads(steps_raw) if isinstance(steps_raw, str) else steps_raw
         if not isinstance(steps_list, list):
@@ -270,6 +275,9 @@ async def create_recipe(
                 "errors": {"_steps": "Invalid step data — please re-enter your pour timeline."},
                 "mode": "create",
                 "steps_json": "[]",
+                "layout": None,
+                "form_target": "#recipe-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -289,6 +297,9 @@ async def create_recipe(
                 # Re-seed the step builder with what the user submitted so
                 # they don't lose their step data on re-render.
                 "steps_json": json.dumps(steps_list),
+                "layout": None,
+                "form_target": "#recipe-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -342,10 +353,19 @@ def recipe_row(
 def edit_recipe_form(
     recipe_id: int,
     request: Request,
+    layout: str | None = None,  # D-21: "desktop" or None
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Pre-populated form fragment for inline edit (swaps the row)."""
+    """Pre-populated form fragment for inline edit (swaps the row).
+
+    ``layout="desktop"`` (D-21) renders the form targeting #recipe-form-mount
+    with innerHTML; without it the form targets closest [data-row] outerHTML.
+    T-15.1-29: any value other than "desktop" falls back to mobile path.
+    """
+    # T-15.1-29: only accept the literal "desktop" value; reject everything else.
+    if layout != "desktop":
+        layout = None
     recipe = recipes_service.get_recipe(db, recipe_id=recipe_id)
     if recipe is None:
         raise HTTPException(status_code=404)
@@ -356,6 +376,12 @@ def edit_recipe_form(
         "water_temp_c": recipe.water_temp_c,
         "grind_setting": recipe.grind_setting or "",
     }
+    if layout == "desktop":
+        form_target = "#recipe-form-mount"
+        form_swap = "innerHTML"
+    else:
+        form_target = "closest [data-row]"
+        form_swap = "outerHTML"
     return templates.TemplateResponse(
         request=request,
         name="fragments/recipe_form.html",
@@ -365,6 +391,9 @@ def edit_recipe_form(
             "mode": "edit",
             "recipe_id": recipe_id,
             "steps_json": json.dumps(recipe.steps or []),
+            "layout": layout,
+            "form_target": form_target,
+            "form_swap": form_swap,
         },
     )
 
@@ -377,6 +406,12 @@ async def update_recipe_handler(
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
     """Update a recipe. Validation errors → 200 + form re-render."""
+    """Update a recipe. Validation errors → 200 + form re-render.
+
+    D-21: reads ``layout`` from the form payload before stripping it.
+    T-15.1-29: only the literal "desktop" is accepted; everything else → None.
+    On desktop success, returns an OOB response: updated row + empty mount div.
+    """
     existing = recipes_service.get_recipe(db, recipe_id=recipe_id)
     if existing is None:
         raise HTTPException(status_code=404)
@@ -385,6 +420,18 @@ async def update_recipe_handler(
     skip = {"X-CSRF-Token"}
     raw: dict[str, object] = {k: v for k, v in form_data.items() if k not in skip}
     steps_raw = raw.pop("steps", "[]")
+    # D-21: strip layout before Pydantic sees payload (extra="forbid" guard).
+    layout_raw = raw.pop("layout", None)
+    layout: str | None = "desktop" if layout_raw == "desktop" else None
+
+    # Compute form_target/form_swap for validation re-renders.
+    if layout == "desktop":
+        form_target = "#recipe-form-mount"
+        form_swap = "innerHTML"
+    else:
+        form_target = "closest [data-row]"
+        form_swap = "outerHTML"
+
     try:
         steps_list = json.loads(steps_raw) if isinstance(steps_raw, str) else steps_raw
         if not isinstance(steps_list, list):
@@ -399,6 +446,9 @@ async def update_recipe_handler(
                 "mode": "edit",
                 "recipe_id": recipe_id,
                 "steps_json": "[]",
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
         )
@@ -417,6 +467,9 @@ async def update_recipe_handler(
                 "mode": "edit",
                 "recipe_id": recipe_id,
                 "steps_json": json.dumps(steps_list),
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
         )
@@ -435,7 +488,11 @@ async def update_recipe_handler(
     return templates.TemplateResponse(
         request=request,
         name="fragments/recipe_row.html",
-        context={"recipe": recipe, "mode": "row"},
+        context={
+            "recipe": recipe,
+            "mode": "row",
+            "include_desktop_oob": layout == "desktop",
+        },
     )
 
 

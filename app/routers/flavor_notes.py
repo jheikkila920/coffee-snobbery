@@ -160,6 +160,9 @@ def new_flavor_note_form(
             "mode": "modal" if as_modal else "create",
             "categories": FLAVOR_NOTE_CATEGORIES,
             "prefill": (prefill or "")[:80],
+            "layout": None,
+            "form_target": "#flavor-note-form-mount",
+            "form_swap": "innerHTML",
         },
     )
 
@@ -209,6 +212,9 @@ async def create_flavor_note(
                 "errors": _normalize_errors(errors_by_field(exc)),
                 "mode": "modal" if as_modal else "create",
                 "categories": FLAVOR_NOTE_CATEGORIES,
+                "layout": None,
+                "form_target": "#flavor-note-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -232,6 +238,9 @@ async def create_flavor_note(
                 "errors": _normalize_errors({"name": "Name already exists."}),
                 "mode": "modal" if as_modal else "create",
                 "categories": FLAVOR_NOTE_CATEGORIES,
+                "layout": None,
+                "form_target": "#flavor-note-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -293,10 +302,19 @@ def flavor_note_row(
 def edit_flavor_note_form(
     flavor_note_id: int,
     request: Request,
+    layout: str | None = None,  # D-21: "desktop" or None
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Pre-populated form fragment for inline edit (swaps the row)."""
+    """Pre-populated form fragment for inline edit (swaps the row).
+
+    ``layout="desktop"`` renders the form targeting #flavor-note-form-mount;
+    without it the form targets closest [data-row]. T-15.1-29: only the
+    literal "desktop" value is accepted.
+    """
+    # T-15.1-29: only accept the literal "desktop" value.
+    if layout != "desktop":
+        layout = None
     flavor_note = flavor_notes_service.get_flavor_note(db, flavor_note_id=flavor_note_id)
     if flavor_note is None:
         raise HTTPException(status_code=404)
@@ -304,6 +322,10 @@ def edit_flavor_note_form(
         "name": flavor_note.name,
         "category": flavor_note.category,
     }
+    if layout == "desktop":
+        form_target, form_swap = "#flavor-note-form-mount", "innerHTML"
+    else:
+        form_target, form_swap = "closest [data-row]", "outerHTML"
     return templates.TemplateResponse(
         request=request,
         name="fragments/flavor_note_form.html",
@@ -313,6 +335,9 @@ def edit_flavor_note_form(
             "mode": "edit",
             "flavor_note_id": flavor_note_id,
             "categories": FLAVOR_NOTE_CATEGORIES,
+            "layout": layout,
+            "form_target": form_target,
+            "form_swap": form_swap,
         },
     )
 
@@ -332,6 +357,14 @@ async def update_flavor_note_handler(
     form_data = await request.form()
     skip = {"X-CSRF-Token", "as_modal"}
     raw = {k: v for k, v in form_data.items() if k not in skip}
+    # D-21: read layout from hidden form field; only "desktop" is accepted (T-15.1-29).
+    layout = raw.pop("layout", None)
+    if layout != "desktop":
+        layout = None
+    if layout == "desktop":
+        form_target, form_swap = "#flavor-note-form-mount", "innerHTML"
+    else:
+        form_target, form_swap = "closest [data-row]", "outerHTML"
     try:
         form = FlavorNoteCreate(**raw)
     except ValidationError as exc:
@@ -344,6 +377,9 @@ async def update_flavor_note_handler(
                 "mode": "edit",
                 "flavor_note_id": flavor_note_id,
                 "categories": FLAVOR_NOTE_CATEGORIES,
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
         )
@@ -367,8 +403,22 @@ async def update_flavor_note_handler(
                 "mode": "edit",
                 "flavor_note_id": flavor_note_id,
                 "categories": FLAVOR_NOTE_CATEGORIES,
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
+        )
+    if layout == "desktop":
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/flavor_note_row.html",
+            context={
+                "flavor_note": flavor_note,
+                "usage_count": 0,
+                "mode": "row",
+                "include_desktop_oob": True,
+            },
         )
     return templates.TemplateResponse(
         request=request,

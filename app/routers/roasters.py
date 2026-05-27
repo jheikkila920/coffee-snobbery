@@ -177,6 +177,9 @@ def new_roaster_form(
             "errors": {},
             "mode": "modal" if as_modal else "create",
             "prefill": (prefill or "")[:200],
+            "layout": None,
+            "form_target": "#roaster-form-mount",
+            "form_swap": "innerHTML",
         },
     )
 
@@ -238,6 +241,9 @@ async def create_roaster(
                 "values": raw,
                 "errors": _normalize_errors(errors_by_field(exc)),
                 "mode": "modal" if as_modal else "create",
+                "layout": None,
+                "form_target": "#roaster-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -261,6 +267,9 @@ async def create_roaster(
                 "values": raw,
                 "errors": _normalize_errors({"name": "Name already exists."}),
                 "mode": "modal" if as_modal else "create",
+                "layout": None,
+                "form_target": "#roaster-form-mount",
+                "form_swap": "innerHTML",
             },
             status_code=200,
         )
@@ -318,10 +327,19 @@ def roaster_row(
 def edit_roaster_form(
     roaster_id: int,
     request: Request,
+    layout: str | None = None,  # D-21: "desktop" or None
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Pre-populated form fragment for inline edit (swaps the row)."""
+    """Pre-populated form fragment for inline edit (swaps the row).
+
+    ``layout="desktop"`` renders the form targeting #roaster-form-mount;
+    without it the form targets closest [data-row]. T-15.1-29: only the
+    literal "desktop" value is accepted; any other value falls back to mobile.
+    """
+    # T-15.1-29: only accept the literal "desktop" value.
+    if layout != "desktop":
+        layout = None
     roaster = roasters_service.get_roaster(db, roaster_id=roaster_id)
     if roaster is None:
         raise HTTPException(status_code=404)
@@ -331,6 +349,10 @@ def edit_roaster_form(
         "website": roaster.website or "",
         "notes": roaster.notes or "",
     }
+    if layout == "desktop":
+        form_target, form_swap = "#roaster-form-mount", "innerHTML"
+    else:
+        form_target, form_swap = "closest [data-row]", "outerHTML"
     return templates.TemplateResponse(
         request=request,
         name="fragments/roaster_form.html",
@@ -339,6 +361,9 @@ def edit_roaster_form(
             "errors": {},
             "mode": "edit",
             "roaster_id": roaster_id,
+            "layout": layout,
+            "form_target": form_target,
+            "form_swap": form_swap,
         },
     )
 
@@ -362,6 +387,14 @@ async def update_roaster_handler(
     form_data = await request.form()
     skip = {"X-CSRF-Token", "as_modal"}
     raw = {k: v for k, v in form_data.items() if k not in skip}
+    # D-21: read layout from hidden form field; only "desktop" is accepted (T-15.1-29).
+    layout = raw.pop("layout", None)
+    if layout != "desktop":
+        layout = None
+    if layout == "desktop":
+        form_target, form_swap = "#roaster-form-mount", "innerHTML"
+    else:
+        form_target, form_swap = "closest [data-row]", "outerHTML"
     coerced = _coerce_empty_to_none(raw)
     try:
         form = RoasterCreate(**coerced)
@@ -374,6 +407,9 @@ async def update_roaster_handler(
                 "errors": _normalize_errors(errors_by_field(exc)),
                 "mode": "edit",
                 "roaster_id": roaster_id,
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
         )
@@ -398,8 +434,17 @@ async def update_roaster_handler(
                 "errors": _normalize_errors({"name": "Name already exists."}),
                 "mode": "edit",
                 "roaster_id": roaster_id,
+                "layout": layout,
+                "form_target": form_target,
+                "form_swap": form_swap,
             },
             status_code=200,
+        )
+    if layout == "desktop":
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/roaster_row.html",
+            context={"roaster": roaster, "mode": "row", "include_desktop_oob": True},
         )
     return templates.TemplateResponse(
         request=request,
