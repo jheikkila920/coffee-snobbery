@@ -82,7 +82,18 @@ Plans:
   5. Varietal stays optional and supports multi-select with autocomplete from a seeded varietal list (CATALOG-05)
   6. A new brew session inherits the parent coffee's flavor notes by default, the user can remove inherited chips, and any flavor-note add or remove on the session is mirrored back to the parent coffee (CATALOG-06)
   7. Roast-freshness tracking is removed app-wide: schema column dropped, AI prompts cleaned, every UI surface scrubbed (CATALOG-07)
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+**Wave 1**
+- [ ] 15.1-01-PLAN.md — CATALOG-02/03: multi-origin schema (coffee_origins join table) + data migration + form repeating rows + filter bar
+- [ ] 15.1-02-PLAN.md — CATALOG-07: roast-freshness removal sweep (drop bags.roast_date, scrub analytics + AI prompts + home + CSV)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 15.1-03-PLAN.md — CATALOG-04/05: roast-level enum widening + varietal m2m + autocomplete + seed (depends on 01 for coffee model surface)
+- [ ] 15.1-04-PLAN.md — CATALOG-06: brew-session flavor-note bidirectional sync + prefill + draft union-merge + CSV parity (depends on 02 for csv_io surface)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 15.1-05-PLAN.md — CATALOG-01: desktop edit-form mount routing + dual Edit buttons across all 5 entity forms (depends on 01/03 for coffee_form settled)
 **UI hint**: yes
 **Insertion reason**: items surfaced during Phase 15 use of the live app — see commit log + post-Phase-15 capture
 
@@ -202,7 +213,7 @@ Plans:
 | 13. PWA UX Fixes | v1.1 | 6/6 | Complete | 2026-05-25 |
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
-| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 0/TBD | Not started | - |
+| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 0/5 | Not started | - |
 | 16. Cafe Quick-Rate | v1.2 | 0/TBD | Not started | - |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
