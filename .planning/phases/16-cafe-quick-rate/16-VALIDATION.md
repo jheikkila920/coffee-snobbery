@@ -65,7 +65,7 @@ The planner populates the Task ID + Plan + Wave columns below as plans are writt
 | TBD | 16-03 | TBD | CAFE-06 | — | Edit form renders with stored values | router unit | `pytest tests/routers/test_cafe_logs.py::test_edit_form_renders -x` | ❌ W0 | ⬜ pending |
 | TBD | 16-03 | TBD | CAFE-06 | — | layout=desktop renders desktop variant (D-21) | router unit | `pytest tests/routers/test_cafe_logs.py::test_edit_form_desktop_layout -x` | ❌ W0 | ⬜ pending |
 | TBD | 16-02 | TBD | CAFE-06 | V4 | Update own log succeeds | router unit | `pytest tests/routers/test_cafe_logs.py::test_update_own_succeeds -x` | ❌ W0 | ⬜ pending |
-| TBD | 16-05 | TBD | All | V12 | sweep_orphans keeps cafe photos | service unit | `pytest tests/services/test_photos.py::test_sweep_keeps_cafe_photos -x` | ❌ W0 | ⬜ pending |
+| TBD | 16-06 | TBD | All | V12 | sweep_orphans keeps cafe photos | service unit | `pytest tests/services/test_photos.py::test_sweep_keeps_cafe_photos -x` | ❌ W0 | ⬜ pending |
 | TBD | 16-01 | TBD | All | — | Migration applies on top of p15_1_varietal_m2m | migration smoke | `pytest tests/migrations/test_cafe_logs_migration.py -x` | ❌ W0 | ⬜ pending |
 | TBD | 16-04 | TBD | All | — | UAT @ 375px: Quick rate button + tab + form fit viewport | manual UAT | Documented in `16-VERIFICATION.md` | n/a (human) | ⬜ pending |
 
