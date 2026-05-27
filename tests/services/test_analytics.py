@@ -338,6 +338,58 @@ def _seed_all_unrated(db, *, username: str) -> int:
 # --------------------------------------------------------------------------- #
 
 
+def _require_cafe_logs_table() -> None:
+    """Skip if the cafe_logs table is not present (Pitfall 6)."""
+    from tests.conftest import _require_cafe_logs_table as _gate
+
+    _gate()
+
+
+def _seed_cafe_into_scenario(
+    db,
+    *,
+    user_id: int,
+    roaster_id: int,
+    cafe_name: str,
+    flavor_note_ids: list[int],
+    origin_country: str | None = None,
+    rating: Decimal | None = None,
+    count: int = 1,
+) -> list[int]:
+    """Insert CafeLog rows into an existing analytics scenario.
+
+    Returns a list of the inserted cafe_log IDs.
+    All rows share the same field values; use multiple calls for variety.
+    Unrated rows have rating=None (excluded from signature + preference dims).
+    """
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    from app.models.cafe_log import CafeLog
+
+    if rating is None:
+        _rating = None
+    else:
+        _rating = Decimal(str(rating))
+
+    ids = []
+    for i in range(count):
+        row = CafeLog(
+            user_id=user_id,
+            roaster_id=roaster_id,
+            cafe_name=cafe_name,
+            origin_country=origin_country,
+            flavor_note_ids=flavor_note_ids,
+            rating=_rating,
+            logged_at=datetime(2026, 3, 15, 10, i, 0, tzinfo=UTC),
+        )
+        db.add(row)
+        db.flush()
+        ids.append(row.id)
+    db.commit()
+    return ids
+
+
 @pytest.fixture
 def clean_analytics() -> Iterator[None]:
     """Wipe analytics test rows before AND after each test (FK-safe order)."""
@@ -347,6 +399,8 @@ def clean_analytics() -> Iterator[None]:
 
     def _reset() -> None:
         with engine.begin() as conn:
+            # cafe_logs references users — delete first (FK-safe)
+            conn.execute(text("DELETE FROM cafe_logs"))
             # brew_sessions references users, coffees, bags, equipment, recipes
             conn.execute(text("DELETE FROM brew_sessions"))
             conn.execute(text("DELETE FROM brew_drafts"))
@@ -777,4 +831,527 @@ def test_signature_zero_rated_sentinel(clean_analytics: None) -> None:
 
     assert sig == analytics._EMPTY_SIGNATURE, (
         f"User with zero rated sessions must return _EMPTY_SIGNATURE; got {sig!r}"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# NEW CAFE-AWARE TESTS (Plan 16-05: D-12 / D-13 / D-14 / D-15 / D-16)        #
+# --------------------------------------------------------------------------- #
+
+
+def test_signature_includes_cafe_logs(clean_analytics: None) -> None:
+    """D-12: adding a rated CafeLog mutates compute_input_signature."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-siginc")
+        sig_before = analytics.compute_input_signature(db, uid)
+
+    # Insert a rated CafeLog for the same user — must mutate the signature.
+    with SessionLocal() as db:
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Signature-Change Cafe",
+            flavor_note_ids=[],
+            origin_country="Panama",
+            rating=Decimal("4.0"),
+        )
+
+    with SessionLocal() as db:
+        sig_after = analytics.compute_input_signature(db, uid)
+
+    assert sig_after != sig_before, (
+        "Adding a rated CafeLog MUST change the signature (D-12: cafe rows in payload)"
+    )
+
+
+def test_signature_excludes_unrated_cafe(clean_analytics: None) -> None:
+    """D-12: adding an UNRATED CafeLog must NOT change compute_input_signature."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-signorating")
+        sig_before = analytics.compute_input_signature(db, uid)
+
+    # Insert an UNRATED CafeLog — must NOT mutate the signature.
+    with SessionLocal() as db:
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Unrated Cafe",
+            flavor_note_ids=[],
+            origin_country=None,
+            rating=None,  # unrated → excluded from signature payload
+        )
+
+    with SessionLocal() as db:
+        sig_after = analytics.compute_input_signature(db, uid)
+
+    assert sig_after == sig_before, (
+        "Adding an UNRATED CafeLog must NOT change the signature "
+        "(D-12: CafeLog.rating.is_not(None) filter required)"
+    )
+
+
+def test_preference_profile_origin_unions_cafe(clean_analytics: None) -> None:
+    """D-13: get_preference_profile['origin'] includes cafe origin_country rows."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-proforigin")
+        # Seed 2 rated CafeLogs with origin_country='Costa Rica' — absent from brew side.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="CR Cafe",
+            flavor_note_ids=[],
+            origin_country="Costa Rica",
+            rating=Decimal("4.0"),
+            count=2,
+        )
+
+    with SessionLocal() as db:
+        profile = analytics.get_preference_profile(db, uid)
+
+    origin_labels = [r.label for r in profile["origin"]]
+    assert "Costa Rica" in origin_labels, (
+        "get_preference_profile['origin'] must include 'Costa Rica' from cafe logs (D-13)"
+    )
+    cr_row = next(r for r in profile["origin"] if r.label == "Costa Rica")
+    assert cr_row.session_count == 2, (
+        f"Costa Rica session_count should be 2 (both cafe rows); got {cr_row.session_count}"
+    )
+
+
+def test_preference_profile_roaster_unions_cafe(clean_analytics: None) -> None:
+    """D-13: get_preference_profile['roaster'] count increases when cafe logs share roaster."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.roaster import Roaster
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-profroaster")
+        # Get the seeded roaster id (analyticstest-Roaster-<username>)
+        roaster_id = db.scalar(
+            select(Roaster.id).where(
+                Roaster.name == "analyticstest-Roaster-analyticstest-profroaster"
+            )
+        )
+        # Brew-only baseline count for this roaster
+        profile_before = analytics.get_preference_profile(db, uid)
+        brew_roaster_rows = profile_before["roaster"]
+        brew_count = next(
+            (r.session_count for r in brew_roaster_rows if r.label is not None),
+            0,
+        )
+
+        # Seed 2 rated CafeLogs pointing at the same roaster.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=roaster_id,
+            cafe_name="Roaster Union Cafe",
+            flavor_note_ids=[],
+            origin_country=None,
+            rating=Decimal("4.5"),
+            count=2,
+        )
+
+    with SessionLocal() as db:
+        profile_after = analytics.get_preference_profile(db, uid)
+
+    roaster_row = next((r for r in profile_after["roaster"] if r.label is not None), None)
+    assert roaster_row is not None, "Roaster row must exist in profile after cafe logs added"
+    assert roaster_row.session_count > brew_count, (
+        f"Roaster session_count must increase after cafe log union; "
+        f"brew_only={brew_count}, after_union={roaster_row.session_count}"
+    )
+
+
+def test_preference_profile_process_brew_only(clean_analytics: None) -> None:
+    """D-13: process + roast_level dims are UNCHANGED when a rated CafeLog is added."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-processonly")
+        # Baseline before cafe insertion
+        profile_before = analytics.get_preference_profile(db, uid)
+        process_before = [(r.label, r.session_count) for r in profile_before["process"]]
+        roast_before = [(r.label, r.session_count) for r in profile_before["roast_level"]]
+
+        # Insert a rated CafeLog — should not affect process or roast_level.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Process-Neutral Cafe",
+            flavor_note_ids=[],
+            origin_country="Ethiopia",
+            rating=Decimal("4.0"),
+        )
+
+    with SessionLocal() as db:
+        profile_after = analytics.get_preference_profile(db, uid)
+        process_after = [(r.label, r.session_count) for r in profile_after["process"]]
+        roast_after = [(r.label, r.session_count) for r in profile_after["roast_level"]]
+
+    assert process_after == process_before, (
+        "process dim must be UNCHANGED after adding a CafeLog (D-13: process stays brew-only)"
+    )
+    assert roast_after == roast_before, (
+        "roast_level dim must be UNCHANGED after adding a CafeLog "
+        "(D-13: roast_level stays brew-only)"
+    )
+
+
+def test_flavor_descriptors_unions_cafe(clean_analytics: None) -> None:
+    """D-13: get_flavor_descriptors includes notes from rated-4+ cafe logs."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.flavor_note import FlavorNote
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-flavorcafe")
+        # Create a NEW flavor note not in the brew scenario.
+        new_fn = FlavorNote(name="analyticstest-fn-cafe-mango", category="fruit")
+        db.add(new_fn)
+        db.flush()
+        new_fn_id = new_fn.id
+
+        # Get one existing brew-side note id to test that it accumulates counts.
+        existing_fn_id = db.scalar(
+            select(FlavorNote.id).where(
+                FlavorNote.name == "analyticstest-fn-blueberry-analyticstest-flavorcafe"
+            )
+        )
+
+        # Seed 2 rated-4.5 CafeLogs: one with the new note, one with an existing note.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Cafe Mango",
+            flavor_note_ids=[new_fn_id],
+            rating=Decimal("4.5"),
+            count=2,  # >=2 appearances to clear the HAVING count>=2 floor
+        )
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Cafe Blueberry",
+            flavor_note_ids=[existing_fn_id],
+            rating=Decimal("4.5"),
+            count=2,
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        rows = analytics.get_flavor_descriptors(db, uid)
+
+    note_ids = {r.id for r in rows}
+    assert new_fn_id in note_ids, (
+        "A flavor note appearing only in cafe logs (rated 4+) must surface in "
+        "get_flavor_descriptors (D-13: UNION ALL of brew + cafe unnest blocks)"
+    )
+    assert existing_fn_id in note_ids, (
+        "An existing brew-side note must still appear after cafe UNION"
+    )
+
+
+def test_cold_start_brew_only(clean_analytics: None) -> None:
+    """D-15: 3 brews + 5 notes + 0 cafe logs → gate_open == True, sessions == 3."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.models.brew_session import BrewSession
+    from app.models.coffee import Coffee
+    from app.models.flavor_note import FlavorNote
+    from app.models.user import User
+    from app.services import analytics
+
+    username = "analyticstest-csbrewonly"
+    with SessionLocal() as db:
+        user = User(username=username, password_hash="x" * 16, is_admin=False, is_active=True)
+        db.add(user)
+        db.flush()
+        uid = user.id
+
+        coffee = Coffee(name=f"analyticstest-ColdBrew-{username}")
+        db.add(coffee)
+        db.flush()
+
+        fn_ids = []
+        for i in range(5):
+            fn = FlavorNote(name=f"analyticstest-fn-csb-{i}-{username}", category="fruit")
+            db.add(fn)
+            db.flush()
+            fn_ids.append(fn.id)
+
+        brew_ts = datetime(2026, 3, 10, 10, 0, 0, tzinfo=UTC)
+        for _ in range(3):
+            session = BrewSession(
+                user_id=uid,
+                coffee_id=coffee.id,
+                dose_grams_actual=Decimal("15"),
+                water_grams_actual=Decimal("250"),
+                rating=None,
+                flavor_note_ids_observed=fn_ids,
+                brewed_at=brew_ts,
+            )
+            db.add(session)
+            db.flush()
+        db.commit()
+
+    with SessionLocal() as db:
+        counts = analytics.get_cold_start_counts(db, uid)
+
+    assert counts["gate_open"] is True, f"Gate must be open for 3 brews + 5 notes; got {counts}"
+    assert counts["sessions"] == 3, (
+        f"sessions must be 3 (brew_count=3, cafe_count=0); got {counts['sessions']}"
+    )
+    assert counts["distinct_notes"] >= 5
+
+
+def test_cold_start_cafe_only(clean_analytics: None) -> None:
+    """D-15: 0 brews + 3 rated cafe logs covering 5 distinct notes → gate_open == True."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.models.flavor_note import FlavorNote
+    from app.models.user import User
+    from app.services import analytics
+
+    username = "analyticstest-cscafeonly"
+    with SessionLocal() as db:
+        user = User(username=username, password_hash="x" * 16, is_admin=False, is_active=True)
+        db.add(user)
+        db.flush()
+        uid = user.id
+
+        fn_ids = []
+        for i in range(5):
+            fn = FlavorNote(name=f"analyticstest-fn-csc-{i}-{username}", category="fruit")
+            db.add(fn)
+            db.flush()
+            fn_ids.append(fn.id)
+        db.commit()
+
+        # 3 rated cafe logs, each covering all 5 notes.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Cafe Only Log",
+            flavor_note_ids=fn_ids,
+            rating=Decimal("4.0"),
+            count=3,
+        )
+
+    with SessionLocal() as db:
+        counts = analytics.get_cold_start_counts(db, uid)
+
+    assert counts["gate_open"] is True, (
+        f"Gate must be open for 3 rated cafe logs + 5 notes; got {counts}"
+    )
+    assert counts["sessions"] == 3, (
+        f"sessions must be 3 (brew_count=0, cafe_count=3); got {counts['sessions']}"
+    )
+    assert counts["distinct_notes"] >= 5
+
+
+def test_cold_start_mixed(clean_analytics: None) -> None:
+    """D-15: 1 brew + 2 cafe logs spanning 5 distinct notes → sessions == 3, gate_open."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.models.brew_session import BrewSession
+    from app.models.coffee import Coffee
+    from app.models.flavor_note import FlavorNote
+    from app.models.user import User
+    from app.services import analytics
+
+    username = "analyticstest-csmixed"
+    with SessionLocal() as db:
+        user = User(username=username, password_hash="x" * 16, is_admin=False, is_active=True)
+        db.add(user)
+        db.flush()
+        uid = user.id
+
+        coffee = Coffee(name=f"analyticstest-ColdMix-{username}")
+        db.add(coffee)
+        db.flush()
+
+        # 5 distinct flavor notes — split between brew and cafe to test UNION.
+        fn_ids = []
+        for i in range(5):
+            fn = FlavorNote(name=f"analyticstest-fn-csm-{i}-{username}", category="fruit")
+            db.add(fn)
+            db.flush()
+            fn_ids.append(fn.id)
+
+        # 1 brew session with the first 3 notes.
+        session = BrewSession(
+            user_id=uid,
+            coffee_id=coffee.id,
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            rating=None,
+            flavor_note_ids_observed=fn_ids[:3],
+            brewed_at=datetime(2026, 3, 10, 10, 0, 0, tzinfo=UTC),
+        )
+        db.add(session)
+        db.flush()
+        db.commit()
+
+        # 2 rated cafe logs with the last 2 notes (new notes only, total=5 distinct).
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Mixed Cafe",
+            flavor_note_ids=fn_ids[3:],  # last 2 notes
+            rating=Decimal("4.0"),
+            count=2,
+        )
+
+    with SessionLocal() as db:
+        counts = analytics.get_cold_start_counts(db, uid)
+
+    assert counts["sessions"] == 3, (
+        f"sessions must be 3 (1 brew + 2 cafe); got {counts['sessions']}"
+    )
+    assert counts["gate_open"] is True, (
+        f"Gate must be open for 1 brew + 2 cafe + 5 distinct notes; got {counts}"
+    )
+    assert counts["distinct_notes"] >= 5
+
+
+def test_sweet_spots_excludes_cafe(clean_analytics: None) -> None:
+    """D-16: inserting a CafeLog does NOT affect get_sweet_spots output (body unchanged)."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-sweetcafe")
+        # Baseline sweet spots from brew sessions only.
+        sweet_before = analytics.get_sweet_spots(db, uid)
+        # Insert a CafeLog whose origin/roaster would affect sweet_spots IF UNIONed.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Sweet Spot Intruder",
+            flavor_note_ids=[],
+            origin_country="Ethiopia",  # same origin as the top sweet spot
+            rating=Decimal("4.5"),
+            count=3,  # would cross the >=3 floor if accidentally UNIONed
+        )
+
+    with SessionLocal() as db:
+        sweet_after = analytics.get_sweet_spots(db, uid)
+
+    # Results must be bit-identical.
+    assert len(sweet_before) == len(sweet_after), (
+        "get_sweet_spots row count must not change after inserting a CafeLog (D-16)"
+    )
+    for before, after in zip(sweet_before, sweet_after, strict=True):
+        assert before.session_count == after.session_count, (
+            "get_sweet_spots session_count must be UNCHANGED (D-16: cafe excluded)"
+        )
+        assert float(before.avg_rating) == float(after.avg_rating), (
+            "get_sweet_spots avg_rating must be UNCHANGED (D-16: cafe excluded)"
+        )
+
+
+def test_top_coffees_excludes_cafe(clean_analytics: None) -> None:
+    """D-14: inserting a high-rated CafeLog does NOT affect get_top_coffees output."""
+    _require_postgres()
+    _require_analytics_tables()
+    _require_cafe_logs_table()
+    from decimal import Decimal
+
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-topcafe")
+        top_before = analytics.get_top_coffees(db, uid)
+        top_before_ids = [r.id for r in top_before]
+
+        # Insert a high-rated CafeLog — its cafe_name has no coffees.id, so the
+        # JOIN to coffees table naturally excludes it. This test verifies that.
+        _seed_cafe_into_scenario(
+            db,
+            user_id=uid,
+            roaster_id=None,
+            cafe_name="Top Coffee Intruder",
+            flavor_note_ids=[],
+            rating=Decimal("5.0"),  # maximum rating
+            count=4,  # would rank #1 if accidentally UNIONed
+        )
+
+    with SessionLocal() as db:
+        top_after = analytics.get_top_coffees(db, uid)
+        top_after_ids = [r.id for r in top_after]
+
+    assert top_before_ids == top_after_ids, (
+        "get_top_coffees must return IDENTICAL coffee IDs after inserting a CafeLog "
+        "(D-14: cafe coffees have no coffees.id row)"
     )
