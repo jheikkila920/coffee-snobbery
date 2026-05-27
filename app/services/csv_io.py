@@ -19,7 +19,7 @@ Per-row resolution order (RESEARCH §Import algorithm):
 1. **Coffee (D-12)** — citext ``Coffee.name == name``; roaster-qualified by
    ``(name, roaster_id)`` when a roaster column is present; ambiguous
    multi-match → refused; no match → refused.
-2. **Bag (D-20)** — ``bag_id`` is always ``None``; roast_date column removed
+2. **Bag (D-20)** — ``bag_id`` is always ``None``; the bag column was removed
    so bag matching is no longer attempted on import.
 3. **Dedup (D-14)** — probe ``(user_id, coffee_id, brewed_at)`` via ``select``
    (no UNIQUE constraint exists — Plan 01 deferred it); existing → skipped.
@@ -338,7 +338,7 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
             outcomes.append(RowOutcome("refused", row_number, reason or "coffee not resolved"))
             continue
 
-        # D-20: roast_date removed; all imports get bag_id=None
+        # D-20: bag column removed; all imports get bag_id=None
         bag_id = None
 
         try:
