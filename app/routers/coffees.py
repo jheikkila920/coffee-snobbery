@@ -439,6 +439,7 @@ async def create_coffee(
             values=raw_view,
             errors={"origins": "At least one origin is required."},
             mode="create",
+            origins=origins,
         )
         return templates.TemplateResponse(
             request=request,
@@ -455,6 +456,7 @@ async def create_coffee(
             values=raw_view,
             errors=_normalize_errors(errors_by_field(exc)),
             mode="create",
+            origins=origins,
         )
         return templates.TemplateResponse(
             request=request,
@@ -686,6 +688,7 @@ async def update_coffee_handler(
             errors={"origins": "At least one origin is required."},
             mode="edit",
             coffee_id=coffee_id,
+            origins=origins,
         )
         return templates.TemplateResponse(
             request=request,
@@ -703,6 +706,7 @@ async def update_coffee_handler(
             errors=_normalize_errors(errors_by_field(exc)),
             mode="edit",
             coffee_id=coffee_id,
+            origins=origins,
         )
         return templates.TemplateResponse(
             request=request,

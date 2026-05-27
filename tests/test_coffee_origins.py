@@ -221,41 +221,46 @@ def test_cascade_delete_removes_origins() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_form_renders_one_origin_row_by_default(client: Any) -> None:
+def test_form_renders_one_origin_row_by_default(authed_client: Any) -> None:
     """GET /coffees/new returns coffee_form.html with at least one data-origin-row element."""
     _require_postgres()
-    # client fixture may skip if app not importable — handled by conftest
-    response = client.get("/coffees/new")
+    response = authed_client.get("/coffees/new")
     assert response.status_code == 200
     assert b"data-origin-row" in response.content, (
         "Expected at least one data-origin-row in /coffees/new response"
     )
 
 
-def test_origin_row_template_endpoint_returns_fragment(client: Any) -> None:
+def test_origin_row_template_endpoint_returns_fragment(authed_client: Any) -> None:
     """GET /coffees/origin-row-template returns the coffee_origin_row.html fragment."""
     _require_postgres()
-    response = client.get("/coffees/origin-row-template")
+    response = authed_client.get("/coffees/origin-row-template")
     assert response.status_code == 200
     assert b"data-origin-row" in response.content
 
 
-def test_post_coffee_with_two_origins_creates_blend(client: Any) -> None:
+def test_post_coffee_with_two_origins_creates_blend(authed_client: Any) -> None:
     """POST /coffees with two origins_country values yields a coffee with 2 origins."""
     _require_postgres()
-    form_data = [
-        ("name", "__test_post_blend__"),
-        ("origins_country", "Ethiopia"),
-        ("origins_country", "Kenya"),
-        ("origins_region", "Yirgacheffe"),
-        ("origins_region", ""),
-        ("notes", ""),
-        ("X-CSRF-Token", client.cookies.get("csrftoken", "")),
-    ]
-    response = client.post(
+    # Mint a real CSRF token via GET / (same pattern as phase_04's _prime_csrf):
+    # the fixture's placeholder token doesn't validate against starlette-csrf's
+    # HMAC-signed cookie. The pre-flight GET sets a properly signed csrftoken.
+    authed_client.cookies.delete("csrftoken")
+    response = authed_client.get("/")
+    token = response.cookies.get("csrftoken") or authed_client.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+    authed_client.cookies.set("csrftoken", token)
+    authed_client.headers["X-CSRF-Token"] = token
+
+    response = authed_client.post(
         "/coffees",
-        data=form_data,
-        headers={"HX-Request": "true"},
+        data={
+            "name": "__test_post_blend__",
+            "origins_country": ["Ethiopia", "Kenya"],
+            "origins_region": ["Yirgacheffe", ""],
+            "notes": "",
+        },
     )
     # A 200 means create succeeded or re-rendered with errors.
     # The test checks that two origins were persisted.
@@ -285,13 +290,13 @@ def test_post_coffee_with_two_origins_creates_blend(client: Any) -> None:
         db.commit()
 
 
-def test_filter_bar_uses_coffee_origins_country(client: Any) -> None:
+def test_filter_bar_uses_coffee_origins_country(authed_client: Any) -> None:
     """GET /coffees passes a countries context sourced from coffee_origins."""
     _require_postgres()
     # The template must render a <select name="country"> whose options come
     # from coffee_origins.country (verified via the service function change).
     # Integration check: GET /coffees returns 200 without errors.
-    response = client.get("/coffees")
+    response = authed_client.get("/coffees")
     assert response.status_code == 200
     # The filter bar still uses name="country" for URL stability (per plan).
     assert b'name="country"' in response.content

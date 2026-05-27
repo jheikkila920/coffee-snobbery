@@ -216,6 +216,8 @@ def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) ->
             "name": "Geometry",
             "process": "washed",
             "roast_level": "light",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "notes": "",
         },
     )
@@ -251,6 +253,8 @@ def test_create_coffee_with_array_round_trip(authed_client: Any, clean_catalog: 
         data={
             "name": "Geometry",
             "notes": "",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "advertised_flavor_note_ids": [str(fn1), str(fn2)],
         },
     )
@@ -389,6 +393,8 @@ def test_update_persists_array_change(authed_client: Any, clean_catalog: None) -
         data={
             "name": "Geometry",
             "notes": "",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "advertised_flavor_note_ids": [str(fn1)],
         },
     )

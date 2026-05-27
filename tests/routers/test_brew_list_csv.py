@@ -390,13 +390,17 @@ def test_import_outcomes_http(app, seeded_regular_user, clean_brew_list) -> None
         _create_session(db, by_user_id=uid, coffee_id=cid, brewed_at=dup_at)
 
     cname = f"{_COFFEE_PREFIX} Import"
+    # 17 fields per row (15.1-02 D-20 removed the roast_date column):
+    # coffee_name, roaster_name, recipe_name, brewer, grinder, kettle, water_type,
+    # dose_grams, water_grams, yield_grams, tds_pct, water_temp_c, grind_setting,
+    # rating, observed_flavor_notes, notes, brewed_at
     rows = [
         # inserted: known coffee, new timestamp
-        f"{cname},,,,,,,Filtered,15,250,,,93,22,4,,fresh import,2026-05-12T07:30",
+        f"{cname},,,,,,Filtered,15,250,,,93,22,4,,fresh import,2026-05-12T07:30",
         # skipped: same coffee + same brewed_at as the pre-seeded session
-        f"{cname},,,,,,,Filtered,15,250,,,93,22,4,,dup,2026-05-10T08:00",
+        f"{cname},,,,,,Filtered,15,250,,,93,22,4,,dup,2026-05-10T08:00",
         # refused: coffee not in catalog
-        "Totally Unknown Coffee,,,,,,,Filtered,15,250,,,93,22,4,,nope,2026-05-13T07:30",
+        "Totally Unknown Coffee,,,,,,Filtered,15,250,,,93,22,4,,nope,2026-05-13T07:30",
     ]
     client = _authed_client(app, seeded_regular_user["signed_cookie"])
     r = client.post(
