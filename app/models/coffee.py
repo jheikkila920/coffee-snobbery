@@ -33,6 +33,7 @@ vocabulary, but ``NULL`` is the universal "unknown" sentinel.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -49,6 +50,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.coffee_origin import CoffeeOrigin
 
 
 class Coffee(Base):
@@ -79,7 +83,7 @@ class Coffee(Base):
 
     # Origin rows — one per origin entry. A single-origin coffee has one row;
     # a blend has >=2. is_blend is derived: len(coffee.origins) > 1 (D-22).
-    origins: Mapped[list["CoffeeOrigin"]] = relationship(  # type: ignore[name-defined]
+    origins: Mapped[list[CoffeeOrigin]] = relationship(
         "CoffeeOrigin",
         cascade="all, delete-orphan",
         order_by="CoffeeOrigin.sort_order",

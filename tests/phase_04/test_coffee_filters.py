@@ -86,16 +86,15 @@ def _seed_coffee(
     from app.db import SessionLocal, engine
     from app.services import coffees as coffees_service
 
+    origins = [(country, None)] if country else []
     with SessionLocal() as db:
         cid = coffees_service.create_coffee(
             db,
             name=name,
             roaster_id=roaster_id,
-            country=country,
-            origin=None,
+            origins=origins,
             process=process,
             roast_level=None,
-            varietal=None,
             notes="",
             advertised_flavor_note_ids=[],
             by_user_id=0,

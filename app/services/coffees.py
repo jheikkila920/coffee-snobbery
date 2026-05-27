@@ -297,11 +297,7 @@ def list_distinct_countries(db: Session) -> list[str]:
     origin data lives in the join table). Function name preserved for URL
     stability and minimal call-site churn.
     """
-    stmt = (
-        select(CoffeeOrigin.country)
-        .distinct()
-        .order_by(CoffeeOrigin.country)
-    )
+    stmt = select(CoffeeOrigin.country).distinct().order_by(CoffeeOrigin.country)
     return [row for row in db.execute(stmt).scalars().all() if row]
 
 

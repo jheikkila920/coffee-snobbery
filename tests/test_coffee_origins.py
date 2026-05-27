@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Skip gate                                                                    #
 # --------------------------------------------------------------------------- #
@@ -95,10 +94,7 @@ def test_data_move_origin_fallback() -> None:
     with engine.connect() as conn:
         # COALESCE fallback: when country is empty, origin value is used.
         result = conn.execute(
-            text(
-                "SELECT o.country FROM coffee_origins o "
-                "WHERE o.country = 'Kenya' LIMIT 1"
-            )
+            text("SELECT o.country FROM coffee_origins o WHERE o.country = 'Kenya' LIMIT 1")
         ).fetchone()
         assert result is None or result[0] == "Kenya"
 
@@ -133,7 +129,6 @@ def test_data_move_country_wins_when_both_set() -> None:
 def test_is_blend_derived_single() -> None:
     """Coffee with one coffee_origins row → is_blend=False (derived, not stored)."""
     _require_postgres()
-    from sqlalchemy import func, select, text
 
     from app.db import SessionLocal
     from app.models.coffee import Coffee
@@ -190,9 +185,9 @@ def test_is_blend_derived_blend() -> None:
 def test_cascade_delete_removes_origins() -> None:
     """Deleting a coffee removes its coffee_origins rows (FK CASCADE)."""
     _require_postgres()
-    from sqlalchemy import select, text
+    from sqlalchemy import select
 
-    from app.db import SessionLocal, engine
+    from app.db import SessionLocal
     from app.models.coffee import Coffee
     from app.models.coffee_origin import CoffeeOrigin  # type: ignore[import]
 
@@ -212,9 +207,11 @@ def test_cascade_delete_removes_origins() -> None:
         db.delete(coffee)
         db.flush()
 
-        remaining = db.execute(
-            select(CoffeeOrigin).where(CoffeeOrigin.coffee_id == coffee_id)
-        ).scalars().all()
+        remaining = (
+            db.execute(select(CoffeeOrigin).where(CoffeeOrigin.coffee_id == coffee_id))
+            .scalars()
+            .all()
+        )
         assert remaining == []
         db.rollback()
 
@@ -224,7 +221,7 @@ def test_cascade_delete_removes_origins() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_form_renders_one_origin_row_by_default(client: "Any") -> None:
+def test_form_renders_one_origin_row_by_default(client: Any) -> None:
     """GET /coffees/new returns coffee_form.html with at least one data-origin-row element."""
     _require_postgres()
     # client fixture may skip if app not importable — handled by conftest
@@ -235,7 +232,7 @@ def test_form_renders_one_origin_row_by_default(client: "Any") -> None:
     )
 
 
-def test_origin_row_template_endpoint_returns_fragment(client: "Any") -> None:
+def test_origin_row_template_endpoint_returns_fragment(client: Any) -> None:
     """GET /coffees/origin-row-template returns the coffee_origin_row.html fragment."""
     _require_postgres()
     response = client.get("/coffees/origin-row-template")
@@ -243,7 +240,7 @@ def test_origin_row_template_endpoint_returns_fragment(client: "Any") -> None:
     assert b"data-origin-row" in response.content
 
 
-def test_post_coffee_with_two_origins_creates_blend(client: "Any") -> None:
+def test_post_coffee_with_two_origins_creates_blend(client: Any) -> None:
     """POST /coffees with two origins_country values yields a coffee with 2 origins."""
     _require_postgres()
     form_data = [
@@ -277,16 +274,18 @@ def test_post_coffee_with_two_origins_creates_blend(client: "Any") -> None:
         ).scalar_one_or_none()
         if coffee is None:
             pytest.skip("Coffee not found — service may have validation-rejected the post")
-        origins = db.execute(
-            select(CoffeeOrigin).where(CoffeeOrigin.coffee_id == coffee.id)
-        ).scalars().all()
+        origins = (
+            db.execute(select(CoffeeOrigin).where(CoffeeOrigin.coffee_id == coffee.id))
+            .scalars()
+            .all()
+        )
         assert len(origins) == 2, f"Expected 2 origins, got {len(origins)}"
         # Cleanup
         db.delete(coffee)
         db.commit()
 
 
-def test_filter_bar_uses_coffee_origins_country(client: "Any") -> None:
+def test_filter_bar_uses_coffee_origins_country(client: Any) -> None:
     """GET /coffees passes a countries context sourced from coffee_origins."""
     _require_postgres()
     # The template must render a <select name="country"> whose options come

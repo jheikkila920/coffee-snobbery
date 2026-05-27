@@ -160,13 +160,13 @@ def _parse_form_payload(
     # Zip and strip blank-country entries (D-22: never persist a blank-country row).
     origins: list[tuple[str, str | None]] = [
         (c.strip(), (r.strip() or None))
-        for c, r in zip(origins_country_raw, origins_region_raw)
+        for c, r in zip(origins_country_raw, origins_region_raw, strict=False)
         if c.strip()
     ]
     # Store raw origin strings in raw_view for form re-render on validation error.
     raw_view["origins"] = [
         {"country": c, "region": r or ""}
-        for c, r in zip(origins_country_raw, origins_region_raw)
+        for c, r in zip(origins_country_raw, origins_region_raw, strict=False)
     ]
 
     # Keys that belong to origin rows — stripped before Pydantic sees the payload.
@@ -646,9 +646,7 @@ def edit_coffee_form(
     # Seed origin rows from the coffee's current origins.
     # If no origins exist (data-move edge case), show one empty row.
     edit_origins: list[tuple[str, str | None]] = (
-        [(o.country, o.region) for o in coffee.origins]
-        if coffee.origins
-        else [("", None)]
+        [(o.country, o.region) for o in coffee.origins] if coffee.origins else [("", None)]
     )
     context = _hydrate_form_context(
         db,
