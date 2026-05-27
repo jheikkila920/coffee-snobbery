@@ -51,7 +51,7 @@ class CoffeeCreate(BaseModel):
     )
     roast_level: str | None = Field(
         None,
-        pattern=r"^(light|medium-light|medium|medium-dark|dark|unknown)$",
+        pattern=r"^(ultra-light|nordic-light|light|medium-light|medium|medium-dark|dark|unknown)$",
     )
     notes: str = Field("", max_length=2000)
     advertised_flavor_note_ids: list[int] = Field(default_factory=list)

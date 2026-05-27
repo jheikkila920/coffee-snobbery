@@ -106,7 +106,7 @@ class Coffee(Base):
         ),
         CheckConstraint(
             "roast_level IS NULL OR roast_level IN "
-            "('light','medium-light','medium','medium-dark','dark','unknown')",
+            "('ultra-light','nordic-light','light','medium-light','medium','medium-dark','dark','unknown')",
             name="coffees_roast_level_check",
         ),
         Index("ix_coffees_roaster_id", "roaster_id"),

@@ -77,8 +77,10 @@ COFFEE_PROCESSES: tuple[str, ...] = (
     "unknown",
 )
 
-# Locked 6-value roast-level enum (same defense-in-depth posture).
+# 8-value roast-level enum (CATALOG-04: ultra-light + nordic-light added).
 COFFEE_ROAST_LEVELS: tuple[str, ...] = (
+    "ultra-light",
+    "nordic-light",
     "light",
     "medium-light",
     "medium",
