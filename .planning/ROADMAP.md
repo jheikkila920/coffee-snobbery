@@ -41,7 +41,7 @@ other households.
 
 - [x] **Phase 15: v1.1 Debt Cleanup** - Close carried debt so new v1.2 work sits on a clean, verified base (completed 2026-05-26)
 - [x] **Phase 15.1: Catalog & Session Polish** (INSERTED) - Coffee catalog + brew session form cleanup: drop dead fields, fix edit, add multi-origin (completed 2026-05-27)
-- [ ] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration
+- [x] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration (completed 2026-05-27)
 - [ ] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page
 - [ ] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation
 - [ ] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts
@@ -214,7 +214,7 @@ Plans:
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
-| 16. Cafe Quick-Rate | v1.2 | 3/6 | In Progress|  |
+| 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
