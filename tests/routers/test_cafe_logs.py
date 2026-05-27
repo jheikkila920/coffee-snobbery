@@ -480,3 +480,84 @@ def test_origin_country_autocomplete(
     assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:200]}"
     # "Ethiopia" is in the seeded list so it must appear.
     assert "Ethiopia" in r.text
+
+
+def test_cafe_form_save_visible_at_375x667(
+    app: Any,
+    seeded_regular_user: dict[str, Any],
+) -> None:
+    """Playwright assertion: Save button visible in first viewport at 375x667 (D-11 / UI-SPEC).
+
+    Requires Playwright + a running FastAPI server on localhost:8000.
+    Skips visibly (pytest.importorskip) when Playwright is unavailable.
+    Skips visibly when the server is not reachable.
+    """
+    sync_api = pytest.importorskip(
+        "playwright.sync_api",
+        reason="playwright not installed — skip sticky-Save viewport assertion",
+    )
+
+    import socket
+
+    # Connectivity guard: only run when the live app is reachable.
+    try:
+        s = socket.create_connection(("localhost", 8000), timeout=2)
+        s.close()
+    except OSError:
+        pytest.skip("localhost:8000 not reachable — run against the live dev container")
+
+    _require_cafe_log_form_template()
+
+    with sync_api.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            viewport={"width": 375, "height": 667},
+        )
+
+        # Log in by posting credentials to /login so we get a real session cookie.
+        page = context.new_page()
+
+        # Grab the CSRF cookie first (GET /login sets it).
+        page.goto("http://localhost:8000/login")
+        csrf_cookie = next(
+            (c["value"] for c in context.cookies() if c["name"] == "csrftoken"),
+            "",
+        )
+
+        # Submit login form.
+        page.fill("input[name=username]", seeded_regular_user["user"].username)
+        page.fill("input[name=password]", "testpassword123")
+        # Inject the CSRF token into the form before submitting.
+        page.evaluate(
+            """(token) => {
+                const csrf = document.querySelector('input[name="X-CSRF-Token"]');
+                if (csrf) csrf.value = token;
+            }""",
+            csrf_cookie,
+        )
+        page.click("button[type=submit]")
+        page.wait_for_load_state("networkidle")
+
+        # Navigate to the cafe log new form.
+        page.goto("http://localhost:8000/cafe-logs/new")
+        page.wait_for_load_state("networkidle")
+
+        # Assert Save button is within the first viewport (bounding rect bottom <= 667).
+        save_button = page.get_by_role("button", name="Save")
+        bbox = save_button.bounding_box()
+        assert bbox is not None, "Save button not found in the DOM"
+        assert bbox["y"] + bbox["height"] <= 667, (
+            f"Save button must be visible without scroll at 375x667 per UI-SPEC D-11 "
+            f"— got y={bbox['y']:.1f} h={bbox['height']:.1f} "
+            f"(bottom={bbox['y'] + bbox['height']:.1f})"
+        )
+
+        # Assert cafe_name input has autofocus (is the active element).
+        active_name = page.evaluate("document.activeElement.name")
+        assert active_name == "cafe_name", (
+            f"cafe_name input must be focused on page load (autofocus) — "
+            f"active element name was '{active_name}'"
+        )
+
+        context.close()
+        browser.close()
