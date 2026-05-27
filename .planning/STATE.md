@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
 stopped_at: Phase 16 planned (6 plans, 3 waves); pre-execute review
-last_updated: "2026-05-27T17:36:49.697Z"
-last_activity: 2026-05-27 -- Phase 16 planning complete
+last_updated: "2026-05-27T17:42:01.514Z"
+last_activity: 2026-05-27 -- Phase 16 execution started
 progress:
   total_phases: 9
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 15.1 — catalog-session-polish
+**Current focus:** Phase 16 — Café Quick-Rate
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-27 -- Phase 16 planning complete
+Phase: 16 (Café Quick-Rate) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 16
+Last activity: 2026-05-27 -- Phase 16 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
