@@ -1,0 +1,109 @@
+{# Cafe log mobile card fragment — rendered inside cafe_log_list.html <md branch.
+
+   Visual distinction (D-07): border-l-2 border-l-amber-500 accent + Heroicons
+   "Coffee" outline SVG top-left. These are the ONLY two changes vs the brew
+   session card — same layout, same typography, same Edit/Delete pattern (D-21).
+   Brew session cards stay UNCHANGED (UI-SPEC § Visual Distinction Spec).
+
+   D-08 LOCKED: the no-data empty state renders BLANK — this card only renders
+   when there are rows. The blank empty state is in cafe_log_list.html.
+
+   D-21 dual Edit button:
+   - Mobile (md:hidden): hx-target="closest [data-row]" outerHTML swap.
+   - Desktop (hidden md:inline-flex): hx-target="#cafe-form-mount" innerHTML
+     swap + ?layout=desktop query string.
+
+   Delete: POST + _method=DELETE + hx-confirm (HTMX 2.x convention, CLAUDE.md § 3.2).
+
+   Context variables expected:
+   - log: dict — pre-resolved row with id, cafe_name, rating, roaster_name,
+     origin_country, brew_method, flavor_note_ids (list[int]), logged_at,
+     notes, photo_filename provided by brew.py list_sessions cafe branch.
+   - flavor_note_names: dict[int, str] — resolved by the router (or empty dict
+     when flavor notes are not pre-resolved; pills simply don't render).
+   - request: the FastAPI Request object (for CSRF cookie). #}
+{% set log_ids = log.flavor_note_ids or [] %}
+<div id="cafe-log-{{ log.id }}"
+     data-row
+     class="relative rounded-lg border border-espresso-200 border-l-2 border-l-amber-500 bg-cream-100 p-4 pr-24 dark:bg-espresso-900 dark:border-espresso-800 dark:border-l-amber-400">
+  {# Heroicons "Coffee" outline SVG — aria-label for screen-reader discoverability
+     (UI-SPEC § Accessibility). The exact path is mandated by UI-SPEC § Visual
+     Distinction Spec — D-07 expanded. #}
+  <svg xmlns="http://www.w3.org/2000/svg"
+       class="absolute top-3 left-3 w-4 h-4 text-amber-600 dark:text-amber-400"
+       fill="none"
+       viewBox="0 0 24 24"
+       stroke="currentColor"
+       aria-label="Cafe tasting">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M3 8h13v6a4 4 0 01-4 4H7a4 4 0 01-4-4V8zm13 1h2a2 2 0 010 4h-2"/>
+  </svg>
+  {# Top-right Edit / Delete cluster. pr-24 on the outer div prevents cafe_name
+     from sliding under these buttons (mirrors coffee_row.html mode="card"). #}
+  <div class="absolute top-3 right-3 flex gap-1">
+    {# Mobile Edit — inline-replace the card with the edit form (D-21 mobile branch) #}
+    <button type="button"
+            hx-get="/cafe-logs/{{ log.id }}/edit"
+            hx-target="closest [data-row]"
+            hx-swap="outerHTML"
+            class="md:hidden inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+      Edit
+    </button>
+    {# Desktop Edit — mount form in #cafe-form-mount above the list (D-21 desktop branch) #}
+    <button type="button"
+            hx-get="/cafe-logs/{{ log.id }}/edit?layout=desktop"
+            hx-target="#cafe-form-mount"
+            hx-swap="innerHTML"
+            class="hidden md:inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+      Edit
+    </button>
+    {# Delete — POST + hidden _method=DELETE + hx-confirm (HTMX 2.x / CLAUDE.md § 3.2).
+       CSRF double-submit-cookie pattern per SHARED PATTERNS. #}
+    <form hx-post="/cafe-logs/{{ log.id }}"
+          hx-target="closest [data-row]"
+          hx-swap="outerHTML"
+          hx-confirm="Delete this cafe tasting? This cannot be undone."
+          class="inline">
+      <input type="hidden" name="_method" value="DELETE">
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+      <button type="submit"
+              class="inline-flex items-center justify-center rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900 min-h-[44px] min-w-[44px]">
+        Delete
+      </button>
+    </form>
+  </div>
+  {# Body — indented from left to clear the cup icon (pl-7 gives ~28px clearance) #}
+  <div class="pl-7">
+    <p class="text-base font-semibold">{{ log.cafe_name }}</p>
+    <p class="text-sm">
+      {% if log.rating is not none %}
+        <span class="text-amber-400" aria-hidden="true">★</span>
+        <span class="tabular-nums">{{ log.rating }}</span>
+        <span class="text-espresso-600 dark:text-cream-300"> / 5</span>
+      {% else %}
+        <span class="text-espresso-600 dark:text-cream-300">—</span>
+      {% endif %}
+    </p>
+    <p class="text-sm">{{ log.roaster_name or "—" }}</p>
+    <p class="text-sm text-espresso-600 dark:text-cream-300">
+      {{ log.origin_country or "—" }}{% if log.brew_method %} · {{ log.brew_method }}{% endif %}
+    </p>
+    {# Flavor pills — up to 3, then "+N more" (mirrors coffee_row.html:83-98) #}
+    {% if log_ids %}
+      <div class="mt-2 flex flex-wrap gap-1">
+        {% set shown = namespace(count=0) %}
+        {% for fid in log_ids %}
+          {% set fname = flavor_note_names.get(fid) if flavor_note_names is defined else none %}
+          {% if fname and shown.count < 3 %}
+            <span class="inline-flex px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">{{ fname }}</span>
+            {% set shown.count = shown.count + 1 %}
+          {% endif %}
+        {% endfor %}
+        {% set extras = log_ids|length - shown.count %}
+        {% if extras > 0 %}
+          <span class="inline-flex px-2 py-1 rounded text-sm text-espresso-700 dark:text-cream-300">+{{ extras }} more</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>

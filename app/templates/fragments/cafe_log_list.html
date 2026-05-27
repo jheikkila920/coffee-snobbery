@@ -1,0 +1,65 @@
+{# Cafe log list fragment — HTMX swap target for GET /brew?tab=cafe.
+
+   Outer wrapper id="session-list" MUST match session_list.html — the existing
+   filter-bar hx-target="#session-list" covers both tabs without any change to
+   the filter bar wiring (PATTERNS.md § 8 — reuse same id).
+
+   Three branches:
+   1. rows present → md+ table / <md cards (mirror session_list.html structure).
+   2. rows empty + active_filter_count > 0 → filtered-zero state with copy.
+   3. rows empty + no filters → BLANK (D-08 LOCKED — see comment in else branch).
+
+   Context contract:
+   - rows: list[dict] — pre-resolved row dicts from brew.py cafe branch.
+   - active_filter_count: int.
+   - flavor_note_names: dict[int, str] — resolved by router for pill rendering.
+   - request: FastAPI Request (passed through for CSRF cookie in card/row).
+
+   CAFE-03 filter scoping (D-06): this fragment only renders cafe data.
+   Brew session data never appears here. #}
+<div id="session-list">
+  {% if rows %}
+    {# Desktop table (md and above) #}
+    <div class="hidden md:block">
+      <table class="w-full text-base">
+        <thead>
+          <tr class="text-sm font-semibold border-b border-espresso-200 dark:border-espresso-800">
+            <th class="text-left py-2">Date</th>
+            <th class="text-left py-2">Coffee name</th>
+            <th class="text-left py-2">Rating</th>
+            <th class="text-left py-2">Roaster</th>
+            <th class="text-left py-2">Origin</th>
+            <th class="text-right py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in rows %}
+            {% include "fragments/cafe_log_row.html" %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {# Mobile cards (below md) #}
+    <div class="md:hidden space-y-3">
+      {% for log in rows %}
+        {% include "fragments/cafe_log_card.html" %}
+      {% endfor %}
+    </div>
+  {% elif active_filter_count %}
+    {# Filtered-zero state — mirrors session_list.html:46-62 structure with cafe copy.
+       D-08 LOCKED carve-out: filtered-zero DOES show copy; only the no-data state is blank. #}
+    <div class="flex flex-col items-center justify-center text-center py-16 gap-3">
+      <h2 class="text-lg font-semibold">No cafe tastings match these filters.</h2>
+      <p class="text-base text-espresso-700 dark:text-cream-200">Try widening the rating or date range.</p>
+      <a href="/brew?tab=cafe"
+         class="rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Clear filters
+      </a>
+    </div>
+  {% else %}
+    {# D-08 LOCKED — blank no-data empty state. Do NOT add a heading or CTA.
+       See .planning/phases/16-cafe-quick-rate/16-CONTEXT.md D-08.
+       Deliberate divergence from session_list.html's "No brews logged yet." copy.
+       A future contributor MUST NOT add hint copy here without re-opening D-08. #}
+  {% endif %}
+</div>
