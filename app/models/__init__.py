@@ -27,6 +27,7 @@ from app.models.recipe import Recipe
 from app.models.roaster import Roaster
 from app.models.session import Session
 from app.models.user import User
+from app.models.varietal import Varietal, coffee_varietals  # noqa: F401
 from app.models.wishlist_entry import WishlistEntry
 
 __all__ = [
@@ -45,5 +46,6 @@ __all__ = [
     "Roaster",
     "Session",
     "User",
+    "Varietal",
     "WishlistEntry",
 ]
