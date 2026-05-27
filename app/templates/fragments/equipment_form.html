@@ -12,12 +12,8 @@
 {% set is_edit = mode == "edit" %}
 {% if is_edit %}
   {% set form_action = "/equipment/" ~ equipment_id %}
-  {% set form_target = "closest [data-row]" %}
-  {% set form_swap = "outerHTML" %}
 {% else %}
   {% set form_action = "/equipment" %}
-  {% set form_target = "#equipment-form-mount" %}
-  {% set form_swap = "innerHTML" %}
 {% endif %}
 <div {% if is_edit %}data-row {% endif %}class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
   <form hx-post="{{ form_action }}"
@@ -26,6 +22,9 @@
         class="flex flex-col gap-4">
     {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
     <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    {% if layout == "desktop" %}
+    <input type="hidden" name="layout" value="desktop">
+    {% endif %}
     <label class="flex flex-col gap-1">
       <span class="text-sm font-semibold">Type</span>
       {# MOB-07: native <select> for short (≤10) option lists. #}
@@ -80,16 +79,16 @@
       {% if is_edit %}
       <button type="button"
               hx-get="/equipment/{{ equipment_id }}/row"
-              hx-target="closest [data-row]"
-              hx-swap="outerHTML"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>
       {% else %}
       <button type="button"
               hx-get="/equipment/empty-form"
-              hx-target="#equipment-form-mount"
-              hx-swap="innerHTML"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>
