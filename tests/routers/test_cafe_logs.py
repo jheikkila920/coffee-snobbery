@@ -482,6 +482,139 @@ def test_origin_country_autocomplete(
     assert "Ethiopia" in r.text
 
 
+def test_tab_cafe_renders_list(
+    app: Any,
+    seeded_regular_user: dict[str, Any],
+    clean_cafe_router: None,
+) -> None:
+    """GET /brew?tab=cafe with one seeded cafe_log returns 200 + visual distinction markers.
+
+    CAFE-03: asserts border-l-amber-500 (D-07 left accent), aria-label="Cafe tasting"
+    (D-07 cup-icon a11y label), and the active-tab marker for "Cafe tastings"
+    (aria-current="page" near "Cafe tastings").
+
+    This test MUST BE ADDED in plan 16-04 (not 16-02) because the router branch
+    (?tab=cafe dispatch in brew.py) and the cafe_log_list.html fragment both ship
+    in this plan — the assertions would have nothing to verify against before 16-04.
+    """
+    _require_postgres()
+    _require_cafe_logs_table()
+    _require_cafe_router()
+
+    # Verify brew.py list_sessions handles ?tab=cafe (plan 16-04 router extension).
+    try:
+        from app.routers import brew as _brew_mod  # noqa: F401
+    except ImportError:
+        pytest.skip("app.routers.brew not importable")
+
+    from app.db import SessionLocal
+
+    uid = seeded_regular_user["user"].id
+    with SessionLocal() as db:
+        _seed_cafe_log(db, by_user_id=uid, cafe_name="CAFE-03 Test Coffee")
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    r = client.get("/brew?tab=cafe")
+    assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:400]}"
+
+    body = r.content
+
+    # D-07: cafe left-border accent class must appear in the rendered HTML.
+    assert b"border-l-amber-500" in body, (
+        "D-07 accent class 'border-l-amber-500' not found in /brew?tab=cafe response. "
+        "Check cafe_log_card.html / cafe_log_row.html and that the router renders them."
+    )
+
+    # D-07: cup-icon aria-label for screen-reader discoverability.
+    assert b'aria-label="Cafe tasting"' in body, (
+        'D-07 cup icon aria-label="Cafe tasting" not found. Check the SVG in cafe_log_card.html.'
+    )
+
+    # Active tab marker — aria-current="page" should appear on the Cafe tastings anchor.
+    assert b'aria-current="page"' in body, (
+        "aria-current='page' not found in /brew?tab=cafe response. "
+        "Check the tab toggle in sessions.html."
+    )
+    assert b"Cafe tastings" in body, "'Cafe tastings' label not found in response."
+
+    # Verify "Cafe tastings" appears near the aria-current marker (within 300 bytes).
+    idx = body.find(b'aria-current="page"')
+    if idx != -1:
+        surrounding = body[max(0, idx - 50) : idx + 300]
+        assert b"Cafe tastings" in surrounding, (
+            "aria-current='page' marker found but 'Cafe tastings' is not within 300 bytes "
+            "after it — the active tab marker may be on the wrong tab anchor."
+        )
+
+
+def test_empty_state_is_blank(
+    app: Any,
+    seeded_regular_user: dict[str, Any],
+    clean_cafe_router: None,
+) -> None:
+    """GET /brew?tab=cafe with zero cafe_logs returns 200 + BLANK session-list region.
+
+    D-08 LOCKED: the no-data empty state for the Cafe tastings tab is blank —
+    no heading, no body, no illustration, no CTA. The list region must render
+    the #session-list div with no child content and no hint-copy substrings.
+
+    Filtered-zero state is OUT of scope for this test — it lives in UI-SPEC
+    § Empty States and is exercised by the existing filtered-zero behavior on
+    the brew tab. D-08 LOCKED carve-out applies only to the no-data state.
+
+    This test seeds ZERO cafe_logs (the default fresh-user state via
+    clean_cafe_router fixture) — no _seed_cafe_log call.
+    """
+    _require_postgres()
+    _require_cafe_logs_table()
+    _require_cafe_router()
+
+    try:
+        from app.routers import brew as _brew_mod  # noqa: F401
+    except ImportError:
+        pytest.skip("app.routers.brew not importable")
+
+    import re
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    r = client.get("/brew?tab=cafe")
+    assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:400]}"
+
+    body = r.content
+
+    # Extract the #session-list region.
+    # Use a regex that captures from the opening <div id="session-list"...> to the
+    # matching closing </div>. A simple non-greedy match handles the common case
+    # where session-list is the last top-level div before </main>.
+    match = re.search(rb'<div id="session-list"[^>]*>(.*?)</div>', body, re.DOTALL)
+    if match:
+        list_region = match.group(1)
+    else:
+        # If the regex doesn't find the div (e.g. different whitespace), fall back
+        # to asserting on the full body but with tighter phrase checks.
+        list_region = body
+
+    # D-08 LOCKED — no <article or <tr rows in the list region.
+    assert b"<article" not in list_region, (
+        "D-08 LOCKED: <article element found in the blank empty state. "
+        "The no-data Cafe tastings tab must render the session-list div empty."
+    )
+    assert b"<tr" not in list_region, (
+        "D-08 LOCKED: <tr element found in the blank empty state. "
+        "The no-data Cafe tastings tab must render the session-list div empty."
+    )
+
+    # D-08 LOCKED — no hint-copy substrings (case-insensitive check on bytes).
+    hint_phrases = [b"no ", b"yet", b"drop", b"add", b"first"]
+    list_lower = list_region.lower()
+    for phrase in hint_phrases:
+        assert phrase not in list_lower, (
+            f"D-08 LOCKED: hint-copy phrase {phrase!r} found in the blank empty state. "
+            "The no-data Cafe tastings tab must render completely blank — no heading, "
+            "no body, no CTA. See .planning/phases/16-cafe-quick-rate/16-CONTEXT.md D-08."
+        )
+
+
 def test_cafe_form_save_visible_at_375x667(
     app: Any,
     seeded_regular_user: dict[str, Any],

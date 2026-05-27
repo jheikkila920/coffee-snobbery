@@ -1,0 +1,83 @@
+{# Cafe log desktop table row fragment — rendered inside cafe_log_list.html md+ branch.
+
+   Visual distinction (D-07): border-l-2 border-l-amber-500 on the <tr>.
+   Same accent technique as the mobile card so D-07 is consistent across layouts.
+
+   D-21 dual Edit button (desktop table variant):
+   - Mobile (md:hidden): hx-target="closest [data-row]" outerHTML (inline replace).
+   - Desktop (hidden md:inline-flex): hx-target="#cafe-form-mount" innerHTML.
+
+   OOB form-mount clear:
+   - include_oob_form_clear: True after a successful create (clear form mount).
+   - include_desktop_oob: True after a successful desktop-edit update (row swaps
+     itself via hx-swap-oob="outerHTML" above, then clears the form mount).
+
+   Context variables expected:
+   - log: dict — id, cafe_name, rating, roaster_name, origin_country,
+     brew_method, logged_at (datetime), from the brew.py cafe branch.
+   - request: FastAPI Request object (for CSRF cookie).
+   - include_oob_form_clear: bool (default False) — clear #cafe-form-mount.
+   - include_desktop_oob: bool (default False) — outerHTML row swap + clear mount. #}
+<tr id="cafe-log-{{ log.id }}"
+    data-row
+    {% if include_desktop_oob is defined and include_desktop_oob %}hx-swap-oob="outerHTML"{% endif %}
+    class="border-b border-espresso-100 border-l-2 border-l-amber-500 dark:border-l-amber-400">
+  <td class="py-2 text-sm text-espresso-600 dark:text-cream-300">
+    {% if log.logged_at %}
+      {{ log.logged_at | localdt(fmt="%b %d, %H:%M") }}
+    {% else %}
+      —
+    {% endif %}
+  </td>
+  <td class="py-2 font-semibold">{{ log.cafe_name }}</td>
+  <td class="py-2">
+    {% if log.rating is not none %}
+      <span class="text-amber-400" aria-hidden="true">★</span>
+      <span class="tabular-nums">{{ log.rating }}</span>
+    {% else %}
+      —
+    {% endif %}
+  </td>
+  <td class="py-2 text-sm">{{ log.roaster_name or "—" }}</td>
+  <td class="py-2 text-sm">{{ log.origin_country or "—" }}</td>
+  <td class="py-2 text-right whitespace-nowrap">
+    {# Mobile Edit — hidden at md+ (renders in mobile fallback path inside desktop table) #}
+    <button type="button"
+            hx-get="/cafe-logs/{{ log.id }}/edit"
+            hx-target="closest [data-row]"
+            hx-swap="outerHTML"
+            class="md:hidden rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+      Edit
+    </button>
+    {# Desktop Edit — D-21 pattern, hidden at <md (mounts form above list) #}
+    <button type="button"
+            hx-get="/cafe-logs/{{ log.id }}/edit?layout=desktop"
+            hx-target="#cafe-form-mount"
+            hx-swap="innerHTML"
+            class="hidden md:inline-flex rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+      Edit
+    </button>
+    {# Delete — POST + _method=DELETE + hx-confirm (HTMX 2.x convention) #}
+    <form hx-post="/cafe-logs/{{ log.id }}"
+          hx-target="closest [data-row]"
+          hx-swap="outerHTML"
+          hx-confirm="Delete this cafe tasting? This cannot be undone."
+          class="inline ml-1">
+      <input type="hidden" name="_method" value="DELETE">
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+      <button type="submit"
+              class="rounded border border-espresso-300 px-3 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Delete
+      </button>
+    </form>
+  </td>
+</tr>
+{% if include_oob_form_clear is defined and include_oob_form_clear %}
+  {# Clear the desktop edit mount after a successful create (Pattern 2 from RESEARCH.md). #}
+  <div id="cafe-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}
+{% if include_desktop_oob is defined and include_desktop_oob %}
+  {# D-21: desktop edit success — row already has hx-swap-oob="outerHTML" above;
+     clear the form mount as the second OOB element. #}
+  <div id="cafe-form-mount" hx-swap-oob="innerHTML"></div>
+{% endif %}
