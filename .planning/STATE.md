@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
-status: executing
+status: ready_to_plan
 stopped_at: Phase 15.1 context updated (D-20/D-21/D-22)
 last_updated: "2026-05-27T00:38:05.905Z"
 last_activity: 2026-05-27 -- Phase 15.1 execution started
 progress:
   total_phases: 9
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
   completed_plans: 3
-  percent: 38
+  percent: 22
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 ## Current Position
 
-Phase: 15.1 (catalog-session-polish) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 15.1
-Last activity: 2026-05-27 -- Phase 15.1 execution started
+Phase: 16
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-27
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 88 (v1.1)
+- Total plans completed: 93 (v1.1)
 - Average duration: —
 - Total execution time: 0 hours (v1.2)
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 |-------|-------|-------|----------|
 | 15–22 | TBD | — | — |
 | 15 | 3 | - | - |
+| 15.1 | 5 | - | - |
 
 **Recent Trend:** No v1.2 history yet
 

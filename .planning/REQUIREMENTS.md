@@ -21,13 +21,13 @@ Carried v1.1 debt, folded in early so new work sits on a clean base.
 
 Inserted phase (Phase 15.1). Coffee catalog and brew session form cleanup surfaced during Phase 15 use of the live app. Lands before any v1.2 feature work that touches the shared coffee schema or AI inputs.
 
-- [ ] **CATALOG-01**: The edit-coffee modal renders at the same width as the create-coffee modal on desktop, and a coffee edit submits and persists end-to-end (item #2 -- Save/Cancel breakage -- is scoped via `/gsd-debug` and may add a `CATALOG-08` if the fix turns out broader than this edit-coffee surface)
-- [ ] **CATALOG-02**: The `coffees.country` column is removed via a safe Alembic migration that merges any existing data into `origin`, and no UI surface, form, AI prompt, or analytics query references country thereafter
-- [ ] **CATALOG-03**: A coffee can be flagged single-origin or blend, blends accept multiple structured origins (not a free-text comma string), and the form UI toggles cleanly between the two modes
-- [ ] **CATALOG-04**: The roast-level enum gains Nordic Light and Ultra Light values (ordering placed at the lighter end), with a forward-compatible migration that preserves existing values
-- [ ] **CATALOG-05**: Varietal stays optional, supports multi-select, and autocompletes from a seeded varietal catalog (Bourbon, Typica, Caturra, Catuai, Geisha, Pacamara, SL28, SL34, etc.); a coffee may have zero, one, or many varietals
-- [ ] **CATALOG-06**: A new brew session prefills its flavor-note chips from the parent coffee, the user can remove inherited chips before saving, and any flavor-note add or remove on the session is mirrored back to the parent coffee (bidirectional sync)
-- [ ] **CATALOG-07**: Roast-freshness tracking is removed app-wide -- the `roast_date`/freshness column is dropped via safe migration, AI prompts no longer mention freshness, the scheduler no longer flags stale coffees, and every UI element is removed
+- [x] **CATALOG-01**: The edit-coffee modal renders at the same width as the create-coffee modal on desktop, and a coffee edit submits and persists end-to-end (item #2 -- Save/Cancel breakage -- is scoped via `/gsd-debug` and may add a `CATALOG-08` if the fix turns out broader than this edit-coffee surface)
+- [x] **CATALOG-02**: The `coffees.country` column is removed via a safe Alembic migration that merges any existing data into `origin`, and no UI surface, form, AI prompt, or analytics query references country thereafter
+- [x] **CATALOG-03**: A coffee can be flagged single-origin or blend, blends accept multiple structured origins (not a free-text comma string), and the form UI toggles cleanly between the two modes
+- [x] **CATALOG-04**: The roast-level enum gains Nordic Light and Ultra Light values (ordering placed at the lighter end), with a forward-compatible migration that preserves existing values
+- [x] **CATALOG-05**: Varietal stays optional, supports multi-select, and autocompletes from a seeded varietal catalog (Bourbon, Typica, Caturra, Catuai, Geisha, Pacamara, SL28, SL34, etc.); a coffee may have zero, one, or many varietals
+- [x] **CATALOG-06**: A new brew session prefills its flavor-note chips from the parent coffee, the user can remove inherited chips before saving, and any flavor-note add or remove on the session is mirrored back to the parent coffee (bidirectional sync)
+- [x] **CATALOG-07**: Roast-freshness tracking is removed app-wide -- the `roast_date`/freshness column is dropped via safe migration, AI prompts no longer mention freshness, the scheduler no longer flags stale coffees, and every UI element is removed
 
 ### Self-Host Distribution (DIST)
 
@@ -149,13 +149,13 @@ Every v1.2 requirement maps to exactly one phase.
 | DEBT-03 | Phase 15 | Complete |
 | DEBT-04 | Phase 15 | Complete |
 | DEBT-05 | Phase 15 | Complete |
-| CATALOG-01 | Phase 15.1 | Pending |
-| CATALOG-02 | Phase 15.1 | Pending |
-| CATALOG-03 | Phase 15.1 | Pending |
-| CATALOG-04 | Phase 15.1 | Pending |
-| CATALOG-05 | Phase 15.1 | Pending |
-| CATALOG-06 | Phase 15.1 | Pending |
-| CATALOG-07 | Phase 15.1 | Pending |
+| CATALOG-01 | Phase 15.1 | Complete |
+| CATALOG-02 | Phase 15.1 | Complete |
+| CATALOG-03 | Phase 15.1 | Complete |
+| CATALOG-04 | Phase 15.1 | Complete |
+| CATALOG-05 | Phase 15.1 | Complete |
+| CATALOG-06 | Phase 15.1 | Complete |
+| CATALOG-07 | Phase 15.1 | Complete |
 | DIST-01 | Phase 18 | Pending |
 | DIST-02 | Phase 18 | Pending |
 | DIST-03 | Phase 18 | Pending |
