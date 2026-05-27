@@ -55,11 +55,11 @@
     {% if roaster_name %}
       <div class="text-sm">{{ roaster_name }}</div>
     {% endif %}
-    {% if coffee.country or coffee.origin %}
+    {% if coffee.origins %}
       <div class="text-sm">
-        {% if coffee.country %}{{ coffee.country }}{% endif %}
-        {% if coffee.country and coffee.origin %} · {% endif %}
-        {% if coffee.origin %}{{ coffee.origin }}{% endif %}
+        {% for o in coffee.origins %}
+          {{ o.country }}{% if o.region %} ({{ o.region }}){% endif %}{% if not loop.last %} · {% endif %}
+        {% endfor %}
       </div>
     {% endif %}
     {# C3: process + roast level as flex-wrap pills (preserved). #}
@@ -100,9 +100,9 @@
     </td>
     <td class="py-2">{{ roaster_name or "—" }}</td>
     <td class="py-2">
-      {% if coffee.country %}{{ coffee.country }}{% endif %}
-      {% if coffee.country and coffee.origin %} · {% endif %}
-      {% if coffee.origin %}{{ coffee.origin }}{% endif %}
+      {% for o in coffee.origins %}
+        {{ o.country }}{% if o.region %} ({{ o.region }}){% endif %}{% if not loop.last %} · {% endif %}
+      {% endfor %}
     </td>
     <td class="py-2">
       {% if coffee.process %}

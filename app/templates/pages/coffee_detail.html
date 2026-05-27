@@ -42,11 +42,15 @@
         </p>
       {% endif %}
       <dl class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-base">
-        {% if coffee.country %}
-          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Country:</dt> <dd class="inline">{{ coffee.country }}</dd></div>
-        {% endif %}
-        {% if coffee.origin %}
-          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Origin:</dt> <dd class="inline">{{ coffee.origin }}</dd></div>
+        {% if coffee.origins %}
+          <div class="sm:col-span-2">
+            <dt class="inline text-sm text-espresso-600 dark:text-cream-300">Origins:</dt>
+            <dd class="inline">
+              {% for o in coffee.origins %}
+                {{ o.country }}{% if o.region %} ({{ o.region }}){% endif %}{% if not loop.last %} · {% endif %}
+              {% endfor %}
+            </dd>
+          </div>
         {% endif %}
         {% if coffee.process %}
           <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Process:</dt> <dd class="inline">{{ coffee.process }}</dd></div>
