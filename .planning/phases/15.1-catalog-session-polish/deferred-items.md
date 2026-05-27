@@ -3,28 +3,22 @@
 Items discovered during execution that are outside the scope of the plan that found them.
 Do NOT fix these unless assigned to a specific plan.
 
-## From Plan 15.1-01 (Multi-Origin Catalog Refactor)
+## From Plan 15.1-01 (Multi-Origin Catalog Refactor) — RESOLVED 2026-05-27
 
-### Pre-existing Coffee.origin references in app/ (outside migrations)
+The original executor declared the plan complete while leaving five service files referencing the dropped `Coffee.origin` mapped column. This would have crashed the home page on first load. Resolved by an orchestrator-applied deviation commit immediately after Wave 1 merge, before Wave 2 dispatch.
 
-These files reference `Coffee.origin` which no longer exists as a mapped column after p15_1_multi_origin migration. They will cause SQLAlchemy `InvalidRequestError` or `AttributeError` at query execution time if the affected code paths are exercised.
+**Policy applied:**
+- **Analytics** (`get_preference_profile`, `get_sweet_spots`) — join `coffee_origins`; a blend session contributes one row per origin (every origin a coffee has counts toward that origin's aggregate).
+- **AI recs** (`suggest_recipe`, `alt_brewer_callout`) — origin filter becomes an EXISTS subquery against `coffee_origins`; matches any of the coffee's origins.
+- **Display** (`get_unrated_coffees`, `search.run_search`) — origin becomes a correlated `array_to_string(array_agg(country ORDER BY sort_order), ', ')` subquery; renders single-origin coffees as `Ethiopia` and blends as `Ethiopia, Brazil`.
 
-| File | Line(s) | Reference | Notes |
-|------|---------|-----------|-------|
-| app/services/ai_service.py | 419, 488 | `func.lower(Coffee.origin) == func.lower(origin)` | Used in SQLAlchemy WHERE clauses for AI recommendation queries |
-| app/services/analytics.py | 125 | `_dim_query(Coffee.origin, Coffee.origin)` | Origin dimension query for preference derivation |
-| app/services/analytics.py | 236, 251 | `Coffee.origin.label("origin")`, `Coffee.origin` in select | get_sweet_spots query |
-| app/services/analytics.py | 308 | `Coffee.origin` in select for recent brews | get_recent_brews query |
-| app/services/search.py | 139 | `Coffee.origin` in search select | Global search result set |
+**Files fixed on main (post-merge):**
+- `app/services/analytics.py`
+- `app/services/ai_service.py`
+- `app/services/search.py`
 
-**Impact:** Home page analytics, AI recommendation system, and global search will fail at runtime if any coffee is searched, the home page analytics query runs, or AI regeneration triggers. These are blocked until the owning plans update these services.
+**Validation:** Each surface compiled and executed against the live DB after migrations ran (`SessionLocal()` smoke test).
 
-**Recommended fix timing:** Plan 15.1-02 (freshness removal) or a dedicated analytics/search update plan.
+### test_analytics.py line 503 — RESOLVED (covered by the same fixup)
 
-### test_analytics.py line 503
-
-```python
-assert rows[0].origin == "Ethiopia"
-```
-
-This test accesses `rows[0].origin` which is a SQLAlchemy result column from `analytics.get_sweet_spots`. That function uses `Coffee.origin` (deferred above). Test will fail when Postgres is reachable until analytics.py is updated.
+The `rows[0].origin == "Ethiopia"` assertion now reads the labeled column from `CoffeeOrigin.country` instead of the dropped `Coffee.origin`.

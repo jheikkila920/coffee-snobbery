@@ -21,11 +21,13 @@ from typing import Any
 
 import structlog
 from sqlalchemy import func, select, text
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session, aliased
 
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
+from app.models.coffee_origin import CoffeeOrigin
 from app.models.equipment import Equipment
 from app.models.recipe import Recipe
 from app.models.roaster import Roaster
@@ -119,8 +121,29 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
         .order_by(func.avg(BrewSession.rating).desc(), func.count(BrewSession.id).desc())
     )
 
+    # Origin dimension joins coffee_origins (D-01). A blend with N origins
+    # contributes N rows per session — every origin a coffee has counts
+    # toward that origin's aggregate. Intentional: the user's "what origins
+    # do I like" question wants both halves of a Yirg+Bourbon blend counted.
+    origin_stmt = (
+        select(
+            CoffeeOrigin.country.label("label"),
+            func.avg(BrewSession.rating).label("avg_rating"),
+            func.count(BrewSession.id).label("session_count"),
+        )
+        .join(Coffee, BrewSession.coffee_id == Coffee.id)
+        .join(CoffeeOrigin, CoffeeOrigin.coffee_id == Coffee.id)
+        .where(
+            BrewSession.user_id == user_id,
+            BrewSession.rating.is_not(None),
+        )
+        .group_by(CoffeeOrigin.country)
+        .having(func.count(BrewSession.id) >= 2)
+        .order_by(func.avg(BrewSession.rating).desc(), func.count(BrewSession.id).desc())
+    )
+
     return {
-        "origin": _dim_query(Coffee.origin, Coffee.origin),
+        "origin": db.execute(origin_stmt).all(),
         "process": _dim_query(Coffee.process, Coffee.process),
         "roaster": db.execute(roaster_stmt).all(),
         "roast_level": _dim_query(Coffee.roast_level, Coffee.roast_level),
@@ -168,15 +191,18 @@ def get_flavor_descriptors(db: Session, user_id: int) -> list[Row]:
 def get_sweet_spots(db: Session, user_id: int) -> list[Row]:
     """Top 3 (origin x process x brewer x recipe) combos, min 3 rated sessions.
 
-    Uses a single GROUP BY over all four dimension columns. Sessions with NULL
+    Uses a single GROUP BY over all five dimension columns. Sessions with NULL
     brewer_id or recipe_id are excluded by INNER JOIN — this is the documented
     v1 behavior (Pitfall 7). No Python loops; pure SQL aggregation.
+
+    Origin now joins coffee_origins (D-01); a blend session contributes one
+    row per origin so the per-origin sweet-spot stays truthful.
     """
     brewer = aliased(Equipment, name="brewer")
 
     stmt = (
         select(
-            Coffee.origin.label("origin"),
+            CoffeeOrigin.country.label("origin"),
             Coffee.process.label("process"),
             brewer.model.label("brewer_name"),
             Recipe.name.label("recipe_name"),
@@ -184,6 +210,7 @@ def get_sweet_spots(db: Session, user_id: int) -> list[Row]:
             func.count(BrewSession.id).label("session_count"),
         )
         .join(Coffee, BrewSession.coffee_id == Coffee.id)
+        .join(CoffeeOrigin, CoffeeOrigin.coffee_id == Coffee.id)
         .join(brewer, BrewSession.brewer_id == brewer.id)
         .join(Recipe, BrewSession.recipe_id == Recipe.id)
         .where(
@@ -191,7 +218,7 @@ def get_sweet_spots(db: Session, user_id: int) -> list[Row]:
             BrewSession.rating.is_not(None),
         )
         .group_by(
-            Coffee.origin,
+            CoffeeOrigin.country,
             Coffee.process,
             brewer.model,
             Recipe.name,
@@ -247,8 +274,24 @@ def get_unrated_coffees(db: Session, user_id: int) -> list[Row]:
         .scalar_subquery()
     )
 
+    # Per-coffee comma-joined origin string (e.g. "Ethiopia, Brazil") so the
+    # unrated-coffees card stays one row per coffee even for blends (D-22).
+    # Ordered by sort_order so the primary origin comes first.
+    origin_subq = (
+        select(
+            func.array_to_string(
+                func.array_agg(aggregate_order_by(CoffeeOrigin.country, CoffeeOrigin.sort_order)),
+                ", ",
+            )
+        )
+        .where(CoffeeOrigin.coffee_id == Coffee.id)
+        .correlate(Coffee)
+        .scalar_subquery()
+        .label("origin")
+    )
+
     stmt = (
-        select(Coffee.id, Coffee.name, Coffee.origin, Coffee.roast_level)
+        select(Coffee.id, Coffee.name, origin_subq, Coffee.roast_level)
         .where(
             Coffee.archived == False,  # noqa: E712
             Coffee.id.not_in(brewed_subq),
