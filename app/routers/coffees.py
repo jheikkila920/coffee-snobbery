@@ -61,6 +61,10 @@ from app.services.coffees import COFFEE_PROCESSES, COFFEE_ROAST_LEVELS
 from app.services.form_validation import errors_by_field
 from app.templates_setup import templates
 
+# Forward-declaration type alias used in _parse_form_payload and _hydrate_form_context
+# signatures to avoid a circular import (CoffeeOrigin model) at the router level.
+_Origins = list[tuple[str, "str | None"]]
+
 router = APIRouter(prefix="/coffees")
 
 # Field keys the inline form template renders error paragraphs for. Any
@@ -70,13 +74,13 @@ router = APIRouter(prefix="/coffees")
 _FORM_FIELDS = {
     "name",
     "roaster_id",
-    "country",
-    "origin",
+    # country, origin, varietal removed (Plan 15.1-01 D-05/D-22).
+    # Origins are now a repeating row set handled outside Pydantic.
     "process",
     "roast_level",
-    "varietal",
     "notes",
     "advertised_flavor_note_ids",
+    "origins",  # composite error key for multi-origin validation
 }
 
 # Form keys where an empty string from the browser is semantically "no
@@ -86,11 +90,9 @@ _FORM_FIELDS = {
 # repeated list.
 _EMPTY_TO_NONE_FIELDS = {
     "roaster_id",
-    "country",
-    "origin",
+    # country, origin, varietal removed (Plan 15.1-01 D-05/D-22).
     "process",
     "roast_level",
-    "varietal",
 }
 
 # Form keys that the chip-builder + autocomplete inputs add on top of
@@ -98,6 +100,8 @@ _EMPTY_TO_NONE_FIELDS = {
 # to the schema; they are NOT in CoffeeCreate, and leaving them in
 # would trip ``extra='forbid'`` and re-render the form with a false
 # error.
+# origins_country / origins_region are getlist'd in _parse_form_payload
+# and never reach CoffeeCreate, so they do NOT need to be listed here.
 _NON_SCHEMA_FORM_KEYS = {
     "X-CSRF-Token",
     "roaster_query",  # autocomplete text input next to roaster_id
@@ -123,8 +127,10 @@ def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
     return normalized
 
 
-def _parse_form_payload(form_data: object) -> tuple[dict[str, object], dict[str, object]]:
-    """Convert raw form data → ``(raw_view, schema_input)``.
+def _parse_form_payload(
+    form_data: object,
+) -> tuple[dict[str, object], dict[str, object], list[tuple[str, str | None]]]:
+    """Convert raw form data → ``(raw_view, schema_input, origins)``.
 
     ``raw_view`` is the dict handed back to the form template on
     validation failure so the user's submitted text is preserved on
@@ -136,11 +142,35 @@ def _parse_form_payload(form_data: object) -> tuple[dict[str, object], dict[str,
     is collected via ``getlist`` and cast to ``list[int]``. Non-int chip
     values raise ``ValueError`` which the caller re-shapes into a
     field-level error.
+
+    ``origins`` is collected via ``getlist("origins_country")`` and
+    ``getlist("origins_region")``, zipped into ``[(country, region), ...]``
+    with blank-country rows stripped. Origins bypass Pydantic entirely
+    (same pattern as ``advertised_flavor_note_ids`` bypassing via getlist).
     """
     # ``form_data`` is starlette.datastructures.FormData; .getlist is
     # the canonical way to read repeated keys.
     raw_view: dict[str, object] = {}
     schema_input: dict[str, object] = {}
+
+    # Collect origins before iterating scalar keys so we can strip origin
+    # keys from the Pydantic path entirely (extra="forbid" guard).
+    origins_country_raw: list[str] = form_data.getlist("origins_country")  # type: ignore[attr-defined]
+    origins_region_raw: list[str] = form_data.getlist("origins_region")  # type: ignore[attr-defined]
+    # Zip and strip blank-country entries (D-22: never persist a blank-country row).
+    origins: list[tuple[str, str | None]] = [
+        (c.strip(), (r.strip() or None))
+        for c, r in zip(origins_country_raw, origins_region_raw)
+        if c.strip()
+    ]
+    # Store raw origin strings in raw_view for form re-render on validation error.
+    raw_view["origins"] = [
+        {"country": c, "region": r or ""}
+        for c, r in zip(origins_country_raw, origins_region_raw)
+    ]
+
+    # Keys that belong to origin rows — stripped before Pydantic sees the payload.
+    _ORIGIN_KEYS = {"origins_country", "origins_region"}
 
     # Collect every key/value pair, treating repeated keys via getlist.
     seen_keys: set[str] = set()
@@ -148,7 +178,7 @@ def _parse_form_payload(form_data: object) -> tuple[dict[str, object], dict[str,
         if key in seen_keys:
             continue
         seen_keys.add(key)
-        if key in _NON_SCHEMA_FORM_KEYS:
+        if key in _NON_SCHEMA_FORM_KEYS or key in _ORIGIN_KEYS:
             continue
         if key == "advertised_flavor_note_ids":
             values = form_data.getlist(key)  # type: ignore[attr-defined]
@@ -178,7 +208,7 @@ def _parse_form_payload(form_data: object) -> tuple[dict[str, object], dict[str,
             else:
                 schema_input[key] = value
 
-    return raw_view, schema_input
+    return raw_view, schema_input, origins
 
 
 def _hydrate_form_context(
@@ -188,12 +218,18 @@ def _hydrate_form_context(
     errors: dict[str, str],
     mode: str,
     coffee_id: int | None = None,
+    origins: list[tuple[str, str | None]] | None = None,
 ) -> dict[str, object]:
     """Build the form-template context with the lookup lists hydrated.
 
     Resolves the selected roaster's name (so the autocomplete text input
     is seeded on edit/re-render) and the names for any selected flavor
     notes (so seeded chips render before Alpine boots — plan 04-11).
+
+    ``origins`` is the list of ``(country, region)`` tuples to seed the
+    origin-rows-container. For create mode defaults to ``[("", None)]``
+    (one empty row). For edit mode, pass the coffee's current origins.
+    If ``None`` is passed, falls back to the same empty-row default.
     """
     roaster_id_raw = values.get("roaster_id")
     roaster_name = ""
@@ -224,6 +260,14 @@ def _hydrate_form_context(
         else []
     )
 
+    # Seed origin rows: edit mode uses the coffee's current origins; create/re-render
+    # uses one empty row so the user always sees at least one row to fill in (D-22).
+    if origins is None:
+        # Default: one empty row for create mode or validation re-render.
+        form_origins: list[tuple[str, str | None]] = [("", None)]
+    else:
+        form_origins = origins if origins else [("", None)]
+
     return {
         "values": values,
         "errors": errors,
@@ -233,6 +277,7 @@ def _hydrate_form_context(
         "roast_levels": COFFEE_ROAST_LEVELS,
         "roaster_name": roaster_name,
         "selected_flavor_notes": selected_flavor_notes,
+        "origins": form_origins,
     }
 
 
@@ -327,11 +372,29 @@ def new_coffee_form(
         values={"advertised_flavor_note_ids": []},
         errors={},
         mode="create",
+        origins=[("", None)],  # one empty row by default (D-22)
     )
     return templates.TemplateResponse(
         request=request,
         name="fragments/coffee_form.html",
         context=context,
+    )
+
+
+@router.get("/origin-row-template", response_class=HTMLResponse)
+def origin_row_template(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+) -> Response:
+    """Return a single empty origin row fragment for HTMX beforeend append.
+
+    Gated with require_user for defense in depth (T-15.1-02). Returns
+    only static HTML scaffolding — no per-user data.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/coffee_origin_row.html",
+        context={"country": "", "region": "", "removable": True},
     )
 
 
@@ -360,9 +423,30 @@ async def create_coffee(
     ``advertised_flavor_note_ids`` keys are collected as a list before
     the Pydantic schema sees them — per plan 04-04's raw-form-read
     pattern (T-04-MASS defense exercised at the router boundary).
+
+    Origin rows are collected via ``getlist("origins_country")`` /
+    ``getlist("origins_region")`` in ``_parse_form_payload`` and passed
+    directly to the service (bypasses Pydantic, same as flavor note ids).
+    A coffee with zero non-blank origins is rejected with a validation error.
     """
     form_data = await request.form()
-    raw_view, schema_input = _parse_form_payload(form_data)
+    raw_view, schema_input, origins = _parse_form_payload(form_data)
+
+    # T-15.1-03: reject submissions with zero non-blank origins.
+    if not origins:
+        context = _hydrate_form_context(
+            db,
+            values=raw_view,
+            errors={"origins": "At least one origin is required."},
+            mode="create",
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/coffee_form.html",
+            context=context,
+            status_code=200,
+        )
+
     try:
         form = CoffeeCreate(**schema_input)
     except ValidationError as exc:
@@ -383,13 +467,11 @@ async def create_coffee(
         db,
         name=form.name,
         roaster_id=form.roaster_id,
-        country=form.country,
-        origin=form.origin,
         process=form.process,
         roast_level=form.roast_level,
-        varietal=form.varietal,
         notes=form.notes,
         advertised_flavor_note_ids=form.advertised_flavor_note_ids,
+        origins=origins,
         by_user_id=user.id,
     )
 
@@ -556,20 +638,25 @@ def edit_coffee_form(
     values: dict[str, object] = {
         "name": coffee.name,
         "roaster_id": str(coffee.roaster_id) if coffee.roaster_id is not None else "",
-        "country": coffee.country or "",
-        "origin": coffee.origin or "",
         "process": coffee.process or "",
         "roast_level": coffee.roast_level or "",
-        "varietal": coffee.varietal or "",
         "notes": coffee.notes or "",
         "advertised_flavor_note_ids": [str(i) for i in (coffee.advertised_flavor_note_ids or [])],
     }
+    # Seed origin rows from the coffee's current origins.
+    # If no origins exist (data-move edge case), show one empty row.
+    edit_origins: list[tuple[str, str | None]] = (
+        [(o.country, o.region) for o in coffee.origins]
+        if coffee.origins
+        else [("", None)]
+    )
     context = _hydrate_form_context(
         db,
         values=values,
         errors={},
         mode="edit",
         coffee_id=coffee_id,
+        origins=edit_origins,
     )
     return templates.TemplateResponse(
         request=request,
@@ -591,7 +678,24 @@ async def update_coffee_handler(
         raise HTTPException(status_code=404)
 
     form_data = await request.form()
-    raw_view, schema_input = _parse_form_payload(form_data)
+    raw_view, schema_input, origins = _parse_form_payload(form_data)
+
+    # T-15.1-03: reject submissions with zero non-blank origins.
+    if not origins:
+        context = _hydrate_form_context(
+            db,
+            values=raw_view,
+            errors={"origins": "At least one origin is required."},
+            mode="edit",
+            coffee_id=coffee_id,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/coffee_form.html",
+            context=context,
+            status_code=200,
+        )
+
     try:
         form = CoffeeCreate(**schema_input)
     except ValidationError as exc:
@@ -614,13 +718,11 @@ async def update_coffee_handler(
         coffee_id=coffee_id,
         name=form.name,
         roaster_id=form.roaster_id,
-        country=form.country,
-        origin=form.origin,
         process=form.process,
         roast_level=form.roast_level,
-        varietal=form.varietal,
         notes=form.notes,
         advertised_flavor_note_ids=form.advertised_flavor_note_ids,
+        origins=origins,
         by_user_id=user.id,
     )
 
