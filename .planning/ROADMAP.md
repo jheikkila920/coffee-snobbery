@@ -40,7 +40,7 @@ mobile-first, AI consolidated into its own nav destination, and cleanly self-hos
 other households.
 
 - [x] **Phase 15: v1.1 Debt Cleanup** - Close carried debt so new v1.2 work sits on a clean, verified base (completed 2026-05-26)
-- [ ] **Phase 15.1: Catalog & Session Polish** (INSERTED) - Coffee catalog + brew session form cleanup: drop dead fields, fix edit, add multi-origin
+- [x] **Phase 15.1: Catalog & Session Polish** (INSERTED) - Coffee catalog + brew session form cleanup: drop dead fields, fix edit, add multi-origin (completed 2026-05-27)
 - [ ] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration
 - [ ] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page
 - [ ] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation
@@ -93,7 +93,7 @@ Plans:
 - [x] 15.1-04-PLAN.md — CATALOG-06: brew-session flavor-note bidirectional sync + prefill + draft union-merge + CSV parity (depends on 02 for csv_io surface)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 15.1-05-PLAN.md — CATALOG-01: desktop edit-form mount routing + dual Edit buttons across all 5 entity forms (depends on 01/03 for coffee_form settled)
+- [x] 15.1-05-PLAN.md — CATALOG-01: desktop edit-form mount routing + dual Edit buttons across all 5 entity forms (depends on 01/03 for coffee_form settled)
 **UI hint**: yes
 **Insertion reason**: items surfaced during Phase 15 use of the live app — see commit log + post-Phase-15 capture
 
@@ -213,7 +213,7 @@ Plans:
 | 13. PWA UX Fixes | v1.1 | 6/6 | Complete | 2026-05-25 |
 | 14. Audit Remediation | v1.1 | 4/4 | Complete | 2026-05-25 |
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
-| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 4/5 | In Progress|  |
+| 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete   | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 0/TBD | Not started | - |
 | 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
