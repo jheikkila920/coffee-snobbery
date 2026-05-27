@@ -373,29 +373,54 @@ def get_unrated_coffees(db: Session, user_id: int) -> list[Row]:
 
 
 def get_cold_start_counts(db: Session, user_id: int) -> dict[str, Any]:
-    """Return live counts for the cold-start gate (D-02).
+    """Return live counts for the cold-start gate (D-02 / D-15 / CAFE-04).
 
-    Counts ALL sessions including unrated (not the signature, which is D-09).
-    gate_open = sessions >= 3 AND distinct_notes >= 5.
+    CAFE-04 / D-15: counts brew + cafe sessions together.
+    gate_open = (brew_count + cafe_count) >= 3 AND distinct_notes_across_both >= 5.
+
+    UI-SPEC § Cold-Start Carve-Out: the template copy ("brews", "flavor notes")
+    stays unchanged — only the arithmetic inputs change (Assumption A2 accepted;
+    Phase 17 owns home-copy polish). The dict keys sessions / distinct_notes /
+    gate_open / sessions_needed / notes_needed are preserved verbatim so
+    _cold_start.html requires NO template change.
+
+    Counts ALL sessions including unrated (not the signature, which is D-09 rated-only).
+    cafe_count counts ALL rated + unrated cafe_logs rows, mirroring brew_count semantics.
+
+    Distinct-notes query: UNION ALL of two unnest blocks (brew + cafe). JOIN to
+    flavor_notes ensures only LIVE notes count (dangling IDs from deleted notes are
+    filtered, matching the behavior of get_flavor_descriptors — the card this gate
+    unlocks). No rating >= 4.0 filter on either side — cold-start counts ALL sessions
+    including unrated (D-02 semantics preserved).
+
+    T-16-05-01 / T-16-05-02: :user_id bound param on both UNION branches; no string
+    interpolation.
     """
-    session_count: int = (
+    brew_count: int = (
         db.scalar(select(func.count(BrewSession.id)).where(BrewSession.user_id == user_id)) or 0
     )
+    cafe_count: int = (
+        db.scalar(select(func.count(CafeLog.id)).where(CafeLog.user_id == user_id)) or 0
+    )
+    total: int = brew_count + cafe_count
 
     # Use raw SQL for unnest — column_valued() lateral join is not supported
     # in this SQLAlchemy 2.0 + ORM context (Assumption A2, RESEARCH.md fallback).
-    # JOIN flavor_notes so only LIVE notes count toward the gate, matching
-    # get_flavor_descriptors (the card this gate unlocks). flavor_note_ids_observed
-    # is a BIGINT[] with no FK, so dangling IDs (note deleted post-session) must
-    # not open the gate on a card that would then render empty (WR-01). D-02
-    # semantics preserved: still counts across ALL sessions, including unrated.
+    # UNION ALL of brew + cafe unnest blocks; outer JOIN to flavor_notes for live-only.
     note_count_row = db.execute(
         text(
             """
-            SELECT count(DISTINCT note_id) AS cnt
-            FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
-            JOIN flavor_notes fn ON fn.id = note_id
-            WHERE bs.user_id = :user_id
+            SELECT count(DISTINCT all_notes.note_id) AS cnt
+            FROM (
+                SELECT note_id
+                FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
+                WHERE bs.user_id = :user_id
+                UNION ALL
+                SELECT note_id
+                FROM cafe_logs cl, unnest(cl.flavor_note_ids) AS note_id
+                WHERE cl.user_id = :user_id
+            ) AS all_notes
+            JOIN flavor_notes fn ON fn.id = all_notes.note_id
             """
         ),
         {"user_id": user_id},
@@ -403,10 +428,10 @@ def get_cold_start_counts(db: Session, user_id: int) -> dict[str, Any]:
     note_count: int = (note_count_row.cnt if note_count_row else 0) or 0
 
     return {
-        "sessions": session_count,
+        "sessions": total,
         "distinct_notes": note_count,
-        "gate_open": session_count >= 3 and note_count >= 5,
-        "sessions_needed": max(0, 3 - session_count),
+        "gate_open": total >= 3 and note_count >= 5,
+        "sessions_needed": max(0, 3 - total),
         "notes_needed": max(0, 5 - note_count),
     }
 
