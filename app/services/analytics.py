@@ -83,6 +83,20 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
     session_count >= 2 (D-06). NULL ratings excluded. Four separate GROUP BY
     queries executed in this service; results returned as a dict so the
     template / router can render all four dimensions in one fragment.
+
+    CAFE-04 / D-13 — cafe contribution by dimension:
+    - origin: YES. UNION cafe_logs.origin_country (per-user, rated, non-null)
+      with coffee_origins.country (per-user via brew_sessions JOIN). The min >=2
+      HAVING clause applies ACROSS the union — 1 brew + 1 cafe from the same
+      country together satisfy the floor.
+    - roaster: YES. UNION cafe roaster (via CafeLog.roaster_id JOIN to Roaster)
+      with brew roaster (via Coffee.roaster_id JOIN). Same HAVING floor.
+    - process: NO. Cafe form does not capture process (user doesn't reliably know
+      "washed/natural/honey" at a cafe). Stays brew-only via _dim_query.
+    - roast_level: NO. Same reasoning. Stays brew-only via _dim_query.
+
+    T-16-05-02 IDOR defense: every new cafe-side SELECT carries
+    CafeLog.user_id == user_id.
     """
 
     def _dim_query(label_col: Any, group_col: Any) -> list[Row]:
@@ -104,12 +118,11 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
         )
         return db.execute(stmt).all()
 
-    # Roaster dimension needs a JOIN to roasters for the name
-    roaster_stmt = (
+    # Roaster dimension: UNION brew roaster JOIN + cafe roaster JOIN (D-13).
+    brew_roaster = (
         select(
-            Roaster.name.label("label"),
-            func.avg(BrewSession.rating).label("avg_rating"),
-            func.count(BrewSession.id).label("session_count"),
+            Roaster.name.label("name"),
+            BrewSession.rating.label("rating"),
         )
         .join(Coffee, BrewSession.coffee_id == Coffee.id)
         .join(Roaster, Coffee.roaster_id == Roaster.id)
@@ -117,20 +130,36 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
             BrewSession.user_id == user_id,
             BrewSession.rating.is_not(None),
         )
-        .group_by(Roaster.name)
-        .having(func.count(BrewSession.id) >= 2)
-        .order_by(func.avg(BrewSession.rating).desc(), func.count(BrewSession.id).desc())
+    )
+    cafe_roaster = (
+        select(
+            Roaster.name.label("name"),
+            CafeLog.rating.label("rating"),
+        )
+        .join(Roaster, CafeLog.roaster_id == Roaster.id)
+        .where(
+            CafeLog.user_id == user_id,
+            CafeLog.rating.is_not(None),
+        )
+    )
+    roaster_union = brew_roaster.union_all(cafe_roaster).subquery()
+    roaster_stmt = (
+        select(
+            roaster_union.c.name.label("label"),
+            func.avg(roaster_union.c.rating).label("avg_rating"),
+            func.count().label("session_count"),
+        )
+        .group_by(roaster_union.c.name)
+        .having(func.count() >= 2)
+        .order_by(func.avg(roaster_union.c.rating).desc(), func.count().desc())
     )
 
-    # Origin dimension joins coffee_origins (D-01). A blend with N origins
-    # contributes N rows per session — every origin a coffee has counts
-    # toward that origin's aggregate. Intentional: the user's "what origins
-    # do I like" question wants both halves of a Yirg+Bourbon blend counted.
-    origin_stmt = (
+    # Origin dimension: UNION brew origin (coffee_origins JOIN) + cafe origin_country (D-13).
+    # A blend with N origins contributes N rows per session — intentional (see original comment).
+    brew_origin = (
         select(
-            CoffeeOrigin.country.label("label"),
-            func.avg(BrewSession.rating).label("avg_rating"),
-            func.count(BrewSession.id).label("session_count"),
+            CoffeeOrigin.country.label("country"),
+            BrewSession.rating.label("rating"),
         )
         .join(Coffee, BrewSession.coffee_id == Coffee.id)
         .join(CoffeeOrigin, CoffeeOrigin.coffee_id == Coffee.id)
@@ -138,9 +167,28 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
             BrewSession.user_id == user_id,
             BrewSession.rating.is_not(None),
         )
-        .group_by(CoffeeOrigin.country)
-        .having(func.count(BrewSession.id) >= 2)
-        .order_by(func.avg(BrewSession.rating).desc(), func.count(BrewSession.id).desc())
+    )
+    cafe_origin = (
+        select(
+            CafeLog.origin_country.label("country"),
+            CafeLog.rating.label("rating"),
+        )
+        .where(
+            CafeLog.user_id == user_id,
+            CafeLog.rating.is_not(None),
+            CafeLog.origin_country.is_not(None),
+        )
+    )
+    origin_union = brew_origin.union_all(cafe_origin).subquery()
+    origin_stmt = (
+        select(
+            origin_union.c.country.label("label"),
+            func.avg(origin_union.c.rating).label("avg_rating"),
+            func.count().label("session_count"),
+        )
+        .group_by(origin_union.c.country)
+        .having(func.count() >= 2)
+        .order_by(func.avg(origin_union.c.rating).desc(), func.count().desc())
     )
 
     return {
