@@ -24,6 +24,18 @@ services:
     image: postgres:16-alpine
     container_name: coffee-snobbery-db
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_READ_SEARCH
+      - FOWNER
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -51,6 +63,10 @@ services:
       target: runtime
     container_name: coffee-snobbery
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 128
     depends_on:
       coffee-snobbery-db:
         condition: service_healthy
