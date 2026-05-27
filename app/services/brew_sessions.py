@@ -511,7 +511,18 @@ def resolve_prefill(
 
     # 4. Always blank the per-attempt fields on /brew/new.
     prefill["rating"] = None
-    prefill["flavor_note_ids_observed"] = []
+    # D-06/D-12: prefill chips from the parent coffee's advertised set ONLY.
+    # Do NOT also pull the user's most-recent session chips (those surface
+    # via the existing prefill summary separately).
+    if resolved_coffee is not None:
+        from app.models.coffee import Coffee  # local import to avoid circular
+
+        coffee_row = db.execute(
+            select(Coffee.advertised_flavor_note_ids).where(Coffee.id == resolved_coffee)
+        ).scalar_one_or_none()
+        prefill["flavor_note_ids_observed"] = list(coffee_row or [])
+    else:
+        prefill["flavor_note_ids_observed"] = []
     prefill["notes"] = ""
 
     return prefill
