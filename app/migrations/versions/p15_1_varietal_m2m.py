@@ -74,28 +74,31 @@ def upgrade() -> None:
     )
 
     # 3. Seed 14 common varietals per D-04 in exact specified order.
+    # `created_at` is omitted from both the table descriptor and the rows so
+    # the column's server_default=NOW() fills it. Passing sa.func.now() as a
+    # bulk_insert value tries to bind a function object as a parameter, which
+    # psycopg cannot adapt ("cannot adapt type 'now'").
     varietals_t = sa.table(
         "varietals",
         sa.column("name", postgresql.CITEXT()),
-        sa.column("created_at", sa.TIMESTAMP(timezone=True)),
     )
     op.bulk_insert(
         varietals_t,
         [
-            {"name": "Bourbon", "created_at": sa.func.now()},
-            {"name": "Typica", "created_at": sa.func.now()},
-            {"name": "Caturra", "created_at": sa.func.now()},
-            {"name": "Catuai", "created_at": sa.func.now()},
-            {"name": "Geisha", "created_at": sa.func.now()},
-            {"name": "Pacamara", "created_at": sa.func.now()},
-            {"name": "SL28", "created_at": sa.func.now()},
-            {"name": "SL34", "created_at": sa.func.now()},
-            {"name": "Mundo Novo", "created_at": sa.func.now()},
-            {"name": "Pacas", "created_at": sa.func.now()},
-            {"name": "Heirloom", "created_at": sa.func.now()},
-            {"name": "Maragogype", "created_at": sa.func.now()},
-            {"name": "Castillo", "created_at": sa.func.now()},
-            {"name": "Catimor", "created_at": sa.func.now()},
+            {"name": "Bourbon"},
+            {"name": "Typica"},
+            {"name": "Caturra"},
+            {"name": "Catuai"},
+            {"name": "Geisha"},
+            {"name": "Pacamara"},
+            {"name": "SL28"},
+            {"name": "SL34"},
+            {"name": "Mundo Novo"},
+            {"name": "Pacas"},
+            {"name": "Heirloom"},
+            {"name": "Maragogype"},
+            {"name": "Castillo"},
+            {"name": "Catimor"},
         ],
     )
 

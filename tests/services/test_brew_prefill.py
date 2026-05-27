@@ -160,7 +160,13 @@ def _create_session(svc, db, *, by_user_id, coffee_id, brewed_at, **over):
 
 
 def test_d04_open_form_default_carries_and_blanks(clean_brew: None) -> None:
-    """Open-form prefill carries last-session fields; blanks per-attempt fields."""
+    """Open-form prefill carries last-session fields; blanks rating + notes.
+
+    Plan 15.1-04 D-06 changed flavor_note_ids_observed from per-attempt to
+    inherited-from-parent-coffee. The session save runs _sync_coffee_flavor_notes
+    which writes [1, 2] into coffee.advertised_flavor_note_ids, and the prefill
+    now reads back from that field.
+    """
     _require_postgres()
     _require_p5_migration_applied()
     from app.db import SessionLocal
@@ -191,8 +197,10 @@ def test_d04_open_form_default_carries_and_blanks(clean_brew: None) -> None:
     assert pf["dose_grams_actual"] == Decimal("18")
     # per-attempt fields are blanked.
     assert pf["rating"] is None
-    assert pf["flavor_note_ids_observed"] == []
     assert pf["notes"] == ""
+    # D-06: flavor_note_ids_observed now inherits from the parent coffee's
+    # advertised_flavor_note_ids (which the session save just populated).
+    assert pf["flavor_note_ids_observed"] == [1, 2]
 
 
 def test_d04_no_history_returns_blanks(clean_brew: None) -> None:
@@ -413,7 +421,11 @@ def test_d06_no_open_bag_is_none(clean_brew: None) -> None:
 
 
 def test_brew_again_blanks_per_attempt(clean_brew: None) -> None:
-    """from_session_id sources that session and blanks rating/observed/notes."""
+    """from_session_id sources that session and blanks rating + notes.
+
+    Plan 15.1-04 D-06 made flavor_note_ids_observed inherit from the source
+    session's parent coffee (the write-back populated coffee_src.advertised_*).
+    """
     _require_postgres()
     _require_p5_migration_applied()
     from app.db import SessionLocal
@@ -454,8 +466,10 @@ def test_brew_again_blanks_per_attempt(clean_brew: None) -> None:
     assert pf["dose_grams_actual"] == Decimal("16")
     # per-attempt fields explicitly blanked.
     assert pf["rating"] is None
-    assert pf["flavor_note_ids_observed"] == []
     assert pf["notes"] == ""
+    # D-06: flavor_note_ids_observed inherits from coffee_src.advertised_*
+    # (populated by the src session's _sync_coffee_flavor_notes write-back).
+    assert pf["flavor_note_ids_observed"] == [3, 4]
 
 
 def test_brew_again_is_user_scoped(clean_brew: None) -> None:

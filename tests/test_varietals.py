@@ -9,6 +9,8 @@ DB-touching tests skip when Postgres is not reachable.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +138,7 @@ def test_citext_uniqueness_collapses_case() -> None:
             db.flush()
 
 
-def test_coffee_with_two_varietals(client: object) -> None:
+def test_coffee_with_two_varietals(authed_client: Any) -> None:
     """POST /coffees with varietal_ids=[1,2] creates a coffee with 2 varietals."""
     _require_postgres()
     import importlib.util
@@ -154,11 +156,15 @@ def test_coffee_with_two_varietals(client: object) -> None:
     if len(ids) < 2:
         pytest.skip("Need at least 2 varietals in DB")
 
-    # Use the TestClient from conftest.
-    try:
-        app_client = client  # type: ignore[assignment]
-    except Exception:  # noqa: BLE001
-        pytest.skip("client fixture unavailable")
+    # Mint a real CSRF token (placeholder doesn't validate against starlette-csrf's HMAC cookie).
+    app_client = authed_client
+    app_client.cookies.delete("csrftoken")
+    pre = app_client.get("/")
+    token = pre.cookies.get("csrftoken") or app_client.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+    app_client.cookies.set("csrftoken", token)
+    app_client.headers["X-CSRF-Token"] = token
 
     resp = app_client.post(
         "/coffees",
@@ -193,14 +199,18 @@ def test_coffee_with_two_varietals(client: object) -> None:
         db.commit()
 
 
-def test_coffee_with_zero_varietals(client: object) -> None:
+def test_coffee_with_zero_varietals(authed_client: Any) -> None:
     """POST /coffees with no varietal_ids creates a coffee with empty varietals."""
     _require_postgres()
 
-    try:
-        app_client = client  # type: ignore[assignment]
-    except Exception:  # noqa: BLE001
-        pytest.skip("client fixture unavailable")
+    app_client = authed_client
+    app_client.cookies.delete("csrftoken")
+    pre = app_client.get("/")
+    token = pre.cookies.get("csrftoken") or app_client.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+    app_client.cookies.set("csrftoken", token)
+    app_client.headers["X-CSRF-Token"] = token
 
     from sqlalchemy import text
 
@@ -305,28 +315,29 @@ def test_varietal_restrict_on_delete() -> None:
         db.commit()
 
 
-def test_autocomplete_endpoint_returns_prefix_matches(client: object) -> None:
+def test_autocomplete_endpoint_returns_prefix_matches(authed_client: Any) -> None:
     """GET /coffees/varietal-autocomplete?q=Bou returns fragment containing 'Bourbon'."""
     _require_postgres()
 
-    try:
-        app_client = client  # type: ignore[assignment]
-    except Exception:  # noqa: BLE001
-        pytest.skip("client fixture unavailable")
+    app_client = authed_client
 
     resp = app_client.get("/coffees/varietal-autocomplete?q=Bou")
     assert resp.status_code == 200
     assert "Bourbon" in resp.text
 
 
-def test_create_varietal_on_the_fly(client: object) -> None:
+def test_create_varietal_on_the_fly(authed_client: Any) -> None:
     """POST /coffees/varietals with name='TestVar' creates and returns a new varietal."""
     _require_postgres()
 
-    try:
-        app_client = client  # type: ignore[assignment]
-    except Exception:  # noqa: BLE001
-        pytest.skip("client fixture unavailable")
+    app_client = authed_client
+    app_client.cookies.delete("csrftoken")
+    pre = app_client.get("/")
+    token = pre.cookies.get("csrftoken") or app_client.cookies.get("csrftoken")
+    if not token:
+        pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+    app_client.cookies.set("csrftoken", token)
+    app_client.headers["X-CSRF-Token"] = token
 
     from sqlalchemy import text
 
