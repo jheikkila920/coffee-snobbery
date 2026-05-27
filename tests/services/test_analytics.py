@@ -78,6 +78,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     from app.models.bag import Bag
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
+    from app.models.coffee_origin import CoffeeOrigin
     from app.models.equipment import Equipment
     from app.models.flavor_note import FlavorNote
     from app.models.recipe import Recipe
@@ -102,7 +103,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee1 = Coffee(
         name=f"analyticstest-Coffee1-{username}",
         roaster_id=roaster.id,
-        origin="Ethiopia",
+        origins=[CoffeeOrigin(country="Ethiopia", sort_order=0)],
         process="washed",
         roast_level="light",
     )
@@ -113,7 +114,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee2 = Coffee(
         name=f"analyticstest-Coffee2-{username}",
         roaster_id=roaster.id,
-        origin="Colombia",
+        origins=[CoffeeOrigin(country="Colombia", sort_order=0)],
         process="natural",
         roast_level="medium",
     )
@@ -124,7 +125,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee3 = Coffee(
         name=f"analyticstest-Coffee3-{username}",
         roaster_id=roaster.id,
-        origin="Kenya",
+        origins=[CoffeeOrigin(country="Kenya", sort_order=0)],
         process="washed",
         roast_level="light",
     )
@@ -135,7 +136,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee_archived = Coffee(
         name=f"analyticstest-CoffeeArchived-{username}",
         roaster_id=roaster.id,
-        origin="Brazil",
+        origins=[CoffeeOrigin(country="Brazil", sort_order=0)],
         process="natural",
         roast_level="dark",
         archived=True,
