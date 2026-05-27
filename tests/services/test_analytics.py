@@ -353,7 +353,7 @@ def _seed_cafe_into_scenario(
     cafe_name: str,
     flavor_note_ids: list[int],
     origin_country: str | None = None,
-    rating: "Decimal | None" = None,
+    rating: Decimal | None = None,
     count: int = 1,
 ) -> list[int]:
     """Insert CafeLog rows into an existing analytics scenario.
@@ -987,9 +987,7 @@ def test_preference_profile_roaster_unions_cafe(clean_analytics: None) -> None:
     with SessionLocal() as db:
         profile_after = analytics.get_preference_profile(db, uid)
 
-    roaster_row = next(
-        (r for r in profile_after["roaster"] if r.label is not None), None
-    )
+    roaster_row = next((r for r in profile_after["roaster"] if r.label is not None), None)
     assert roaster_row is not None, "Roaster row must exist in profile after cafe logs added"
     assert roaster_row.session_count > brew_count, (
         f"Roaster session_count must increase after cafe log union; "
@@ -1106,8 +1104,8 @@ def test_cold_start_brew_only(clean_analytics: None) -> None:
     _require_postgres()
     _require_analytics_tables()
     _require_cafe_logs_table()
-    from decimal import Decimal
     from datetime import UTC, datetime
+    from decimal import Decimal
 
     from app.db import SessionLocal
     from app.models.brew_session import BrewSession
@@ -1152,9 +1150,7 @@ def test_cold_start_brew_only(clean_analytics: None) -> None:
     with SessionLocal() as db:
         counts = analytics.get_cold_start_counts(db, uid)
 
-    assert counts["gate_open"] is True, (
-        f"Gate must be open for 3 brews + 5 notes; got {counts}"
-    )
+    assert counts["gate_open"] is True, f"Gate must be open for 3 brews + 5 notes; got {counts}"
     assert counts["sessions"] == 3, (
         f"sessions must be 3 (brew_count=3, cafe_count=0); got {counts['sessions']}"
     )
@@ -1216,8 +1212,8 @@ def test_cold_start_mixed(clean_analytics: None) -> None:
     _require_postgres()
     _require_analytics_tables()
     _require_cafe_logs_table()
-    from decimal import Decimal
     from datetime import UTC, datetime
+    from decimal import Decimal
 
     from app.db import SessionLocal
     from app.models.brew_session import BrewSession
@@ -1315,7 +1311,7 @@ def test_sweet_spots_excludes_cafe(clean_analytics: None) -> None:
     assert len(sweet_before) == len(sweet_after), (
         "get_sweet_spots row count must not change after inserting a CafeLog (D-16)"
     )
-    for before, after in zip(sweet_before, sweet_after):
+    for before, after in zip(sweet_before, sweet_after, strict=True):
         assert before.session_count == after.session_count, (
             "get_sweet_spots session_count must be UNCHANGED (D-16: cafe excluded)"
         )

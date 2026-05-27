@@ -171,16 +171,13 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
             BrewSession.rating.is_not(None),
         )
     )
-    cafe_origin = (
-        select(
-            CafeLog.origin_country.label("country"),
-            CafeLog.rating.label("rating"),
-        )
-        .where(
-            CafeLog.user_id == user_id,
-            CafeLog.rating.is_not(None),
-            CafeLog.origin_country.is_not(None),
-        )
+    cafe_origin = select(
+        CafeLog.origin_country.label("country"),
+        CafeLog.rating.label("rating"),
+    ).where(
+        CafeLog.user_id == user_id,
+        CafeLog.rating.is_not(None),
+        CafeLog.origin_country.is_not(None),
     )
     origin_union = brew_origin.union_all(cafe_origin).subquery()
     origin_stmt = (
