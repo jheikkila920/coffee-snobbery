@@ -335,6 +335,7 @@ def _seed_gate_cleared_no_sweet_spots(db: Any, *, username: str) -> int:
 
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
+    from app.models.coffee_origin import CoffeeOrigin
     from app.models.equipment import Equipment
     from app.models.flavor_note import FlavorNote
     from app.models.recipe import Recipe
@@ -378,7 +379,7 @@ def _seed_gate_cleared_no_sweet_spots(db: Any, *, username: str) -> int:
     for i, origin in enumerate(["Ethiopia", "Colombia", "Kenya"]):
         coffee = Coffee(
             name=f"analyticstest-SparseCoffee{i}-{username}",
-            origin=origin,
+            origins=[CoffeeOrigin(country=origin, sort_order=0)],
             process="washed",
             roast_level="light",
         )
@@ -448,18 +449,9 @@ def test_flavor_descriptors_fragment_headers(
     assert "HX-Request" in resp.headers.get("vary", "")
 
 
-def test_roast_freshness_fragment_headers(
-    app: Any, seeded_regular_user: dict, clean_home_router: None
-) -> None:
-    """GET /home/cards/roast-freshness returns 200 with cache headers."""
-    _require_postgres()
-    _require_analytics_tables()
-
-    client = _authed_client(app, seeded_regular_user["signed_cookie"])
-    resp = client.get("/home/cards/roast-freshness", headers={"HX-Request": "true"})
-    assert resp.status_code == 200
-    assert "no-store" in resp.headers.get("cache-control", "")
-    assert "HX-Request" in resp.headers.get("vary", "")
+# test_roast_freshness_fragment_headers REMOVED: Phase 15.1 CATALOG-07
+# deleted the /home/cards/roast-freshness endpoint (the card is gone from
+# the home shell). The endpoint now correctly returns 404.
 
 
 def test_sweet_spots_fragment_headers(
@@ -566,16 +558,18 @@ def test_sweet_spots_no_ai_placeholder(
 
 
 def test_home_shell_staggered_lazy_load(app: Any, clean_home_router: None) -> None:
-    """Gate-open home shell renders >=5 staggered hx-trigger delays, distinct and ascending.
+    """Gate-open home shell renders >=4 staggered hx-trigger delays, distinct and ascending.
 
-    Requirement HOME-09: the five aggregate cards use staggered hx-trigger="load delay:Nms"
-    to spread fragment requests across 500ms.  A future edit that collapses the delays to a
-    single value or drops slots would silently break this requirement without this test.
+    Requirement HOME-09: the aggregate cards use staggered hx-trigger="load delay:Nms"
+    to spread fragment requests. Post-CATALOG-07 (Phase 15.1) the roast-freshness card
+    (400ms slot) was removed, leaving 4 aggregate cards at 100/200/300/500ms.
+    The unrated-coffees slot (150ms) and AI-hero slot (600ms) are unrelated lazy slots.
+    A future edit that collapses delays to a single value or drops slots would silently
+    break this requirement without this test.
 
     The test seeds a GATE-OPEN user (reuses _seed_analytics_scenario from Plan 06-01),
-    GETs /, and asserts that the rendered HTML contains at least 5 occurrences of
-    hx-trigger="load delay:Nms" whose millisecond values are distinct and strictly
-    ascending (100 < 200 < 300 < 400 < 500).
+    GETs /, and asserts that the rendered HTML contains at least 4 aggregate-card slots
+    whose millisecond values are distinct and strictly ascending.
     """
     _require_postgres()
     _require_analytics_tables()
@@ -599,23 +593,23 @@ def test_home_shell_staggered_lazy_load(app: Any, clean_home_router: None) -> No
     delay_matches = re.findall(r'hx-trigger="load delay:(\d+)ms"', body)
     delay_values = [int(m) for m in delay_matches]
 
-    assert len(delay_values) >= 5, (
-        f"Expected >=5 hx-trigger='load delay:Nms' slots in gate-open home shell, "
+    assert len(delay_values) >= 4, (
+        f"Expected >=4 hx-trigger='load delay:Nms' slots in gate-open home shell, "
         f"got {len(delay_values)}: {delay_values}"
     )
 
-    # The five aggregate card delays must be distinct (no two slots share a delay value
-    # among the five smallest after removing the 150ms unrated-coffees slot).
-    # Strategy: sort all delay values and verify the five aggregate-card slots
-    # (100/200/300/400/500ms per spec) are all present.
-    expected_aggregate_delays = {100, 200, 300, 400, 500}
+    # Post-CATALOG-07: 4 aggregate-card delays at 100/200/300/500ms.
+    # (The 400ms slot belonged to the now-removed roast-freshness card.)
+    # Other lazy slots in the shell (150ms unrated-coffees, 600ms AI hero) are
+    # filtered out before the ascending-order check.
+    expected_aggregate_delays = {100, 200, 300, 500}
     actual_delay_set = set(delay_values)
     assert expected_aggregate_delays <= actual_delay_set, (
         f"Expected aggregate card delays {expected_aggregate_delays} to be present; "
         f"found delay values: {sorted(actual_delay_set)}"
     )
 
-    # The aggregate delays must be strictly ascending (100 < 200 < 300 < 400 < 500),
+    # The aggregate delays must be strictly ascending (100 < 200 < 300 < 500),
     # proving they are staggered in DOM order as the spec requires.
     aggregate_delays_in_order = [v for v in delay_values if v in expected_aggregate_delays]
     assert aggregate_delays_in_order == sorted(aggregate_delays_in_order), (

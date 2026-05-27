@@ -173,10 +173,14 @@ def test_equipment_create_returns_list_fragment(
         "Response should contain equipment list container markup "
         "(space-y-3 card section or hidden md:block table)"
     )
-    # form-mount ID must NOT appear in the response body
-    assert "equipment-form-mount" not in body, (
-        "Response must NOT contain equipment-form-mount — the response body is "
-        "swapped into #equipment-form-mount (emptying it); it should not reference itself"
+    # The response body must NOT redeclare the form-mount div (which would be
+    # self-referential since the body is swapped INTO #equipment-form-mount).
+    # Post-D-21 (commit 58ce3b8) the OOB list contains edit buttons with
+    # hx-target="#equipment-form-mount" — those bare references are fine.
+    # Forbid only a NEW <div id="equipment-form-mount" ... > declaration.
+    assert 'id="equipment-form-mount"' not in body, (
+        "Response must NOT redeclare a #equipment-form-mount div — the response body "
+        "is swapped into #equipment-form-mount; redeclaring it would be self-referential"
     )
     # Newly created equipment must appear (inside the OOB list)
     assert _EQUIPMENT_BRAND in body, (
@@ -207,10 +211,16 @@ def test_coffee_create_returns_list_fragment(
 
     client = _authed_client(app, seeded_regular_user["signed_cookie"])
 
+    # Phase 15.1 (T-15.1-03): POST /coffees rejects a payload with zero
+    # non-blank origins. The form contract collects origins via
+    # getlist("origins_country") / getlist("origins_region"), so a valid
+    # create requires at least one origins_country value.
     r = client.post(
         "/coffees",
         data={
             "name": _COFFEE_NAME,
+            "origins_country": "Ethiopia",
+            "origins_region": "",
         },
         headers={"HX-Request": "true"},
     )
@@ -227,10 +237,14 @@ def test_coffee_create_returns_list_fragment(
         "Response should contain coffee list container markup "
         "(space-y-3 card section or hidden md:block table)"
     )
-    # form-mount ID must NOT appear in the response body
-    assert "coffee-form-mount" not in body, (
-        "Response must NOT contain coffee-form-mount — the response body is "
-        "swapped into #coffee-form-mount (emptying it); it should not reference itself"
+    # The response body must NOT redeclare the form-mount div (which would be
+    # self-referential since the body is swapped INTO #coffee-form-mount).
+    # Post-D-21 (commit 58ce3b8) the OOB list contains edit buttons with
+    # hx-target="#coffee-form-mount" — those bare references are fine.
+    # Forbid only a NEW <div id="coffee-form-mount" ... > declaration.
+    assert 'id="coffee-form-mount"' not in body, (
+        "Response must NOT redeclare a #coffee-form-mount div — the response body "
+        "is swapped into #coffee-form-mount; redeclaring it would be self-referential"
     )
     # Newly created coffee must appear (inside the OOB list)
     assert _COFFEE_NAME in body, f"Newly created coffee name '{_COFFEE_NAME}' not found in response"

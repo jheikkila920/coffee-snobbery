@@ -97,14 +97,16 @@ def test_bags_columns(pg_session: Connection) -> None:
     ).all()
     cols = {row[0]: (row[1], row[2]) for row in rows}
 
+    # Phase 15.1 (CATALOG-07) dropped bags.roast_date.
+    # Phase 4 (CAT-08) added bags.photo_filename (nullable).
     expected = {
         "id": ("bigint", "NO"),
         "coffee_id": ("bigint", "NO"),
-        "roast_date": ("date", "YES"),
         "weight_grams": ("integer", "YES"),
         "opened_at": ("timestamp with time zone", "YES"),
         "finished_at": ("timestamp with time zone", "YES"),
         "notes": ("text", "NO"),
+        "photo_filename": ("text", "YES"),
         "created_at": ("timestamp with time zone", "NO"),
         "updated_at": ("timestamp with time zone", "NO"),
     }

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -74,6 +74,7 @@ def _seed_1000_sessions(db, *, username: str) -> int:
     from app.models.bag import Bag
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
+    from app.models.coffee_origin import CoffeeOrigin
     from app.models.equipment import Equipment
     from app.models.flavor_note import FlavorNote
     from app.models.recipe import Recipe
@@ -107,7 +108,7 @@ def _seed_1000_sessions(db, *, username: str) -> int:
         c = Coffee(
             name=f"perftest-Coffee-{origin}-{username}",
             roaster_id=roaster.id,
-            origin=origin,
+            origins=[CoffeeOrigin(country=origin, sort_order=0)],
             process=process,
             roast_level=roast_level,
         )
@@ -115,17 +116,14 @@ def _seed_1000_sessions(db, *, username: str) -> int:
         db.flush()
         coffees.append(c)
 
-    # 2 bags per coffee (different roast dates for freshness buckets)
+    # 2 bags per coffee. roast_date column was dropped in Phase 15.1 (CATALOG-07);
+    # bags now only carry coffee_id + weight/notes. Keep the per-coffee count for
+    # join coverage even though freshness bucketing is no longer derived here.
     bags = []
-    # brew_date reference: 2026-03-10
-    # bag1: roasted 2 days before brew → "0-3 days" freshness bucket
-    # bag2: roasted 10 days before brew → "8-14 days" freshness bucket
-    brew_ref = date(2026, 3, 10)
     for coffee in coffees:
-        for days_fresh in [2, 10]:
+        for _ in range(2):
             bag = Bag(
                 coffee_id=coffee.id,
-                roast_date=brew_ref - timedelta(days=days_fresh),
             )
             db.add(bag)
             db.flush()
@@ -308,11 +306,12 @@ def test_analytics_query_latency(clean_analytics_perf: None) -> None:
         uid = _seed_1000_sessions(db, username="perftest-latency")
 
     # Define each function to time, with its display name
+    # Phase 15.1 (CATALOG-07) removed get_roast_freshness_buckets along with
+    # the roast-freshness home card and the bags.roast_date column.
     checks = [
         ("get_top_coffees", analytics.get_top_coffees),
         ("get_preference_profile", analytics.get_preference_profile),
         ("get_flavor_descriptors", analytics.get_flavor_descriptors),
-        ("get_roast_freshness_buckets", analytics.get_roast_freshness_buckets),
         ("get_sweet_spots", analytics.get_sweet_spots),
         ("get_recent_brews", analytics.get_recent_brews),
         ("get_unrated_coffees", analytics.get_unrated_coffees),

@@ -84,9 +84,11 @@ def _seed_shared_catalog(
             db.add(roaster)
             await db.flush()
 
+            from app.models.coffee_origin import CoffeeOrigin
+
             coffee = Coffee(
                 name=f"Ethiopia Yirgacheffe {cs}",
-                origin="Yirgacheffe",
+                origins=[CoffeeOrigin(country="Ethiopia", region="Yirgacheffe", sort_order=0)],
                 roaster_id=roaster.id,
                 notes="",
             )
