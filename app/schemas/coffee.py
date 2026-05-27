@@ -55,6 +55,12 @@ class CoffeeCreate(BaseModel):
     )
     notes: str = Field("", max_length=2000)
     advertised_flavor_note_ids: list[int] = Field(default_factory=list)
+    # varietal_ids bypasses Pydantic (same as origins_country/origins_region): the router
+    # collects them via getlist("varietal_ids") in _parse_form_payload and strips them from
+    # schema_input before CoffeeCreate sees the payload (extra="forbid" guard). This field
+    # is declared here solely as documentation + for test introspection; it will always be
+    # the empty-list default at validation time since the router never populates it.
+    varietal_ids: list[int] = Field(default_factory=list)
 
     @field_validator("advertised_flavor_note_ids")
     @classmethod

@@ -58,8 +58,11 @@
         {% if coffee.roast_level %}
           <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Roast level:</dt> <dd class="inline">{{ coffee.roast_level }}</dd></div>
         {% endif %}
-        {% if coffee.varietal %}
-          <div><dt class="inline text-sm text-espresso-600 dark:text-cream-300">Varietal:</dt> <dd class="inline">{{ coffee.varietal }}</dd></div>
+        {% if coffee.varietals %}
+          <div class="sm:col-span-2">
+            <dt class="inline text-sm text-espresso-600 dark:text-cream-300">Varietals:</dt>
+            <dd class="inline">{% for v in coffee.varietals %}{{ v.name }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
+          </div>
         {% endif %}
       </dl>
       {% if coffee.advertised_flavor_note_ids %}
