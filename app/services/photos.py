@@ -38,9 +38,12 @@ input never touches the path (T-04-PHOTO mitigation). The serving route
 (plan 04-10) reuses ``_is_safe_photo_filename`` as a defense against
 ``../etc/passwd`` style path traversal.
 
-``sweep_orphans`` order is load-bearing per D-07: list filesystem FIRST,
-query DB SECOND, unlink THIRD. Reversing the order would delete a file
-that a freshly-inserted row references and produce silent data loss.
+``sweep_orphans`` queries BOTH ``bags.photo_filename`` AND
+``cafe_logs.photo_filename`` to build the referenced set (Pitfall 8 /
+CAFE-02 — sweeping only bags would silently delete every cafe photo).
+Order is load-bearing per D-07: list filesystem FIRST, query DB SECOND,
+unlink THIRD. Reversing the order would delete a file that a
+freshly-inserted row references and produce silent data loss.
 RESEARCH.md Pitfall 9 names the footgun.
 
 This module is a primitives module (mirrors ``app/services/encryption.py``).
@@ -346,12 +349,15 @@ def _sweep_unreferenced(on_disk: set[str], referenced_main_filenames: set[str]) 
 
 
 def sweep_orphans(db) -> int:  # type: ignore[no-untyped-def]
-    """Diff filesystem against ``bags.photo_filename``; unlink unreferenced files.
+    """Diff filesystem against referenced photo filenames; unlink unreferenced files.
+
+    Queries BOTH ``bags.photo_filename`` AND ``cafe_logs.photo_filename``
+    (Pitfall 8 / CAFE-02: union bags and cafe refs — silent data loss otherwise).
 
     STRICT ordering per D-07 / RESEARCH.md Pitfall 9:
 
     1. Snapshot the filesystem FIRST (``on_disk``).
-    2. Query ``bags.photo_filename`` SECOND.
+    2. Query ``bags.photo_filename`` + ``cafe_logs.photo_filename`` SECOND.
     3. Unlink the DIFF THIRD (delegated to :func:`_sweep_unreferenced`).
 
     Doing it in reverse (unlinking files referenced by a freshly-inserted
@@ -375,15 +381,18 @@ def sweep_orphans(db) -> int:  # type: ignore[no-untyped-def]
 
     # Step 2: query DB second. Lazy-import to keep the module's import
     # graph minimal (mirrors ``app/dependencies/db.py`` pattern) and to
-    # defer the ``Bag.photo_filename`` attribute lookup until call time
-    # (the column is added in plan 04-03; importing eagerly here would
-    # break ``from app.services.photos import sweep_orphans`` before then).
+    # defer attribute lookups until call time.
     from sqlalchemy import select
 
     from app.models.bag import Bag
+    from app.models.cafe_log import CafeLog  # Pitfall 8 / CAFE-02: cafe photos must survive sweep
 
-    rows = db.execute(select(Bag.photo_filename).where(Bag.photo_filename.isnot(None))).all()
-    referenced_main: set[str] = {fn for (fn,) in rows if fn is not None}
+    bag_rows = db.execute(select(Bag.photo_filename).where(Bag.photo_filename.isnot(None))).all()
+    cafe_rows = db.execute(
+        select(CafeLog.photo_filename).where(CafeLog.photo_filename.isnot(None))
+    ).all()
+    referenced_main: set[str] = {fn for (fn,) in bag_rows if fn is not None}
+    referenced_main |= {fn for (fn,) in cafe_rows if fn is not None}
 
     # Step 3: unlink the diff.
     count = _sweep_unreferenced(on_disk, referenced_main)
