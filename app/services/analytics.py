@@ -205,24 +205,41 @@ def get_preference_profile(db: Session, user_id: int) -> dict[str, list[Row]]:
 
 
 def get_flavor_descriptors(db: Session, user_id: int) -> list[Row]:
-    """Top-10 flavor descriptors from the user's 4.0+ rated sessions, min 2 (D-07).
+    """Top-10 flavor descriptors from the user's 4.0+ rated brew + cafe sessions, min 2.
 
-    Unnests brew_sessions.flavor_note_ids_observed (the OBSERVED array — never
-    coffees.advertised_flavor_note_ids, Pitfall 2).
+    CAFE-04 / D-13: UNIONs rated-4+ brew_sessions.flavor_note_ids_observed with
+    rated-4+ cafe_logs.flavor_note_ids. A flavor note appearing in both a 4.0+ brew
+    row AND a 4.0+ cafe row counts TWICE (once per source) — this weights notes that
+    recur across taste contexts, which is the desired behavior.
 
-    Uses raw SQL for the unnest + implicit lateral join pattern because
-    func.unnest().column_valued() produces a TableValuedColumn that SQLAlchemy's
-    ORM join layer cannot resolve (Assumption A2 from RESEARCH.md, confirmed at
-    runtime). The bound :user_id parameter prevents SQL injection (T-06-03).
+    Unnest pattern: raw SQL with a UNION ALL of two unnest blocks inside a derived-table
+    subquery. func.unnest().column_valued() cannot be used in this ORM context (Assumption
+    A2 from RESEARCH.md). The bound :user_id parameter prevents SQL injection (T-06-03)
+    and is referenced twice (once per UNION side); psycopg 3 supports a single-key dict
+    referenced multiple times in the same statement.
+
+    JOIN to flavor_notes filters dangling IDs so only LIVE notes count (matching the
+    cold-start gate's live-note-only semantics — no ghost notes open the descriptors card).
+
+    T-16-05-01 / T-16-05-02: no string interpolation; :user_id bound param only.
     """
     stmt = text(
         """
         SELECT fn.id, fn.name, count(*) AS session_count
-        FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
-        JOIN flavor_notes fn ON fn.id = note_id
-        WHERE bs.user_id = :user_id
-          AND bs.rating IS NOT NULL
-          AND bs.rating >= 4.0
+        FROM (
+            SELECT note_id
+            FROM brew_sessions bs, unnest(bs.flavor_note_ids_observed) AS note_id
+            WHERE bs.user_id = :user_id
+              AND bs.rating IS NOT NULL
+              AND bs.rating >= 4.0
+            UNION ALL
+            SELECT note_id
+            FROM cafe_logs cl, unnest(cl.flavor_note_ids) AS note_id
+            WHERE cl.user_id = :user_id
+              AND cl.rating IS NOT NULL
+              AND cl.rating >= 4.0
+        ) AS notes
+        JOIN flavor_notes fn ON fn.id = notes.note_id
         GROUP BY fn.id, fn.name
         HAVING count(*) >= 2
         ORDER BY session_count DESC
