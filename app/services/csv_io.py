@@ -65,6 +65,7 @@ from app.models.flavor_note import FlavorNote
 from app.models.recipe import Recipe
 from app.models.roaster import Roaster
 from app.schemas.brew_csv import BrewCsvRow
+from app.services.brew_sessions import _sync_coffee_flavor_notes
 from app.services.flavor_notes import create_flavor_note
 
 log = structlog.get_logger(__name__)
@@ -410,6 +411,7 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
     # Single transaction: auto-create observed notes + add all sessions, commit
     # once. A DB error here rolls back the entire batch (Pitfall 4).
     inserted = 0
+    inserted_sessions: list[BrewSession] = []
     if pending:
         try:
             for _row_number, session, notes_raw in pending:
@@ -417,6 +419,7 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
                     db, names_raw=notes_raw, by_user_id=by_user_id
                 )
                 db.add(session)
+                inserted_sessions.append(session)
             db.commit()
         except Exception:
             db.rollback()
@@ -424,6 +427,23 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
         for row_number, _session, _notes_raw in pending:
             outcomes.append(RowOutcome("inserted", row_number, "imported"))
             inserted += 1
+
+    # D-11: Write-back flavor chips to parent coffee for each imported session.
+    # Second transaction: sessions are already committed; if write-back fails the
+    # sessions stay and a re-import (last-write-wins per D-09) would fix the chips.
+    if inserted_sessions:
+        try:
+            for session in inserted_sessions:
+                _sync_coffee_flavor_notes(
+                    db,
+                    coffee_id=session.coffee_id,
+                    old_session_ids=[],
+                    new_session_ids=list(session.flavor_note_ids_observed or []),
+                )
+            db.commit()
+        except Exception:
+            db.rollback()
+            # Non-fatal: sessions committed; chips sync incomplete but recoverable.
 
     skipped = sum(1 for o in outcomes if o.status == "skipped")
     refused = sum(1 for o in outcomes if o.status == "refused")
