@@ -168,16 +168,68 @@
       {% endif %}
     </label>
 
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-semibold">Varietal</span>
-      <input name="varietal"
-             maxlength="120"
-             value="{{ values.get('varietal', '') or '' }}"
-             class="rounded border px-2 py-2 text-base{% if errors.get('varietal') %} border-red-300{% else %} border-espresso-200{% endif %}">
-      {% if errors.get('varietal') %}
-        <p class="text-sm text-red-700 mt-1">{{ errors['varietal'] }}</p>
-      {% endif %}
-    </label>
+    {# Varietal chip-builder (CATALOG-05).
+       Mirrors the flavorNoteChips scope exactly; uses a distinct x-data scope
+       `varietalChips` to avoid collision with the flavor-note chip-builder above.
+       The data-initial-chips attribute MUST use single quotes (Pitfall 5 —
+       |tojson emits double quotes; double-quoting the attr breaks HTML parsing).
+       Server-seed chips render pre-hydration; Alpine clears them on init() and
+       drives from selectedChips. Hidden inputs named "varietal_ids" are
+       collected via getlist("varietal_ids") in _parse_form_payload (bypasses
+       Pydantic, same pattern as origins_country/origins_region). #}
+    <div id="varietal-chips"
+         class="field varietal-chips-field flex flex-col gap-1"
+         x-data="varietalChips"
+         data-initial-chips='{{ selected_varietals|tojson }}'>
+      <span class="text-sm font-semibold">Varietals</span>
+      <div id="varietal-chip-list" class="flex flex-wrap gap-2 mb-2">
+        {% for chip in selected_varietals %}
+          <span data-seed-chip
+                class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
+            {{ chip.name }}
+          </span>
+        {% endfor %}
+        <template x-for="chip in selectedChips" :key="chip.id">
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
+            <span x-text="chip.name"></span>
+            <button type="button"
+                    x-on:click="removeChip(chip.id)"
+                    :aria-label="'Remove ' + chip.name"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-cream-300 dark:hover:bg-espresso-700">
+              &times;
+            </button>
+          </span>
+        </template>
+      </div>
+      <div id="varietal-hidden-inputs" data-seed-hidden-container>
+        {% for chip in selected_varietals %}
+          <input type="hidden" name="varietal_ids" value="{{ chip.id }}">
+        {% endfor %}
+        <template x-for="chip in selectedChips" :key="'vh-' + chip.id">
+          <input type="hidden" name="varietal_ids" :value="chip.id">
+        </template>
+      </div>
+      {# Target for the create-on-the-fly chip response (hx-swap="afterbegin"). #}
+      <div id="varietal-new-chip-target" class="hidden"></div>
+      <div class="relative">
+        <input type="text"
+               name="varietal_query"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
+               autocomplete="off"
+               hx-get="/coffees/varietal-autocomplete"
+               hx-trigger="input changed delay:200ms[target.value.length >= 2], focus once from:closest .field"
+               hx-sync="this:replace"
+               hx-target="#varietal-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars to add a varietal…"
+               class="w-full rounded border px-2 py-2 text-base border-espresso-200">
+        <div id="varietal-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
+      </div>
+    </div>
 
     {# Advertised flavor notes — chip-builder (D-15 + D-16 + plan 04-11).
        Wraps the input + chip list + hidden inputs in a single

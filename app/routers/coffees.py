@@ -49,16 +49,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
 from app.models.user import User
+from app.models.varietal import Varietal
 from app.schemas.coffee import CoffeeCreate
 from app.services import coffees as coffees_service
 from app.services import roasters as roasters_service
+from app.services import varietals as varietals_service
 from app.services.coffees import COFFEE_PROCESSES, COFFEE_ROAST_LEVELS
-from app.services.form_validation import errors_by_field
+from app.services.form_validation import DuplicateNameError, errors_by_field
 from app.templates_setup import templates
 
 # Forward-declaration type alias used in _parse_form_payload and _hydrate_form_context
@@ -105,7 +108,8 @@ _EMPTY_TO_NONE_FIELDS = {
 _NON_SCHEMA_FORM_KEYS = {
     "X-CSRF-Token",
     "roaster_query",  # autocomplete text input next to roaster_id
-    "flavor_note_query",  # autocomplete text input for chip-builder
+    "flavor_note_query",  # autocomplete text input for flavor-note chip-builder
+    "varietal_query",  # autocomplete text input for varietal chip-builder (CATALOG-05)
 }
 
 
@@ -129,8 +133,8 @@ def _normalize_errors(errors: dict[str, str]) -> dict[str, str]:
 
 def _parse_form_payload(
     form_data: object,
-) -> tuple[dict[str, object], dict[str, object], list[tuple[str, str | None]]]:
-    """Convert raw form data → ``(raw_view, schema_input, origins)``.
+) -> tuple[dict[str, object], dict[str, object], list[tuple[str, str | None]], list[int]]:
+    """Convert raw form data → ``(raw_view, schema_input, origins, varietal_ids)``.
 
     ``raw_view`` is the dict handed back to the form template on
     validation failure so the user's submitted text is preserved on
@@ -147,6 +151,12 @@ def _parse_form_payload(
     ``getlist("origins_region")``, zipped into ``[(country, region), ...]``
     with blank-country rows stripped. Origins bypass Pydantic entirely
     (same pattern as ``advertised_flavor_note_ids`` bypassing via getlist).
+
+    ``varietal_ids`` is collected via ``getlist("varietal_ids")`` and cast to
+    ``list[int]``. Bypasses Pydantic (same pattern as origins). T-15.1-15:
+    strict int() cast rejects non-integer values; invalid values silently
+    discarded rather than crashing — FK constraint enforces referential
+    integrity at the DB level.
     """
     # ``form_data`` is starlette.datastructures.FormData; .getlist is
     # the canonical way to read repeated keys.
@@ -169,8 +179,18 @@ def _parse_form_payload(
         for c, r in zip(origins_country_raw, origins_region_raw, strict=False)
     ]
 
-    # Keys that belong to origin rows — stripped before Pydantic sees the payload.
-    _ORIGIN_KEYS = {"origins_country", "origins_region"}
+    # Collect varietal_ids from hidden chip inputs (CATALOG-05 T-15.1-15).
+    varietal_ids_raw: list[str] = form_data.getlist("varietal_ids")  # type: ignore[attr-defined]
+    varietal_ids: list[int] = []
+    for v in varietal_ids_raw:
+        if isinstance(v, str) and v:
+            try:
+                varietal_ids.append(int(v))
+            except (TypeError, ValueError):
+                pass  # discard non-integer values; FK enforces at DB level
+
+    # Keys that belong to origin/varietal rows — stripped before Pydantic sees payload.
+    _ORIGIN_KEYS = {"origins_country", "origins_region", "varietal_ids"}
 
     # Collect every key/value pair, treating repeated keys via getlist.
     seen_keys: set[str] = set()
@@ -208,7 +228,7 @@ def _parse_form_payload(
             else:
                 schema_input[key] = value
 
-    return raw_view, schema_input, origins
+    return raw_view, schema_input, origins, varietal_ids
 
 
 def _hydrate_form_context(
@@ -219,6 +239,7 @@ def _hydrate_form_context(
     mode: str,
     coffee_id: int | None = None,
     origins: list[tuple[str, str | None]] | None = None,
+    selected_varietals: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     """Build the form-template context with the lookup lists hydrated.
 
@@ -230,6 +251,11 @@ def _hydrate_form_context(
     origin-rows-container. For create mode defaults to ``[("", None)]``
     (one empty row). For edit mode, pass the coffee's current origins.
     If ``None`` is passed, falls back to the same empty-row default.
+
+    ``selected_varietals`` is the list of ``{id, name}`` dicts for the
+    varietal chip-builder seed (CATALOG-05). For create mode defaults to
+    ``[]``. For edit mode, pass the coffee's current varietals list.
+    If ``None``, returns empty list (no pre-selected chips).
     """
     roaster_id_raw = values.get("roaster_id")
     roaster_name = ""
@@ -278,7 +304,86 @@ def _hydrate_form_context(
         "roaster_name": roaster_name,
         "selected_flavor_notes": selected_flavor_notes,
         "origins": form_origins,
+        "selected_varietals": selected_varietals or [],
     }
+
+
+# --------------------------------------------------------------------------- #
+# Varietal autocomplete + create-on-the-fly (CATALOG-05)                      #
+# MUST be declared before the /{coffee_id} param route so these literal paths #
+# are not captured by the int-param matcher (Starlette resolves in order).   #
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/varietal-autocomplete", response_class=HTMLResponse)
+def varietal_autocomplete(
+    request: Request,
+    q: str = "",
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Autocomplete prefix-search fragment for the varietal chip-builder.
+
+    Returns ``fragments/varietal_autocomplete.html`` containing a ``<ul>``
+    of matches. If ``len(q) < 2``, returns an empty body (T-15.1-19: no
+    unbounded open-ended search). The ``exact_match`` flag suppresses the
+    "Add as new varietal" affordance when an exact match already exists.
+    """
+    if len(q) < 2:
+        return HTMLResponse("")
+    items = varietals_service.search_by_prefix(db, query=q, limit=50)
+    # Exact match check (CITEXT: case-insensitive compare).
+    exact_match = any(item.name.lower() == q.lower() for item in items)
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/varietal_autocomplete.html",
+        context={"items": items, "query": q, "exact_match": exact_match},
+    )
+
+
+@router.post("/varietals", response_class=HTMLResponse)
+async def create_varietal_on_the_fly(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Create a new varietal on-the-fly from the chip-builder autocomplete.
+
+    CSRF-protected via starlette-csrf middleware (T-15.1-21).
+    ``name`` comes from the form body (hx-vals in the autocomplete fragment).
+    On success, returns a chip-fragment pair (visible pill + hidden input)
+    to be injected into the chip-builder by the HTMX afterbegin swap.
+    On DuplicateNameError, returns a 200 with an inline error message.
+    """
+    form_data = await request.form()
+    name = str(form_data.get("name", "")).strip()
+    if not name:
+        return HTMLResponse(
+            '<p class="text-sm text-red-700 px-3 py-2">Varietal name is required.</p>'
+        )
+    try:
+        varietal = varietals_service.create_varietal(db, name=name, by_user_id=user.id)
+    except DuplicateNameError:
+        # Re-query the existing varietal so the UI can still add it as a chip
+        # (concurrent "Add X" clicks both succeed from the user's perspective —
+        # T-15.1-16: DuplicateNameError → fetch existing by CITEXT ilike).
+        existing = db.execute(
+            select(Varietal).where(Varietal.name.ilike(name))
+        ).scalar_one_or_none()
+        if existing is None:
+            return HTMLResponse(
+                f'<p class="text-sm text-red-700 px-3 py-2">"{name}" already exists.</p>'
+            )
+        varietal = existing
+    # Return a chip-fragment: visible pill + hidden input, ready for afterbegin inject.
+    safe_name = varietal.name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return HTMLResponse(
+        f"<span data-seed-chip"
+        f' class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm'
+        f' bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">'
+        f"{safe_name}</span>"
+        f'<input type="hidden" name="varietal_ids" value="{varietal.id}">'
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -373,6 +478,7 @@ def new_coffee_form(
         errors={},
         mode="create",
         origins=[("", None)],  # one empty row by default (D-22)
+        selected_varietals=[],
     )
     return templates.TemplateResponse(
         request=request,
@@ -430,7 +536,7 @@ async def create_coffee(
     A coffee with zero non-blank origins is rejected with a validation error.
     """
     form_data = await request.form()
-    raw_view, schema_input, origins = _parse_form_payload(form_data)
+    raw_view, schema_input, origins, varietal_ids = _parse_form_payload(form_data)
 
     # T-15.1-03: reject submissions with zero non-blank origins.
     if not origins:
@@ -474,6 +580,7 @@ async def create_coffee(
         notes=form.notes,
         advertised_flavor_note_ids=form.advertised_flavor_note_ids,
         origins=origins,
+        varietal_ids=varietal_ids,
         by_user_id=user.id,
     )
 
@@ -650,6 +757,10 @@ def edit_coffee_form(
     edit_origins: list[tuple[str, str | None]] = (
         [(o.country, o.region) for o in coffee.origins] if coffee.origins else [("", None)]
     )
+    # Seed varietal chips from the coffee's current varietals (CATALOG-05).
+    edit_varietals: list[dict[str, object]] = [
+        {"id": v.id, "name": v.name} for v in (coffee.varietals or [])
+    ]
     context = _hydrate_form_context(
         db,
         values=values,
@@ -657,6 +768,7 @@ def edit_coffee_form(
         mode="edit",
         coffee_id=coffee_id,
         origins=edit_origins,
+        selected_varietals=edit_varietals,
     )
     return templates.TemplateResponse(
         request=request,
@@ -678,7 +790,7 @@ async def update_coffee_handler(
         raise HTTPException(status_code=404)
 
     form_data = await request.form()
-    raw_view, schema_input, origins = _parse_form_payload(form_data)
+    raw_view, schema_input, origins, varietal_ids = _parse_form_payload(form_data)
 
     # T-15.1-03: reject submissions with zero non-blank origins.
     if not origins:
@@ -725,6 +837,7 @@ async def update_coffee_handler(
         notes=form.notes,
         advertised_flavor_note_ids=form.advertised_flavor_note_ids,
         origins=origins,
+        varietal_ids=varietal_ids,
         by_user_id=user.id,
     )
 

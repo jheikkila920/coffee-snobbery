@@ -107,6 +107,7 @@ CATALOG_ROASTER_ARCHIVED = "catalog.roaster.archived"
 CATALOG_FLAVOR_NOTE_CREATED = "catalog.flavor_note.created"
 CATALOG_FLAVOR_NOTE_UPDATED = "catalog.flavor_note.updated"
 CATALOG_FLAVOR_NOTE_ARCHIVED = "catalog.flavor_note.archived"
+CATALOG_VARIETAL_CREATED = "catalog.varietal.created"
 CATALOG_EQUIPMENT_CREATED = "catalog.equipment.created"
 CATALOG_EQUIPMENT_UPDATED = "catalog.equipment.updated"
 CATALOG_EQUIPMENT_ARCHIVED = "catalog.equipment.archived"
@@ -248,6 +249,7 @@ __all__ = [
     "CATALOG_FLAVOR_NOTE_ARCHIVED",
     "CATALOG_FLAVOR_NOTE_CREATED",
     "CATALOG_FLAVOR_NOTE_UPDATED",
+    "CATALOG_VARIETAL_CREATED",
     "CATALOG_PHOTO_ORPHAN_SWEPT",
     "CATALOG_RECIPE_ARCHIVED",
     "CATALOG_RECIPE_CREATED",

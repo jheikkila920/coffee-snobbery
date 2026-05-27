@@ -61,6 +61,7 @@ from app.models.bag import Bag
 from app.models.coffee import Coffee
 from app.models.coffee_origin import CoffeeOrigin
 from app.models.flavor_note import FlavorNote
+from app.models.varietal import Varietal
 
 log = structlog.get_logger(__name__)
 
@@ -77,8 +78,10 @@ COFFEE_PROCESSES: tuple[str, ...] = (
     "unknown",
 )
 
-# Locked 6-value roast-level enum (same defense-in-depth posture).
+# 8-value roast-level enum (CATALOG-04: ultra-light + nordic-light added).
 COFFEE_ROAST_LEVELS: tuple[str, ...] = (
+    "ultra-light",
+    "nordic-light",
     "light",
     "medium-light",
     "medium",
@@ -98,12 +101,14 @@ def create_coffee(
     notes: str,
     advertised_flavor_note_ids: list[int],
     origins: list[tuple[str, str | None]] | None = None,
+    varietal_ids: list[int] | None = None,
     by_user_id: int,
 ) -> Coffee:
     """Insert a new coffee row and emit ``catalog.coffee.created``.
 
     ORM instantiate → ``add`` → ``flush`` (populate id) → add CoffeeOrigin rows
-    → ``commit``. Origins are a list of ``(country, region)`` tuples (D-22).
+    + assign varietal m2m → ``commit``. Origins are a list of ``(country, region)``
+    tuples (D-22). varietal_ids are FK references to the varietals table (CATALOG-05).
 
     SQLAlchemy 2.0 + psycopg 3 handle the ``ARRAY(BigInteger)`` round-
     trip natively — pass the list straight to the column.
@@ -117,7 +122,7 @@ def create_coffee(
         advertised_flavor_note_ids=list(advertised_flavor_note_ids),
     )
     db.add(coffee)
-    db.flush()  # populate coffee.id for FK on origin rows
+    db.flush()  # populate coffee.id for FK on origin rows + m2m assignment
 
     # Insert origin rows in sort_order sequence (D-22).
     for i, (country, region) in enumerate(origins or []):
@@ -129,6 +134,14 @@ def create_coffee(
                 sort_order=i,
             )
         )
+
+    # Assign varietal m2m (CATALOG-05). Load Varietal objects by ID and assign
+    # to the relationship; SQLAlchemy handles the join-table inserts.
+    if varietal_ids:
+        varietals = list(
+            db.execute(select(Varietal).where(Varietal.id.in_(varietal_ids))).scalars().all()
+        )
+        coffee.varietals = varietals
 
     db.commit()
     log.info(
@@ -221,6 +234,7 @@ def update_coffee(
     notes: str,
     advertised_flavor_note_ids: list[int],
     origins: list[tuple[str, str | None]] | None = None,
+    varietal_ids: list[int] | None = None,
     by_user_id: int,
 ) -> Coffee:
     """UPDATE the row, commit, re-fetch, emit ``catalog.coffee.updated``.
@@ -233,6 +247,11 @@ def update_coffee(
     Origins use a replace strategy: delete all existing coffee_origins rows
     for the coffee, then insert the new set. Both ops happen in the same
     transaction as the Coffee row update (D-22 implicit blend promotion).
+
+    Varietals use the ORM relationship assignment: load the existing coffee
+    object, replace coffee.varietals with the new Varietal objects. SQLAlchemy
+    handles the join-table deletes and inserts within the same transaction
+    (CATALOG-05).
     """
     db.execute(
         update(Coffee)
@@ -262,7 +281,18 @@ def update_coffee(
             )
         )
 
+    # Replace varietal m2m (CATALOG-05). Load the coffee object and reassign
+    # the varietals relationship — SQLAlchemy syncs the join table.
+    coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one()
+    if varietal_ids is not None:
+        new_varietals = list(
+            db.execute(select(Varietal).where(Varietal.id.in_(varietal_ids))).scalars().all()
+        )
+        coffee.varietals = new_varietals
+
     db.commit()
+    # Re-fetch to pick up all relationship data (origins + varietals).
+    db.expire(coffee)
     coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one()
     log.info(
         CATALOG_COFFEE_UPDATED,
