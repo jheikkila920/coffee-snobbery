@@ -232,7 +232,13 @@ def test_prefill_does_not_pull_recent_session_chips(clean_flavor) -> None:
 
 
 def test_save_writes_back_added_chips(clean_flavor) -> None:
-    """Creating a session with extra chips enriches coffee.advertised_flavor_note_ids."""
+    """Creating a session with extra chips enriches coffee.advertised_flavor_note_ids.
+
+    Coffee starts with notes 0,1 advertised. Session is saved with notes 0,1,2.
+    Note 2 is new (in session but not in old=[]), so it is added to advertised.
+    Note 3 is already in advertised and is NOT in the session — it stays because
+    it was not in old_session_ids either, so it is not in the removed set.
+    """
     _require_postgres()
     _require_migration_applied()
 
@@ -243,19 +249,20 @@ def test_save_writes_back_added_chips(clean_flavor) -> None:
 
     r_id = _seed_roaster(db)
     note_ids = _seed_flavor_notes(db, 4)
-    c_id = _seed_coffee(db, roaster_id=r_id, advertised=note_ids[:2])
+    # Coffee starts with notes 0,1,3 advertised
+    c_id = _seed_coffee(db, roaster_id=r_id, advertised=[note_ids[0], note_ids[1], note_ids[3]])
     u_id = _seed_user(db)
     db.commit()
 
-    # Save session with notes 0, 1, 2 (note 2 is new)
+    # Save session with notes 0, 1, 2 (note 2 is new; note 3 is absent)
     _seed_session(db, user_id=u_id, coffee_id=c_id, flavor_note_ids=note_ids[:3])
 
     result = db.execute(select(Coffee.advertised_flavor_note_ids).where(Coffee.id == c_id)).scalar()
-    # note 2 was added; note 3 was never in any session so stays
+    # notes 0,1 were already in both; note 2 was added from session (old=[])
     assert note_ids[0] in result
     assert note_ids[1] in result
     assert note_ids[2] in result
-    # note 3 was in advertised but not in session — stays (not in old=[], so not removed)
+    # note 3 was in advertised and NOT in old_session_ids ([]) → not in removed set → stays
     assert note_ids[3] in result
 
 
@@ -312,7 +319,7 @@ def test_csv_import_triggers_writeback(clean_flavor) -> None:
     r_id = _seed_roaster(db, name="CSVRoaster")
     note_ids = _seed_flavor_notes(db, 3, prefix="CSVNote")
     c_id = _seed_coffee(db, roaster_id=r_id, name="CSVCoffee", advertised=[])
-    _seed_user(db)
+    u_id = _seed_user(db)
     db.commit()
 
     # Get the coffee name for the CSV
@@ -327,7 +334,7 @@ def test_csv_import_triggers_writeback(clean_flavor) -> None:
         f"{coffee_name},CSVRoaster,18,300,{note_name},2026-01-01T10:00:00\n"
     ).encode()
 
-    import_brews(db, raw_bytes=csv_content, by_user_id=1)
+    import_brews(db, raw_bytes=csv_content, by_user_id=u_id)
 
     result = db.execute(select(Coffee.advertised_flavor_note_ids).where(Coffee.id == c_id)).scalar()
     assert note_ids[0] in (result or [])
