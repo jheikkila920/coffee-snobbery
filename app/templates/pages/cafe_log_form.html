@@ -1,0 +1,369 @@
+{% extends "base.html" if not (layout == "desktop" and mode == "edit") else "fragments/cafe_log_bare.html" %}
+{# Cafe log add/edit page (D-10/D-11, CAFE-01/CAFE-02/CAFE-06).
+
+   Context contract (locked by Plan 16-02 _hydrate_form_context):
+     - values:               {field: str | list[str]} prefilled / submitted values
+     - errors:               {field: message}
+     - mode:                 "create" | "edit"
+     - cafe_log_id:          int (edit mode only)
+     - form_action:          POST target ("/cafe-logs" or "/cafe-logs/{id}")
+     - form_target:          HTMX hx-target
+     - form_swap:            HTMX hx-swap
+     - layout:               "desktop" | None
+     - selected_flavor_notes: list[{id, name}] pre-resolved server-side
+     - roaster_name:          str (resolved at render time for autocomplete text)
+
+   Dual-render mode (D-21 / CAFE-06):
+     - layout="desktop" + mode="edit" → extends "fragments/cafe_log_bare.html"
+       (passthrough; response body = form card only, ready for #cafe-form-mount
+       innerHTML swap)
+     - all other combinations → extends "base.html" (full-page shell)
+
+   Alpine scopes:
+     - ratingStars         on the rating fieldset (verbatim from brew_form.html)
+     - observedFlavorNotes on the flavor-notes wrapper (UI-SPEC Q1 Option A)
+     - autocomplete        on roaster + origin country (nested, fine)
+   No brewDraft scope (D-11 — no server-side draft autosave at v1).
+
+   CSP-strict: no |safe, no hx-vals='js:', no inline handlers. Autoescape ON.
+   Tailwind v3 invariant: .dark: selectors only, never @custom-variant.
+#}
+{% set is_edit = mode == "edit" %}
+{% block page_title %}{% if is_edit %}Snobbery — Edit cafe tasting{% else %}Snobbery — Quick rate{% endif %}{% endblock %}
+{% block content %}
+
+{% set full_page = not (layout == "desktop" and mode == "edit") %}
+{% if full_page %}
+<main class="mx-auto max-w-2xl px-6 py-12">
+  <h1 class="text-2xl font-semibold mb-6">{% if is_edit %}Edit cafe tasting{% else %}Quick rate a coffee{% endif %}</h1>
+{% endif %}
+
+{# observedFlavorNotes scope wraps the form card. The flavor-note chip widget's
+   x-on handlers (onInput/onFocus/onBlur/onKeydown/commitItem/removeChip) resolve
+   against this outer scope. The nested roaster + origin-country autocomplete divs
+   each declare their own x-data="autocomplete" creating sub-scopes — Alpine
+   correctly resolves each x-on against the nearest ancestor that owns the method.
+   UI-SPEC Q1 Option A: reusing observedFlavorNotes verbatim — the chip widget
+   logic is identical to brew_form; the variable name is a semantic stretch
+   intentional per the spec decision. #}
+<div class="field"
+     x-data="observedFlavorNotes"
+     data-initial-chips='{{ selected_flavor_notes|tojson }}'>
+
+  <form method="post"
+        action="{{ form_action }}"
+        enctype="multipart/form-data"
+        hx-post="{{ form_action }}"
+        hx-target="{{ hx_target }}"
+        hx-swap="{{ hx_swap }}"
+        hx-encoding="multipart/form-data"
+        class="rounded-lg border border-espresso-200 bg-cream-100 p-6 flex flex-col gap-3 dark:bg-espresso-900 dark:border-espresso-800">
+
+    {# CSRF — double-submit-cookie pattern (T-16-03-03 / ASVS V13).
+       Matches every state-changing form in the app. #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+    {# Pass layout=desktop through on the desktop-edit branch so the POST handler
+       routes the success swap target correctly. _NON_SCHEMA_FORM_KEYS in the
+       cafe_logs router (plan 16-02) strips "layout" before Pydantic validation
+       (T-16-03-04 mass-assignment defense). #}
+    {% if layout == "desktop" %}
+      <input type="hidden" name="layout" value="desktop">
+    {% endif %}
+
+    {# Form-level error (extra="forbid" trip, 500, or unknown validation failure).
+       Placed near the top so it is visible without scrolling past optional fields. #}
+    {% if errors.get('_form') %}
+      <p class="text-sm text-red-700 mb-2">{{ errors['_form'] }}</p>
+    {% endif %}
+
+    {# ==================================================================
+       REQUIRED FIELDS — first-viewport per D-11 (visible at 375x667 px
+       without scrolling: coffee name + rating + Save bar)
+       ================================================================== #}
+
+    {# ---- 1. Coffee name (required, autofocused) ---- #}
+    {# autofocus attr is the primary mechanism. The x-data init() wrapper is the
+       belt-and-suspenders backup: Safari sometimes ignores autofocus on subsequent
+       navigations within a PWA session (UI-SPEC § Interaction Contracts). #}
+    <div class="flex flex-col gap-1"
+         x-data="{ init() { $el.querySelector('[name=cafe_name]').focus(); } }">
+      <label for="cafe_name_input" class="text-sm font-semibold">Coffee name</label>
+      <input id="cafe_name_input"
+             name="cafe_name"
+             type="text"
+             required
+             autofocus
+             minlength="1"
+             maxlength="200"
+             placeholder="e.g. Onyx Geometry"
+             value="{{ values.get('cafe_name', '') }}"
+             aria-describedby="cafe_name-error"
+             class="w-full rounded border px-2 py-2 text-base min-h-[44px]{% if errors.get('cafe_name') %} border-red-300{% else %} border-espresso-200{% endif %}">
+      <p id="cafe_name-error" class="text-sm text-red-700">{{ errors.get('cafe_name', '') }}</p>
+    </div>
+
+    {# ---- 2. Rating (ratingStars Alpine scope, reused verbatim from brew_form.html
+             lines 112-164). Same w-14 h-14 stars, min-h-[56px] touch zone, half-step
+             buttons, amber-400 fill, Clear button, tabular-nums echo. ---- #}
+    <fieldset class="flex flex-col gap-1"
+              x-data="ratingStars"
+              data-initial-rating="{{ values.get('rating', '') }}">
+      <legend class="text-sm font-semibold">Rating</legend>
+      <input type="hidden" name="rating" :value="hiddenValue">
+      <div role="group" aria-label="Rating, 0 to 5 stars"
+           class="flex flex-nowrap items-center gap-1 min-h-[56px] py-2"
+           x-on:keydown="onKeydown($event)" tabindex="0">
+        {% for i in range(5) %}
+          <span class="relative inline-block w-14 h-14">
+            <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-espresso-800" fill="currentColor" aria-hidden="true">
+              <path d="M12 2.5l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.9 6.16 21l1.11-6.5-4.72-4.6 6.53-.95z"/>
+            </svg>
+            <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-amber-400 fill-amber-400"
+                 fill="currentColor" aria-hidden="true"
+                 x-show="fillState({{ i }}) === 'full'">
+              <path d="M12 2.5l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.9 6.16 21l1.11-6.5-4.72-4.6 6.53-.95z"/>
+            </svg>
+            <svg viewBox="0 0 24 24" class="w-14 h-14 absolute inset-0 text-amber-400 fill-amber-400"
+                 fill="currentColor" aria-hidden="true"
+                 x-show="fillState({{ i }}) === 'half'">
+              <defs><clipPath id="half-clip-{{ i }}"><rect x="0" y="0" width="12" height="24"/></clipPath></defs>
+              <path clip-path="url(#half-clip-{{ i }})" d="M12 2.5l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.9 6.16 21l1.11-6.5-4.72-4.6 6.53-.95z"/>
+            </svg>
+            <button type="button"
+                    x-on:click="setHalf({{ i }}, 'left')"
+                    :aria-label="zoneLabel({{ i }}, 'left')"
+                    class="absolute inset-y-0 left-0 w-1/2 focus:outline-none focus:ring-2 focus:ring-espresso-700 focus:ring-offset-1"></button>
+            <button type="button"
+                    x-on:click="setHalf({{ i }}, 'right')"
+                    :aria-label="zoneLabel({{ i }}, 'right')"
+                    class="absolute inset-y-0 right-0 w-1/2 focus:outline-none focus:ring-2 focus:ring-espresso-700 focus:ring-offset-1"></button>
+          </span>
+        {% endfor %}
+        <span class="ml-2 text-sm text-espresso-600 tabular-nums dark:text-cream-300" x-text="echo">Not rated</span>
+        <button type="button" x-on:click="clear()"
+                class="ml-2 rounded border border-espresso-300 px-2 py-1 text-sm text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">
+          Clear
+        </button>
+      </div>
+      {% if errors.get('rating') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['rating'] }}</p>
+      {% endif %}
+    </fieldset>
+
+    {# 3. Sticky Save bar lives at the BOTTOM of the form (see below).
+       Required fields (1. cafe_name + 2. rating) + the sticky Save bar at the
+       bottom of the page are ALL visible in the first viewport at 375x667 px:
+       H1 (~36px) + name field (~70px) + rating (~88px) + optional fields START
+       below fold + sticky Save bar (~64px from bottom) = ~258px above fold. #}
+
+    {# ==================================================================
+       OPTIONAL FIELDS — below the fold per D-11
+       ================================================================== #}
+
+    {# ---- 4. Roaster autocomplete (optional).
+       Reuses the existing /roasters/list endpoint + autocomplete Alpine scope
+       verbatim from coffee_form.html lines 83-112. The "+ Create new" mini-modal
+       flow is included (autocomplete_list.html renders it when create_new_endpoint
+       is non-empty, which /roasters/list always provides). ---- #}
+    <div class="field flex flex-col gap-1"
+         x-data="autocomplete"
+         data-entity-key="roaster"
+         data-hidden-input-name="roaster_id"
+         data-initial-id="{{ values.get('roaster_id') or '' }}"
+         data-initial-name="{{ roaster_name or '' }}">
+      <span class="text-sm font-semibold">Roaster (optional)</span>
+      <div class="relative">
+        <input type="text"
+               name="roaster_query"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
+               autocomplete="off"
+               hx-get="/roasters/list"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2], focus once from:closest .field"
+               hx-sync="this:replace"
+               hx-target="#roaster-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars; pick or '+ Create new'"
+               class="w-full rounded border px-2 py-2 text-base min-h-[44px] border-espresso-200">
+        <input type="hidden" name="roaster_id" :value="selectedId">
+        <div id="roaster-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
+      </div>
+      {% if errors.get('roaster_id') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['roaster_id'] }}</p>
+      {% endif %}
+    </div>
+
+    {# ---- 5. Origin country autocomplete (optional, D-03 — NO + Create new).
+       Same autocomplete Alpine scope but data-entity-key="country" and the hidden
+       input name is "origin_country" (a string, not an FK id — D-03 free-text).
+       The visible text input carries name="origin_country_query" to submit the
+       typed free-text when no dropdown item is selected.
+       The /cafe-logs/origin-country-autocomplete endpoint always returns
+       create_new_endpoint="" which suppresses the "+ Create new" option in
+       autocomplete_list.html. ---- #}
+    <div class="field flex flex-col gap-1"
+         x-data="autocomplete"
+         data-entity-key="country"
+         data-hidden-input-name="origin_country"
+         data-initial-id="{{ values.get('origin_country', '') }}"
+         data-initial-name="{{ values.get('origin_country', '') }}">
+      <span class="text-sm font-semibold">Origin country (optional)</span>
+      <div class="relative">
+        <input type="text"
+               name="origin_country_query"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
+               autocomplete="off"
+               hx-get="/cafe-logs/origin-country-autocomplete"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2], focus once from:closest .field"
+               hx-sync="this:replace"
+               hx-target="#origin-country-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars for suggestions, or enter your own"
+               class="w-full rounded border px-2 py-2 text-base min-h-[44px] border-espresso-200">
+        <input type="hidden" name="origin_country" :value="selectedId">
+        <div id="origin-country-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
+      </div>
+      {% if errors.get('origin_country') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['origin_country'] }}</p>
+      {% endif %}
+    </div>
+
+    {# ---- 6. Brew method (optional, D-05 — free-text, no enum, no FK) ---- #}
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Brew method (optional)</span>
+      <input type="text"
+             name="brew_method"
+             maxlength="100"
+             placeholder="e.g. V60, Aeropress, espresso"
+             value="{{ values.get('brew_method', '') }}"
+             class="w-full rounded border border-espresso-200 px-2 py-2 text-base">
+      {% if errors.get('brew_method') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['brew_method'] }}</p>
+      {% endif %}
+    </label>
+
+    {# ---- 7. Flavor notes chip widget (optional).
+       Resolves into the observedFlavorNotes scope declared on the ancestor wrapper
+       above. Hidden inputs use name="flavor_note_ids" (the cafe_logs router's
+       schema field — NOT "flavor_note_ids_observed" which belongs to brew sessions).
+       data-initial-chips on the ancestor wrapper pre-seeds the chips server-side
+       so validation re-renders and edit-mode pre-population work without hydration.
+       UI-SPEC Q1 Option A: observedFlavorNotes reused verbatim — semantic stretch
+       is intentional per the spec decision (chip logic is identical). ---- #}
+    <div class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Flavor notes (optional)</span>
+      <div id="cafe-observed-chip-list" class="flex flex-wrap gap-2 min-h-[44px]">
+        {% for chip in selected_flavor_notes %}
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200"
+                data-seed-chip data-chip-id="{{ chip.id }}" data-chip-name="{{ chip.name }}">{{ chip.name }}</span>
+        {% endfor %}
+        <template x-for="chip in selectedChips" :key="chip.id">
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
+            <span x-text="chip.name"></span>
+            <span x-show="chip.isNew"
+                  class="ml-1 px-1 py-1 rounded text-sm bg-cream-300 text-espresso-700 dark:bg-espresso-700 dark:text-cream-300">new</span>
+            <button type="button"
+                    x-on:click="removeChip(chip.id)"
+                    :aria-label="'Remove ' + chip.name"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-cream-300 dark:hover:bg-espresso-700">&times;</button>
+          </span>
+        </template>
+      </div>
+      <div id="cafe-observed-hidden-inputs" data-seed-hidden-container>
+        {% for chip in selected_flavor_notes %}
+          <input type="hidden" name="flavor_note_ids" value="{{ chip.id }}">
+        {% endfor %}
+        <template x-for="chip in selectedChips" :key="'h-' + chip.id">
+          <input type="hidden" name="flavor_note_ids" :value="chip.id">
+        </template>
+      </div>
+      <div class="relative">
+        <input type="text"
+               name="flavor_note_query"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
+               autocomplete="off"
+               hx-get="/flavor-notes/datalist"
+               hx-trigger="input changed delay:350ms[target.value.length >= 2], focus once from:closest .field"
+               hx-sync="this:replace"
+               hx-target="#cafe-flavor-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars; Enter or comma adds…"
+               class="w-full rounded border border-espresso-200 px-2 py-2 text-base">
+        <div id="cafe-flavor-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1 max-h-60 overflow-y-auto"></div>
+      </div>
+    </div>
+
+    {# ---- 8. Notes (optional) ---- #}
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Notes (optional)</span>
+      <textarea name="notes"
+                rows="3"
+                maxlength="5000"
+                class="w-full rounded border border-espresso-200 px-2 py-2 text-base">{{ values.get('notes', '') }}</textarea>
+      {% if errors.get('notes') %}
+        <p class="text-sm text-red-700 mt-1">{{ errors['notes'] }}</p>
+      {% endif %}
+    </label>
+
+    {# ---- 9. Photo (optional).
+       name="photo" + accept matches the bag form pattern (app/routers/bags.py:367-418)
+       so the existing photo-upload.js Canvas downscale handler hooks into the form
+       automatically (it listens on form[data-photo-form] submit events — the form
+       above does not declare data-photo-form so downscale is skipped, which is
+       acceptable: server-side Pillow pipeline re-encodes regardless per SEC-4). ---- #}
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Photo (optional)</span>
+      <input type="file"
+             name="photo"
+             accept="image/jpeg,image/png,image/webp"
+             class="w-full rounded border border-espresso-200 px-2 py-2 text-base">
+      <p id="photo-error" class="text-sm text-red-700">{{ errors.get('photo', '') }}</p>
+    </label>
+
+    {# ---- 10. Tasted at (optional, editable for backfilling past tastings) ---- #}
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Tasted at</span>
+      <input type="datetime-local"
+             name="logged_at"
+             value="{{ values.get('logged_at', '') }}"
+             class="w-full rounded border border-espresso-200 px-2 py-2 text-base">
+      <p class="text-sm text-espresso-600 dark:text-cream-200">Defaults to now; edit to backfill a previous tasting.</p>
+    </label>
+
+    {# ---- Sticky Save bar (D-11 / D-20 brew_form.html precedent).
+       bottom-16 on mobile (above the persistent bottom nav, 64px reserved by
+       content-nav-safe-area); md:bottom-0 on desktop (no bottom nav).
+       The inline style= is the one allowed exception per D-20 — env(safe-area-inset-bottom)
+       cannot be expressed as a Tailwind v3 utility without a custom plugin.
+       Mirrors brew_form.html lines 285-327 verbatim. ---- #}
+    <div class="sticky bottom-16 md:bottom-0 inset-x-0 z-20 border-t border-espresso-200 bg-cream-50/95 backdrop-blur px-4 py-3 flex flex-col gap-2 dark:bg-espresso-950/95 dark:border-espresso-800"
+         style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
+      <div class="flex items-center gap-3">
+        <a href="/brew?tab=cafe"
+           class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 px-4 py-2 text-base text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200">Cancel</a>
+        <button type="submit"
+                class="flex-1 inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800">
+          {% if is_edit %}Save changes{% else %}Save{% endif %}
+        </button>
+      </div>
+    </div>
+
+  </form>
+</div>
+
+{% if full_page %}
+</main>
+{% endif %}
+{% endblock %}
