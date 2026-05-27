@@ -48,6 +48,39 @@ from app.models.recipe import Recipe
 
 log = structlog.get_logger(__name__)
 
+
+def _sync_coffee_flavor_notes(
+    db: Session,
+    *,
+    coffee_id: int,
+    old_session_ids: list[int],
+    new_session_ids: list[int],
+) -> None:
+    """Bidirectional sync of session chips to coffees.advertised_flavor_note_ids (D-07/D-08).
+
+    Computes ``(current | added) - removed`` where:
+    - ``current`` = coffee's existing advertised set
+    - ``added``   = chips in new_session_ids but not in old_session_ids
+    - ``removed`` = chips in old_session_ids but not in new_session_ids
+
+    Does NOT call ``db.commit()`` — caller is responsible for the transaction.
+    Handles ``None`` or empty array on the coffee gracefully (treats as empty set).
+    """
+    from app.models.coffee import Coffee  # local import to avoid circular
+
+    coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one()
+    current = set(coffee.advertised_flavor_note_ids or [])
+    added = set(new_session_ids) - set(old_session_ids)
+    removed = set(old_session_ids) - set(new_session_ids)
+    updated = (current | added) - removed
+    db.execute(
+        update(Coffee)
+        .where(Coffee.id == coffee_id)
+        .values(advertised_flavor_note_ids=sorted(updated), updated_at=func.now())
+    )
+    # caller commits
+
+
 # The four recipe-template fields D-05 lets a selected recipe override on the
 # brew form. Mapped from the recipe's own column names in :func:`recipe_targets`.
 _RECIPE_TEMPLATE_FIELDS = (
@@ -210,6 +243,13 @@ def create_brew_session(
         deltas={eq_id: 1 for eq_id in (brewer_id, grinder_id, kettle_id) if eq_id is not None},
     )
     db.flush()  # populate id for the audit event
+    # D-07/D-08: write-back chips to parent coffee in the SAME transaction.
+    _sync_coffee_flavor_notes(
+        db,
+        coffee_id=coffee_id,
+        old_session_ids=[],
+        new_session_ids=flavor_note_ids_observed,
+    )
     db.commit()
     log.info(BREW_SESSION_CREATED, session_id=session.id, user_id=by_user_id)
     return session
@@ -237,6 +277,8 @@ def update_brew_session(
         return None
 
     old_equipment = (session.brewer_id, session.grinder_id, session.kettle_id)
+    # D-08: capture old chips before update for bidirectional sync diff.
+    old_flavor_note_ids = list(session.flavor_note_ids_observed or [])
 
     # Apply only declared writable fields the caller actually passed.
     values: dict[str, Any] = {k: v for k, v in fields.items() if k in _WRITABLE_FIELDS}
@@ -256,6 +298,14 @@ def update_brew_session(
             .where(BrewSession.id == session_id, BrewSession.user_id == by_user_id)
             .values(**values)
         )
+    # D-07/D-08: write-back to parent coffee in the SAME transaction.
+    new_flavor_note_ids = list(values.get("flavor_note_ids_observed", old_flavor_note_ids) or [])
+    _sync_coffee_flavor_notes(
+        db,
+        coffee_id=session.coffee_id,
+        old_session_ids=old_flavor_note_ids,
+        new_session_ids=new_flavor_note_ids,
+    )
     db.commit()
     refreshed = db.execute(
         select(BrewSession).where(BrewSession.id == session_id, BrewSession.user_id == by_user_id)
@@ -461,7 +511,18 @@ def resolve_prefill(
 
     # 4. Always blank the per-attempt fields on /brew/new.
     prefill["rating"] = None
-    prefill["flavor_note_ids_observed"] = []
+    # D-06/D-12: prefill chips from the parent coffee's advertised set ONLY.
+    # Do NOT also pull the user's most-recent session chips (those surface
+    # via the existing prefill summary separately).
+    if resolved_coffee is not None:
+        from app.models.coffee import Coffee  # local import to avoid circular
+
+        coffee_row = db.execute(
+            select(Coffee.advertised_flavor_note_ids).where(Coffee.id == resolved_coffee)
+        ).scalar_one_or_none()
+        prefill["flavor_note_ids_observed"] = list(coffee_row or [])
+    else:
+        prefill["flavor_note_ids_observed"] = []
     prefill["notes"] = ""
 
     return prefill

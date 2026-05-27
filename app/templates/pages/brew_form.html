@@ -170,6 +170,8 @@
              advertised_flavor_note_ids. #}
           <div class="flex flex-col gap-1">
             <span class="text-sm font-semibold">Flavor notes</span>
+            {# D-09: last-write-wins tooltip — visible without hover for accessibility #}
+            <p class="text-xs text-espresso-600 dark:text-cream-400">Saving this session updates this coffee's advertised notes for everyone (last save wins).</p>
             <div id="observed-chip-list" class="flex flex-wrap gap-2 min-h-[44px]">
               {% for chip in selected_flavor_notes %}
                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200"
