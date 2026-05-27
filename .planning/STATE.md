@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
-status: executing
-stopped_at: Phase 16 planned (6 plans, 3 waves); pre-execute review
-last_updated: "2026-05-27T17:42:01.514Z"
-last_activity: 2026-05-27 -- Phase 16 execution started
+status: gaps_pending
+stopped_at: Phase 16 executed; verifier=gaps_found (CAFE-02 origin-country autocomplete bug); awaiting --gaps cycle
+last_updated: "2026-05-27T20:45:00.000Z"
+last_activity: 2026-05-27 -- Phase 16 execution complete; verifier gaps_found
 progress:
   total_phases: 9
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 14
-  completed_plans: 8
-  percent: 57
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 ## Current Position
 
-Phase: 16 (Café Quick-Rate) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 16
-Last activity: 2026-05-27 -- Phase 16 execution started
+Phase: 16 (Café Quick-Rate) — gaps_pending
+Plan: 6 of 6 (all executed)
+Status: Verifier returned gaps_found — CAFE-02 origin-country autocomplete bug; awaiting --gaps cycle or manual fix
+Last activity: 2026-05-27 -- Phase 16 execution complete; verifier gaps_found
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100% plans / verification incomplete
 
 ## Performance Metrics
 
@@ -88,6 +88,6 @@ Progress: [░░░░░░░░░░] 0%
 ## Session Continuity
 
 Last session: 2026-05-27T17:36:49.678Z
-Stopped at: Phase 16 planned (6 plans, 3 waves); pre-execute review
-Resume file: .planning/phases/16-cafe-quick-rate/16-01-PLAN.md
-Next: `/gsd-plan-phase 15` — v1.1 Debt Cleanup
+Stopped at: Phase 16 executed; verifier=gaps_found (CAFE-02 origin-country autocomplete bug)
+Resume file: .planning/phases/16-cafe-quick-rate/16-VERIFICATION-AUTO.md
+Next: `/gsd-plan-phase 16 --gaps` (re-plan to fix origin-country) — or fix inline and re-verify
