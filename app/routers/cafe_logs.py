@@ -101,7 +101,9 @@ _NON_SCHEMA_FORM_KEYS = {
     "X-CSRF-Token",
     "roaster_query",
     "flavor_note_query",
-    "origin_country_query",
+    # D-03 origin_country fix: the visible input now posts directly as
+    # `origin_country` (no separate _query input + hidden id), so there is
+    # nothing to strip here. Keeping the explanatory comment for future readers.
     "layout",  # D-21: desktop layout param; stripped before Pydantic sees payload
     "_method",  # POST + _method=DELETE pattern (HTMX 2.x convention)
     "photo",  # file upload — handled separately by the router, not a schema field

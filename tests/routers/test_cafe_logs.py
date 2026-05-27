@@ -216,6 +216,69 @@ def test_create_full_enrichment(
     assert r.status_code == 204, f"expected 204, got {r.status_code}: {r.text[:200]}"
 
 
+def test_origin_country_round_trips_to_db(
+    app: Any,
+    seeded_regular_user: dict[str, Any],
+    clean_cafe_router: None,
+) -> None:
+    """D-03 regression: POST origin_country=Ethiopia must persist to the DB row.
+
+    Closes the verifier gap on CAFE-02: the generic autocomplete component
+    parseInts item ids, but origin_country is a free-text string. The fix
+    routes the visible input directly to `name="origin_country"` (no hidden
+    selectedId-bound input). This test posts the form payload AND reads the
+    DB row back — the original test_create_full_enrichment only asserted
+    HTTP 204 and let the silent-NULL bug slip through.
+    """
+    _require_postgres()
+    _require_cafe_logs_table()
+    _require_cafe_router()
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.cafe_log import CafeLog
+
+    uid = seeded_regular_user["user"].id
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    r = client.post(
+        "/cafe-logs",
+        data={
+            "cafe_name": "Origin Round-Trip Cafe",
+            "origin_country": "Ethiopia",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 204, f"expected 204, got {r.status_code}: {r.text[:200]}"
+
+    # Round-trip: read the DB row back and assert origin_country was stored.
+    with SessionLocal() as db:
+        row = db.execute(
+            select(CafeLog).where(CafeLog.user_id == uid).order_by(CafeLog.id.desc())
+        ).scalar_one()
+    assert row.origin_country == "Ethiopia", (
+        f"origin_country dropped on create: got {row.origin_country!r}"
+    )
+
+    # Edit-flow regression: update origin_country to a different value and verify
+    # it persisted (not silently wiped by the prior selectedId-bound hidden input).
+    r2 = client.post(
+        f"/cafe-logs/{row.id}",
+        data={
+            "cafe_name": "Origin Round-Trip Cafe",
+            "origin_country": "Kenya",
+        },
+        follow_redirects=False,
+    )
+    assert r2.status_code == 204, f"expected 204 on update, got {r2.status_code}: {r2.text[:200]}"
+
+    with SessionLocal() as db:
+        row2 = db.execute(select(CafeLog).where(CafeLog.id == row.id)).scalar_one()
+    assert row2.origin_country == "Kenya", (
+        f"origin_country wiped or unchanged on edit: got {row2.origin_country!r}"
+    )
+
+
 def test_create_mass_assignment_rejected(
     app: Any,
     seeded_regular_user: dict[str, Any],

@@ -198,23 +198,23 @@
     </div>
 
     {# ---- 5. Origin country autocomplete (optional, D-03 — NO + Create new).
-       Same autocomplete Alpine scope but data-entity-key="country" and the hidden
-       input name is "origin_country" (a string, not an FK id — D-03 free-text).
-       The visible text input carries name="origin_country_query" to submit the
-       typed free-text when no dropdown item is selected.
-       The /cafe-logs/origin-country-autocomplete endpoint always returns
-       create_new_endpoint="" which suppresses the "+ Create new" option in
-       autocomplete_list.html. ---- #}
+       D-03 free-text: origin_country is a string (not an FK id). The autocomplete
+       Alpine component drives the dropdown only — `query` is bound to the visible
+       input which posts directly as name="origin_country". Clicking a suggestion
+       sets `query`; typing free text sets `query` to the typed value. There is NO
+       hidden input (the generic autocomplete's selectedId is parseInt-only and
+       cannot carry string FK ids — verifier D-03 fix).
+       The /cafe-logs/origin-country-autocomplete endpoint returns
+       create_new_endpoint="" which suppresses the "+ Create new" option. ---- #}
     <div class="field flex flex-col gap-1"
          x-data="autocomplete"
          data-entity-key="country"
-         data-hidden-input-name="origin_country"
-         data-initial-id="{{ values.get('origin_country', '') }}"
+         data-initial-id=""
          data-initial-name="{{ values.get('origin_country', '') }}">
       <span class="text-sm font-semibold">Origin country (optional)</span>
       <div class="relative">
         <input type="text"
-               name="origin_country_query"
+               name="origin_country"
                :value="query"
                x-on:input="onInput($el)"
                x-on:focus="onFocus()"
@@ -228,7 +228,6 @@
                hx-swap="innerHTML"
                placeholder="Type 2+ chars for suggestions, or enter your own"
                class="w-full rounded border px-2 py-2 text-base min-h-[44px] border-espresso-200">
-        <input type="hidden" name="origin_country" :value="selectedId">
         <div id="origin-country-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
       </div>
       {% if errors.get('origin_country') %}
