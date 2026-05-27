@@ -81,10 +81,11 @@ def _seed_coffee(db, *, name: str, roaster_id: int | None = None):
     return coffee
 
 
-def _seed_bag(db, *, coffee_id: int, roast_date):
+def _seed_bag(db, *, coffee_id: int):
+    """Seed a bag without roast_date (column removed in Phase 15.1 D-16)."""
     from app.models.bag import Bag
 
-    bag = Bag(coffee_id=coffee_id, roast_date=roast_date)
+    bag = Bag(coffee_id=coffee_id)
     db.add(bag)
     db.flush()
     return bag
@@ -150,8 +151,10 @@ def _csv(rows: list[dict[str, str]], *, fieldnames: list[str]) -> bytes:
 
 
 def test_import_outcomes(clean_csv: None) -> None:
-    """Refused (coffee not in catalog / ambiguous / bag not found), skipped
-    (duplicate), inserted (freestyle + with bag)."""
+    """Refused (coffee not in catalog / ambiguous), skipped (duplicate), inserted.
+
+    D-20: bag resolution via roast_date is removed; all imports get bag_id=None.
+    """
     _require_postgres()
     _require_p5_migration_applied()
     from app.db import SessionLocal
@@ -167,14 +170,8 @@ def test_import_outcomes(clean_csv: None) -> None:
         # Ambiguous coffee — same name under two roasters.
         _seed_coffee(db, name="CSV Ambiguous", roaster_id=r1.id)
         _seed_coffee(db, name="CSV Ambiguous", roaster_id=r2.id)
-        # Coffee with a bag.
-        bagged = _seed_coffee(db, name="CSV Bagged", roaster_id=r1.id)
-        from datetime import date
-
-        bag = _seed_bag(db, coffee_id=bagged.id, roast_date=date(2026, 5, 1))
         db.commit()
         uid = user.id
-        bag_id = bag.id
 
     # Pre-seed an existing session to trigger the dedup-skip branch.
     dup_brewed_at = datetime(2026, 5, 10, 8, 0, 0, tzinfo=UTC)
@@ -206,14 +203,7 @@ def test_import_outcomes(clean_csv: None) -> None:
             brewed_at=dup_brewed_at,
         )
 
-    fieldnames = [
-        "coffee_name",
-        "roaster_name",
-        "roast_date",
-        "dose_grams",
-        "water_grams",
-        "brewed_at",
-    ]
+    fieldnames = ["coffee_name", "roaster_name", "dose_grams", "water_grams", "brewed_at"]
     rows = [
         # 1. coffee not in catalog -> refused
         {
@@ -236,25 +226,16 @@ def test_import_outcomes(clean_csv: None) -> None:
             "water_grams": "250",
             "brewed_at": "2026-05-10T08:00:00+00:00",
         },
-        # 4. names a bag (roast_date) that does not resolve -> refused
-        {
-            "coffee_name": "CSV Bagged",
-            "roast_date": "2099-01-01",
-            "dose_grams": "15",
-            "water_grams": "250",
-            "brewed_at": "2026-05-11T10:00:00+00:00",
-        },
-        # 5. freestyle (no bag named) -> inserted
+        # 4. freestyle -> inserted (bag_id=None per D-20)
         {
             "coffee_name": "CSV Solo",
             "dose_grams": "16",
             "water_grams": "256",
             "brewed_at": "2026-05-11T11:00:00+00:00",
         },
-        # 6. names a resolving bag -> inserted with bag_id
+        # 5. another freestyle -> inserted
         {
-            "coffee_name": "CSV Bagged",
-            "roast_date": "2026-05-01",
+            "coffee_name": "CSV Solo",
             "dose_grams": "17",
             "water_grams": "272",
             "brewed_at": "2026-05-11T12:00:00+00:00",
@@ -266,19 +247,16 @@ def test_import_outcomes(clean_csv: None) -> None:
         outcomes = csv_io.import_brews(db, raw_bytes=raw, by_user_id=uid)
 
     statuses = [o.status for o in outcomes]
-    assert statuses == ["refused", "refused", "skipped", "refused", "inserted", "inserted"]
+    assert statuses == ["refused", "refused", "skipped", "inserted", "inserted"]
     assert "not in catalog" in outcomes[0].reason
     assert "ambiguous" in outcomes[1].reason
     assert "duplicate" in outcomes[2].reason
-    assert "bag" in outcomes[3].reason.lower()
 
-    # The two inserted rows landed; the bagged one carries the bag id.
+    # 1 pre-seeded + 2 inserted = 3 total; all have bag_id=None (D-20).
     with SessionLocal() as db:
         rows_db = brew_svc.list_brew_sessions(db, by_user_id=uid)
-    # 1 pre-seeded + 2 inserted = 3 total.
     assert len(rows_db) == 3
-    bagged_rows = [r for r in rows_db if r.bag_id == bag_id]
-    assert len(bagged_rows) == 1
+    assert all(r.bag_id is None for r in rows_db)
 
 
 def test_import_single_transaction(clean_csv: None, monkeypatch) -> None:
@@ -584,11 +562,9 @@ def test_export_includes_ratio_and_ey(clean_csv: None) -> None:
 def test_export_roundtrip(clean_csv: None) -> None:
     """Export a user's sessions, then re-import the same bytes for a fresh user
     with the same catalog -> every row inserts, no refusals; bag_id=null
-    round-trips freestyle."""
+    round-trips freestyle (D-20: bag resolution removed, all imports get bag_id=None)."""
     _require_postgres()
     _require_p5_migration_applied()
-    from datetime import date
-
     from app.db import SessionLocal
     from app.services import brew_sessions as brew_svc
     from app.services import csv_io
@@ -598,16 +574,15 @@ def test_export_roundtrip(clean_csv: None) -> None:
         user_b = _seed_user(db, username="csvtest-rt-b")
         roaster = _seed_roaster(db, name="CSV RT Roaster")
         coffee = _seed_coffee(db, name="CSV RTCoffee", roaster_id=roaster.id)
-        bag = _seed_bag(db, coffee_id=coffee.id, roast_date=date(2026, 5, 2))
         db.flush()
-        a_id, b_id, cid, bag_id = user_a.id, user_b.id, coffee.id, bag.id
+        a_id, b_id, cid = user_a.id, user_b.id, coffee.id
 
-        # One row with a bag, one freestyle (bag_id null).
+        # Two freestyle sessions (bag_id=None per D-20).
         brew_svc.create_brew_session(
             db,
             by_user_id=a_id,
             coffee_id=cid,
-            bag_id=bag_id,
+            bag_id=None,
             recipe_id=None,
             brewer_id=None,
             grinder_id=None,
@@ -657,10 +632,8 @@ def test_export_roundtrip(clean_csv: None) -> None:
     with SessionLocal() as db:
         b_rows = brew_svc.list_brew_sessions(db, by_user_id=b_id)
     assert len(b_rows) == 2
-    bag_linked = [r for r in b_rows if r.bag_id == bag_id]
-    freestyle = [r for r in b_rows if r.bag_id is None]
-    assert len(bag_linked) == 1
-    assert len(freestyle) == 1
+    # D-20: all imported rows have bag_id=None
+    assert all(r.bag_id is None for r in b_rows)
 
     # Re-importing the same file for the SAME user is a no-op (all duplicates).
     with SessionLocal() as db:

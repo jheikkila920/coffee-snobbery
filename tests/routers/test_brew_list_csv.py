@@ -364,7 +364,7 @@ def test_export_attachment(app, seeded_regular_user, clean_brew_list) -> None:
 
 def _csv_bytes(rows: list[str]) -> bytes:
     header = (
-        "coffee_name,roaster_name,roast_date,recipe_name,brewer,grinder,kettle,"
+        "coffee_name,roaster_name,recipe_name,brewer,grinder,kettle,"
         "water_type,dose_grams,water_grams,yield_grams,tds_pct,water_temp_c,"
         "grind_setting,rating,observed_flavor_notes,notes,brewed_at"
     )
