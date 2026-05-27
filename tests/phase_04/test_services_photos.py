@@ -326,3 +326,97 @@ def test_safe_filename_regex() -> None:
 # Unused-import guard — keep io + BytesIO imported so test isolation passes   #
 # --------------------------------------------------------------------------- #
 _ = io.BytesIO  # imported above for future tests; assigning silences unused-import
+
+
+# --------------------------------------------------------------------------- #
+# Pitfall 8 regression — cafe photos must survive the nightly sweep           #
+# (plan 16-06: extend sweep_orphans to UNION cafe_logs.photo_filename)        #
+# --------------------------------------------------------------------------- #
+
+
+def _require_postgres_reachable() -> None:
+    """Skip if Postgres is unreachable (mirrors pattern in tests/services/test_analytics.py)."""
+    try:
+        from tests.conftest import _postgres_reachable
+    except ImportError:
+        pytest.skip("postgres reachability probe missing from conftest")
+    if not _postgres_reachable():
+        pytest.skip("Postgres not reachable — sweep_keeps_cafe_photos needs the DB")
+
+
+def test_sweep_keeps_cafe_photos(
+    photo_volume: Path,
+    synthetic_jpeg: Callable[..., bytes],
+) -> None:
+    """Cafe-referenced photos survive sweep_orphans (Pitfall 8 regression).
+
+    Seeds: one CafeLog row pointing at cafe_real.jpg (no Bag row).
+    Expects: sweep returns 2 (orphan pair deleted); cafe pair untouched.
+
+    This test is RED until plan 16-06 Task 2 extends sweep_orphans to
+    UNION cafe_logs.photo_filename into referenced_main.
+    """
+    _require_photos_service()
+    _require_postgres_reachable()
+    try:
+        from tests.conftest import _require_cafe_logs_table
+    except ImportError:
+        pytest.skip("_require_cafe_logs_table helper not found in tests.conftest")
+    _require_cafe_logs_table()
+
+    from app.db import SessionLocal
+    from app.services.photos import sweep_orphans
+
+    # --- FS setup: two file pairs on disk ----------------------------------
+    # Cafe pair: must survive the sweep (referenced by a CafeLog row).
+    # Orphan pair: must be deleted (no DB reference).
+    cafe_bytes = synthetic_jpeg(dimensions=(200, 200))
+    orphan_bytes = synthetic_jpeg(dimensions=(300, 300))
+
+    # Write files directly to the monkeypatched PHOTOS_DIR (photo_volume).
+    (photo_volume / "cafe_real.jpg").write_bytes(cafe_bytes)
+    (photo_volume / "cafe_real-thumb.jpg").write_bytes(cafe_bytes)
+    (photo_volume / "orphan_real.jpg").write_bytes(orphan_bytes)
+    (photo_volume / "orphan_real-thumb.jpg").write_bytes(orphan_bytes)
+
+    # --- DB seed: one CafeLog row referencing cafe_real.jpg ----------------
+    from app.models.cafe_log import CafeLog
+    from app.models.user import User
+
+    with SessionLocal() as db:
+        user = User(
+            username="sweep-cafe-test",
+            email="sweep-cafe@example.com",
+            password_hash="x" * 16,
+            is_admin=False,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+
+        log = CafeLog(
+            user_id=user.id,
+            cafe_name="Sweep Test Cafe",
+            photo_filename="cafe_real.jpg",
+        )
+        db.add(log)
+        db.commit()
+
+        # --- Act: run the sweep against the seeded DB ----------------------
+        deleted_count = sweep_orphans(db)
+
+    # --- Assert ------------------------------------------------------------
+    assert deleted_count == 2, (
+        f"Expected 2 orphan deletions (orphan pair), got {deleted_count}. "
+        "Pitfall 8: sweep_orphans may not be unioning cafe_logs.photo_filename."
+    )
+    assert (photo_volume / "cafe_real.jpg").exists(), (
+        "Cafe photo was deleted by sweep — Pitfall 8 regression"
+    )
+    assert (photo_volume / "cafe_real-thumb.jpg").exists(), (
+        "Cafe thumb was deleted by sweep — Pitfall 8 regression"
+    )
+    assert not (photo_volume / "orphan_real.jpg").exists(), "Orphan was NOT deleted by sweep"
+    assert not (photo_volume / "orphan_real-thumb.jpg").exists(), (
+        "Orphan thumb was NOT deleted by sweep"
+    )
