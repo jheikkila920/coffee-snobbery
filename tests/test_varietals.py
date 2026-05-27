@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Skip gate                                                                    #
 # --------------------------------------------------------------------------- #
@@ -75,9 +74,20 @@ def test_seed_includes_expected_names() -> None:
     from app.db import SessionLocal
 
     expected = {
-        "Bourbon", "Typica", "Caturra", "Catuai", "Geisha", "Pacamara",
-        "SL28", "SL34", "Mundo Novo", "Pacas", "Heirloom", "Maragogype",
-        "Castillo", "Catimor",
+        "Bourbon",
+        "Typica",
+        "Caturra",
+        "Catuai",
+        "Geisha",
+        "Pacamara",
+        "SL28",
+        "SL34",
+        "Mundo Novo",
+        "Pacas",
+        "Heirloom",
+        "Maragogype",
+        "Castillo",
+        "Catimor",
     }
     with SessionLocal() as db:
         rows = db.execute(text("SELECT name FROM varietals")).scalars().all()
@@ -113,9 +123,7 @@ def test_citext_uniqueness_collapses_case() -> None:
 
     # Check that 'Geisha' is already seeded; if not, skip.
     with SessionLocal() as db:
-        exists = db.execute(
-            text("SELECT id FROM varietals WHERE name = 'Geisha'")
-        ).scalar()
+        exists = db.execute(text("SELECT id FROM varietals WHERE name = 'Geisha'")).scalar()
     if exists is None:
         pytest.skip("Geisha seed not found — migration not applied")
 
@@ -131,9 +139,9 @@ def test_citext_uniqueness_collapses_case() -> None:
 def test_coffee_with_two_varietals(client: object) -> None:
     """POST /coffees with varietal_ids=[1,2] creates a coffee with 2 varietals."""
     _require_postgres()
-    try:
-        from starlette.testclient import TestClient
-    except ImportError:
+    import importlib.util
+
+    if importlib.util.find_spec("starlette") is None:
         pytest.skip("starlette not available")
 
     from sqlalchemy import text
@@ -142,9 +150,7 @@ def test_coffee_with_two_varietals(client: object) -> None:
 
     # Get first two varietal IDs from the DB.
     with SessionLocal() as db:
-        ids = db.execute(
-            text("SELECT id FROM varietals ORDER BY id LIMIT 2")
-        ).scalars().all()
+        ids = db.execute(text("SELECT id FROM varietals ORDER BY id LIMIT 2")).scalars().all()
     if len(ids) < 2:
         pytest.skip("Need at least 2 varietals in DB")
 
@@ -183,9 +189,7 @@ def test_coffee_with_two_varietals(client: object) -> None:
 
     # Cleanup
     with SessionLocal() as db:
-        db.execute(
-            text("DELETE FROM coffees WHERE name='__test_two_varietals__'")
-        )
+        db.execute(text("DELETE FROM coffees WHERE name='__test_two_varietals__'"))
         db.commit()
 
 
@@ -236,9 +240,7 @@ def test_cascade_delete_removes_join_rows() -> None:
     from app.db import SessionLocal
 
     with SessionLocal() as db:
-        v_id = db.execute(
-            text("SELECT id FROM varietals ORDER BY id LIMIT 1")
-        ).scalar()
+        v_id = db.execute(text("SELECT id FROM varietals ORDER BY id LIMIT 1")).scalar()
     if v_id is None:
         pytest.skip("No varietals in DB")
 
@@ -250,10 +252,7 @@ def test_cascade_delete_removes_join_rows() -> None:
             )
         ).scalar()
         db.execute(
-            text(
-                "INSERT INTO coffee_varietals (coffee_id, varietal_id) "
-                "VALUES (:cid, :vid)"
-            ),
+            text("INSERT INTO coffee_varietals (coffee_id, varietal_id) VALUES (:cid, :vid)"),
             {"cid": coffee_id, "vid": v_id},
         )
         db.commit()
@@ -279,9 +278,7 @@ def test_varietal_restrict_on_delete() -> None:
     # Insert a temporary varietal + a coffee that uses it.
     with SessionLocal() as db:
         v_id = db.execute(
-            text(
-                "INSERT INTO varietals (name) VALUES ('__test_restrict__') RETURNING id"
-            )
+            text("INSERT INTO varietals (name) VALUES ('__test_restrict__') RETURNING id")
         ).scalar()
         c_id = db.execute(
             text(
@@ -290,9 +287,7 @@ def test_varietal_restrict_on_delete() -> None:
             )
         ).scalar()
         db.execute(
-            text(
-                "INSERT INTO coffee_varietals (coffee_id, varietal_id) VALUES (:cid, :vid)"
-            ),
+            text("INSERT INTO coffee_varietals (coffee_id, varietal_id) VALUES (:cid, :vid)"),
             {"cid": c_id, "vid": v_id},
         )
         db.commit()
@@ -300,9 +295,7 @@ def test_varietal_restrict_on_delete() -> None:
     # Attempt to delete the varietal while a join row references it.
     with SessionLocal() as db:
         with pytest.raises(IntegrityError):
-            db.execute(
-                text("DELETE FROM varietals WHERE id=:vid"), {"vid": v_id}
-            )
+            db.execute(text("DELETE FROM varietals WHERE id=:vid"), {"vid": v_id})
             db.flush()
 
     # Cleanup
@@ -348,7 +341,5 @@ def test_create_varietal_on_the_fly(client: object) -> None:
 
     # Cleanup
     with SessionLocal() as db:
-        db.execute(
-            text("DELETE FROM varietals WHERE name='TestVarietalOnTheFly'")
-        )
+        db.execute(text("DELETE FROM varietals WHERE name='TestVarietalOnTheFly'"))
         db.commit()

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # --------------------------------------------------------------------------- #
 # Skip gate                                                                    #
 # --------------------------------------------------------------------------- #
@@ -81,9 +80,7 @@ def test_search_by_prefix_returns_matches() -> None:
 
     # Ensure Bourbon is seeded (from migration).
     with SessionLocal() as db:
-        bourbon_exists = db.execute(
-            text("SELECT id FROM varietals WHERE name='Bourbon'")
-        ).scalar()
+        bourbon_exists = db.execute(text("SELECT id FROM varietals WHERE name='Bourbon'")).scalar()
     if bourbon_exists is None:
         pytest.skip("Bourbon not seeded — migration not applied")
 
