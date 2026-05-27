@@ -20,12 +20,10 @@ import json
 from typing import Any
 
 import structlog
-from sqlalchemy import Date as SaDate
-from sqlalchemy import case, cast, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session, aliased
 
-from app.models.bag import Bag
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
 from app.models.equipment import Equipment
@@ -160,61 +158,6 @@ def get_flavor_descriptors(db: Session, user_id: int) -> list[Row]:
         """
     )
     return db.execute(stmt, {"user_id": user_id}).all()
-
-
-# --------------------------------------------------------------------------- #
-# HOME-04: Roast freshness buckets                                             #
-# --------------------------------------------------------------------------- #
-
-
-def get_roast_freshness_buckets(db: Session, user_id: int) -> list[Row]:
-    """Freshness buckets (0-3, 4-7, 8-14, 15-21, 22+ days) using bags.roast_date.
-
-    Hard rule: reads bags.roast_date ONLY, never coffees.roast_date (Pitfall 4).
-    Sessions without a bag or with roast_date=NULL are excluded by INNER JOIN.
-    Buckets require >=2 rated sessions each (D-07).
-    """
-    # Cast brewed_at in an explicit zone (UTC) so the day-count is stable
-    # regardless of the DB session's TimeZone GUC — a bare timestamptz->date
-    # cast uses the connection timezone and can shift a near-midnight brew
-    # across a bucket boundary (WR-03). The household logs in UTC.
-    days_expr = cast(func.timezone("UTC", BrewSession.brewed_at), SaDate) - Bag.roast_date
-
-    bucket_expr = case(
-        (days_expr <= 3, "0-3 days"),
-        (days_expr <= 7, "4-7 days"),
-        (days_expr <= 14, "8-14 days"),
-        (days_expr <= 21, "15-21 days"),
-        else_="22+ days",
-    ).label("freshness_bucket")
-
-    bucket_order_expr = case(
-        (days_expr <= 3, 1),
-        (days_expr <= 7, 2),
-        (days_expr <= 14, 3),
-        (days_expr <= 21, 4),
-        else_=5,
-    )
-
-    stmt = (
-        select(
-            bucket_expr,
-            func.avg(BrewSession.rating).label("avg_rating"),
-            func.count(BrewSession.id).label("session_count"),
-            func.min(bucket_order_expr).label("bucket_order"),
-        )
-        .join(Bag, BrewSession.bag_id == Bag.id)
-        .where(
-            BrewSession.user_id == user_id,
-            BrewSession.rating.is_not(None),
-            Bag.roast_date.is_not(None),
-            days_expr >= 0,  # exclude brews dated before the roast date (WR-02)
-        )
-        .group_by(bucket_expr)
-        .having(func.count(BrewSession.id) >= 2)
-        .order_by(func.min(bucket_order_expr))
-    )
-    return db.execute(stmt).all()
 
 
 # --------------------------------------------------------------------------- #
@@ -368,7 +311,7 @@ def compute_input_signature(db: Session, user_id: int) -> str:
     """SHA256 hex over this user's RATED sessions' AI-input fields (D-08/D-09, COST-4).
 
     Inputs per session: (coffee_id, float(rating), sorted flavor_note_ids_observed,
-    recipe_id, brewer_id, bag roast_date isoformat-or-None).
+    recipe_id, brewer_id).
 
     Free-text notes and timestamps are EXCLUDED so a notes typo-fix never
     invalidates the recommendation.
@@ -387,9 +330,7 @@ def compute_input_signature(db: Session, user_id: int) -> str:
             BrewSession.flavor_note_ids_observed,
             BrewSession.recipe_id,
             BrewSession.brewer_id,
-            Bag.roast_date,
         )
-        .outerjoin(Bag, BrewSession.bag_id == Bag.id)
         .where(
             BrewSession.user_id == user_id,
             BrewSession.rating.is_not(None),  # D-09: rated sessions only
@@ -408,7 +349,6 @@ def compute_input_signature(db: Session, user_id: int) -> str:
             sorted(row.flavor_note_ids_observed or []),
             row.recipe_id,
             row.brewer_id,
-            row.roast_date.isoformat() if row.roast_date else None,
         ]
 
     payload = [_serialize_row(r) for r in rows]
