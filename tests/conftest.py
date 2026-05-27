@@ -152,6 +152,24 @@ def client(app: Any) -> Iterator[Any]:
 
 
 @pytest.fixture
+def authed_client(app: Any, seeded_admin_user: dict[str, Any]) -> Iterator[Any]:
+    """``TestClient`` with a valid session cookie + ``csrftoken`` preloaded.
+
+    Mirrors ``tests/phase_04/conftest.py::authed_client`` so top-level tests
+    (e.g. ``tests/test_coffee_origins.py``) can hit auth-gated routes without
+    living under ``phase_04/``.
+    """
+    from fastapi.testclient import TestClient
+
+    csrf_token = "test-csrf-token-toplevel"  # noqa: S105 — test fixture, not a credential
+    with TestClient(app) as _client:
+        _client.cookies.set("session_id", seeded_admin_user["signed_cookie"])
+        _client.cookies.set("csrftoken", csrf_token)
+        _client.headers["X-CSRF-Token"] = csrf_token
+        yield _client
+
+
+@pytest.fixture
 def db_session() -> Iterator[Any]:
     """Per-test transactional rollback DB session.
 

@@ -9,7 +9,6 @@ Validation rules:
 
 * ``coffee_id``: required, ``>= 1``. FK to ``coffees.id`` (constraint added
   in plan 04-03).
-* ``roast_date``: optional date.
 * ``weight_grams``: optional; when present 1-10000 grams (10kg ceiling per
   Phase 4 CONTEXT specifics).
 * ``opened_at`` / ``finished_at``: optional datetimes (lifecycle markers).
@@ -27,7 +26,7 @@ posted to /bags.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,7 +37,6 @@ class BagCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     coffee_id: int = Field(..., ge=1)
-    roast_date: date | None = None
     weight_grams: int | None = Field(None, ge=1, le=10000)
     opened_at: datetime | None = None
     finished_at: datetime | None = None

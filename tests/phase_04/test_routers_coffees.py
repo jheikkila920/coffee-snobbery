@@ -119,14 +119,15 @@ def _seed_coffee(**kwargs: Any) -> int:
     from app.db import SessionLocal
     from app.services import coffees as coffees_service
 
+    country = kwargs.pop("country", None)
+    kwargs.pop("origin", None)
+    kwargs.pop("varietal", None)
     defaults: dict[str, Any] = {
         "name": kwargs.pop("name", "Geometry"),
         "roaster_id": kwargs.pop("roaster_id", None),
-        "country": kwargs.pop("country", None),
-        "origin": kwargs.pop("origin", None),
+        "origins": [(country, None)] if country else [],
         "process": kwargs.pop("process", None),
         "roast_level": kwargs.pop("roast_level", None),
-        "varietal": kwargs.pop("varietal", None),
         "notes": kwargs.pop("notes", ""),
         "advertised_flavor_note_ids": kwargs.pop("advertised_flavor_note_ids", []),
         "by_user_id": kwargs.pop("by_user_id", 0),
@@ -215,6 +216,8 @@ def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) ->
             "name": "Geometry",
             "process": "washed",
             "roast_level": "light",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "notes": "",
         },
     )
@@ -224,8 +227,11 @@ def test_create_coffee_minimal_valid(authed_client: Any, clean_catalog: None) ->
     assert 'hx-swap-oob="innerHTML"' in resp.text
     # List-container markers appear inside the OOB div.
     assert "space-y-3" in resp.text or 'class="hidden md:block"' in resp.text
-    # form-mount ID must NOT appear in the response body (it's the swap target, not content).
-    assert "coffee-form-mount" not in resp.text
+    # No form is rendered in the response — only the row + the OOB list update.
+    # (15.1-05 added per-row desktop edit buttons that reference #coffee-form-mount
+    # as hx-target, so the literal string is now present in row markup; the contract
+    # being tested is the absence of a re-rendered <form>.)
+    assert "<form " not in resp.text
 
 
 def test_create_coffee_with_array_round_trip(authed_client: Any, clean_catalog: None) -> None:
@@ -250,6 +256,8 @@ def test_create_coffee_with_array_round_trip(authed_client: Any, clean_catalog: 
         data={
             "name": "Geometry",
             "notes": "",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "advertised_flavor_note_ids": [str(fn1), str(fn2)],
         },
     )
@@ -293,14 +301,15 @@ def test_create_coffee_rejects_blank_name(authed_client: Any, clean_catalog: Non
         "/coffees",
         data={
             "name": "",
-            "country": "Ethiopia",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "notes": "",
         },
     )
     assert resp.status_code == 200
     body = resp.text
     assert "text-red-700" in body
-    # Submitted country preserved on re-render (D-04).
+    # Submitted origin country preserved on re-render (D-04).
     assert "Ethiopia" in body
 
 
@@ -387,6 +396,8 @@ def test_update_persists_array_change(authed_client: Any, clean_catalog: None) -
         data={
             "name": "Geometry",
             "notes": "",
+            "origins_country": "Ethiopia",
+            "origins_region": "",
             "advertised_flavor_note_ids": [str(fn1)],
         },
     )

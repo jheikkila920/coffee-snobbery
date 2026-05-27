@@ -33,6 +33,7 @@ vocabulary, but ``NULL`` is the universal "unknown" sentinel.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -45,10 +46,14 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, CITEXT, TIMESTAMP
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.coffee_origin import CoffeeOrigin
+    from app.models.varietal import Varietal
 
 
 class Coffee(Base):
@@ -64,11 +69,12 @@ class Coffee(Base):
         ForeignKey("roasters.id", ondelete="SET NULL"),
         nullable=True,
     )
-    country: Mapped[str | None] = mapped_column(Text, nullable=True)
-    origin: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # country and origin columns removed in p15_1_multi_origin migration (D-05).
+    # Use coffee.origins (relationship to CoffeeOrigin) for origin data.
+    # varietal column removed in p15_1_varietal_m2m migration (CATALOG-05).
+    # Use coffee.varietals (m2m relationship via coffee_varietals) for varietal data.
     process: Mapped[str | None] = mapped_column(Text, nullable=True)
     roast_level: Mapped[str | None] = mapped_column(Text, nullable=True)
-    varietal: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     advertised_flavor_note_ids: Mapped[list[int]] = mapped_column(
         ARRAY(BigInteger),
@@ -76,6 +82,24 @@ class Coffee(Base):
         server_default=text("'{}'::bigint[]"),
     )
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
+    # Origin rows — one per origin entry. A single-origin coffee has one row;
+    # a blend has >=2. is_blend is derived: len(coffee.origins) > 1 (D-22).
+    origins: Mapped[list[CoffeeOrigin]] = relationship(
+        "CoffeeOrigin",
+        cascade="all, delete-orphan",
+        order_by="CoffeeOrigin.sort_order",
+    )
+
+    # Varietals — m2m via coffee_varietals join table (CATALOG-05 D-02).
+    # lazy="selectin" so varietals load with the coffee in a single query.
+    varietals: Mapped[list[Varietal]] = relationship(
+        "Varietal",
+        secondary="coffee_varietals",
+        lazy="selectin",
+        order_by="Varietal.name",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
@@ -93,7 +117,7 @@ class Coffee(Base):
         ),
         CheckConstraint(
             "roast_level IS NULL OR roast_level IN "
-            "('light','medium-light','medium','medium-dark','dark','unknown')",
+            "('ultra-light','nordic-light','light','medium-light','medium','medium-dark','dark','unknown')",
             name="coffees_roast_level_check",
         ),
         Index("ix_coffees_roaster_id", "roaster_id"),

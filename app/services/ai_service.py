@@ -50,6 +50,7 @@ from app.events import (
 from app.models.ai_recommendation import AIRecommendation
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
+from app.models.coffee_origin import CoffeeOrigin
 from app.models.equipment import Equipment
 from app.models.recipe import Recipe
 from app.services import analytics as analytics_service  # noqa: F401 — used in Task 3
@@ -415,8 +416,19 @@ def suggest_recipe(
             BrewSession.user_id == user_id,
             BrewSession.rating.is_not(None),
             BrewSession.recipe_id.is_not(None),
-            # Case-insensitive style matching (Coffee columns are nullable)
-            func.lower(Coffee.origin) == func.lower(origin) if origin else text("TRUE"),
+            # Case-insensitive style matching. Origin matches ANY of the coffee's
+            # origins (D-01 multi-origin): a Yirgacheffe+Bourbon blend counts when
+            # filtering by 'Ethiopia'. Process/roast_level remain Coffee columns.
+            (
+                select(CoffeeOrigin.id)
+                .where(
+                    CoffeeOrigin.coffee_id == Coffee.id,
+                    func.lower(CoffeeOrigin.country) == func.lower(origin),
+                )
+                .exists()
+                if origin
+                else text("TRUE")
+            ),
             func.lower(Coffee.process) == func.lower(process) if process else text("TRUE"),
             (
                 func.lower(Coffee.roast_level) == func.lower(roast_level)
@@ -485,7 +497,17 @@ def alt_brewer_callout(
             BrewSession.user_id == user_id,
             BrewSession.rating.is_not(None),
             BrewSession.brewer_id.is_not(None),
-            func.lower(Coffee.origin) == func.lower(origin) if origin else text("TRUE"),
+            # Origin matches ANY of the coffee's origins (D-01 multi-origin).
+            (
+                select(CoffeeOrigin.id)
+                .where(
+                    CoffeeOrigin.coffee_id == Coffee.id,
+                    func.lower(CoffeeOrigin.country) == func.lower(origin),
+                )
+                .exists()
+                if origin
+                else text("TRUE")
+            ),
             func.lower(Coffee.process) == func.lower(process) if process else text("TRUE"),
             (
                 func.lower(Coffee.roast_level) == func.lower(roast_level)

@@ -17,9 +17,17 @@ Validation rules:
   CONTEXT specifics; default empty list keeps downstream queries
   cleaner than NULL.
 
+Note: ``country``, ``origin``, and ``varietal`` fields were removed in Plan 15.1-01
+(D-05/D-22). Origin data is now collected via ``origins_country``/``origins_region``
+repeated form keys handled directly in ``_parse_form_payload`` (bypassing Pydantic
+the same way ``advertised_flavor_note_ids`` bypasses it). The ``varietal`` free-text
+column is replaced by a join table in Plan 15.1-03.
+
 Mass-assignment defense (T-04-MASS): ``ConfigDict(extra="forbid")`` rejects
 any field not declared above — e.g., a malicious ``is_admin=True`` posted
 to /coffees raises ``ValidationError`` rather than being silently dropped.
+``origins_country`` and ``origins_region`` keys are stripped from the payload
+before reaching Pydantic, so ``extra="forbid"`` is not tripped.
 """
 
 from __future__ import annotations
@@ -34,19 +42,25 @@ class CoffeeCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     roaster_id: int | None = Field(None, ge=1)
-    country: str | None = Field(None, max_length=80)
-    origin: str | None = Field(None, max_length=120)
+    # country, origin, varietal fields removed (Plan 15.1-01 D-05/D-22).
+    # Origins handled via origins_country/origins_region getlist in router.
+    # Varietal free-text replaced by join table in Plan 15.1-03.
     process: str | None = Field(
         None,
         pattern=r"^(washed|natural|honey|anaerobic|experimental|unknown)$",
     )
     roast_level: str | None = Field(
         None,
-        pattern=r"^(light|medium-light|medium|medium-dark|dark|unknown)$",
+        pattern=r"^(ultra-light|nordic-light|light|medium-light|medium|medium-dark|dark|unknown)$",
     )
-    varietal: str | None = Field(None, max_length=120)
     notes: str = Field("", max_length=2000)
     advertised_flavor_note_ids: list[int] = Field(default_factory=list)
+    # varietal_ids bypasses Pydantic (same as origins_country/origins_region): the router
+    # collects them via getlist("varietal_ids") in _parse_form_payload and strips them from
+    # schema_input before CoffeeCreate sees the payload (extra="forbid" guard). This field
+    # is declared here solely as documentation + for test introspection; it will always be
+    # the empty-list default at validation time since the router never populates it.
+    varietal_ids: list[int] = Field(default_factory=list)
 
     @field_validator("advertised_flavor_note_ids")
     @classmethod

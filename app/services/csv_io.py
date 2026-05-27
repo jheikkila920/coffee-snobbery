@@ -19,8 +19,8 @@ Per-row resolution order (RESEARCH §Import algorithm):
 1. **Coffee (D-12)** — citext ``Coffee.name == name``; roaster-qualified by
    ``(name, roaster_id)`` when a roaster column is present; ambiguous
    multi-match → refused; no match → refused.
-2. **Bag (D-13)** — when the row names a bag (coffee + ``roast_date``) and it
-   resolves → link; named-but-unmatched → refused; not named → ``bag_id=None``.
+2. **Bag (D-20)** — ``bag_id`` is always ``None``; the bag column was removed
+   so bag matching is no longer attempted on import.
 3. **Dedup (D-14)** — probe ``(user_id, coffee_id, brewed_at)`` via ``select``
    (no UNIQUE constraint exists — Plan 01 deferred it); existing → skipped.
 4. **Validate** the accepted row through :class:`app.schemas.brew_csv.BrewCsvRow`.
@@ -58,7 +58,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.events import BREW_CSV_EXPORTED, BREW_CSV_IMPORTED
-from app.models.bag import Bag
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
 from app.models.equipment import Equipment
@@ -66,6 +65,7 @@ from app.models.flavor_note import FlavorNote
 from app.models.recipe import Recipe
 from app.models.roaster import Roaster
 from app.schemas.brew_csv import BrewCsvRow
+from app.services.brew_sessions import _sync_coffee_flavor_notes
 from app.services.flavor_notes import create_flavor_note
 
 log = structlog.get_logger(__name__)
@@ -94,7 +94,6 @@ _FORMULA_TRIGGERS = ("=", "+", "-", "@")
 EXPORT_FIELDNAMES = [
     "coffee_name",
     "roaster_name",
-    "roast_date",
     "recipe_name",
     "brewer",
     "grinder",
@@ -126,7 +125,6 @@ _HEADER_ALIASES: dict[str, str] = {
     # --- Snobbery-native (authoritative) ---
     "coffee_name": "coffee_name",
     "roaster_name": "roaster_name",
-    "roast_date": "roast_date",
     "recipe_name": "recipe_name",
     "brewer": "brewer",
     "grinder": "grinder",
@@ -236,31 +234,6 @@ def _resolve_coffee(db: Session, *, name: str, roaster_name: str) -> tuple[int |
     return matches[0], None
 
 
-def _resolve_bag(
-    db: Session, *, coffee_id: int, roast_date_raw: str
-) -> tuple[int | None, str | None]:
-    """Resolve an optional bag for the row (D-13).
-
-    No ``roast_date`` named → ``(None, None)`` (freestyle import, ``bag_id``
-    stays null). Named but unmatched (or unparseable) → ``(None, reason)``
-    (refused). A matched bag → ``(bag_id, None)``.
-    """
-    if not roast_date_raw:
-        return None, None
-    try:
-        roast_date = datetime.fromisoformat(roast_date_raw).date()
-    except ValueError:
-        return None, f"bag (roast {roast_date_raw}) not found"
-    bag_id = (
-        db.execute(select(Bag.id).where(Bag.coffee_id == coffee_id, Bag.roast_date == roast_date))
-        .scalars()
-        .first()
-    )
-    if bag_id is None:
-        return None, f"bag (roast {roast_date}) not found"
-    return bag_id, None
-
-
 def _parse_brewed_at(raw: str) -> datetime:
     """Parse the row's ``brewed_at`` to a tz-aware UTC datetime.
 
@@ -366,12 +339,8 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
             outcomes.append(RowOutcome("refused", row_number, reason or "coffee not resolved"))
             continue
 
-        bag_id, bag_reason = _resolve_bag(
-            db, coffee_id=coffee_id, roast_date_raw=row.get("roast_date", "")
-        )
-        if bag_reason is not None:
-            outcomes.append(RowOutcome("refused", row_number, bag_reason))
-            continue
+        # D-20: bag column removed; all imports get bag_id=None
+        bag_id = None
 
         try:
             brewed_at = _parse_brewed_at(row.get("brewed_at", ""))
@@ -391,7 +360,6 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
             validated = BrewCsvRow(
                 coffee_name=row.get("coffee_name", ""),
                 roaster_name=row.get("roaster_name", ""),
-                bag_label=row.get("roast_date", ""),
                 brewer=row.get("brewer", ""),
                 grinder=row.get("grinder", ""),
                 kettle=row.get("kettle", ""),
@@ -443,6 +411,7 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
     # Single transaction: auto-create observed notes + add all sessions, commit
     # once. A DB error here rolls back the entire batch (Pitfall 4).
     inserted = 0
+    inserted_sessions: list[BrewSession] = []
     if pending:
         try:
             for _row_number, session, notes_raw in pending:
@@ -450,6 +419,7 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
                     db, names_raw=notes_raw, by_user_id=by_user_id
                 )
                 db.add(session)
+                inserted_sessions.append(session)
             db.commit()
         except Exception:
             db.rollback()
@@ -457,6 +427,23 @@ def import_brews(db: Session, *, raw_bytes: bytes, by_user_id: int) -> list[RowO
         for row_number, _session, _notes_raw in pending:
             outcomes.append(RowOutcome("inserted", row_number, "imported"))
             inserted += 1
+
+    # D-11: Write-back flavor chips to parent coffee for each imported session.
+    # Second transaction: sessions are already committed; if write-back fails the
+    # sessions stay and a re-import (last-write-wins per D-09) would fix the chips.
+    if inserted_sessions:
+        try:
+            for session in inserted_sessions:
+                _sync_coffee_flavor_notes(
+                    db,
+                    coffee_id=session.coffee_id,
+                    old_session_ids=[],
+                    new_session_ids=list(session.flavor_note_ids_observed or []),
+                )
+            db.commit()
+        except Exception:
+            db.rollback()
+            # Non-fatal: sessions committed; chips sync incomplete but recoverable.
 
     skipped = sum(1 for o in outcomes if o.status == "skipped")
     refused = sum(1 for o in outcomes if o.status == "refused")
@@ -582,7 +569,6 @@ def export_brews(
     writer.writeheader()
     for s in sessions:
         coffee_name, roaster_name = name_caches["coffee"].get(s.coffee_id, ("", ""))
-        bag_roast = name_caches["bag"].get(s.bag_id, "") if s.bag_id else ""
         observed = _NOTE_DELIMITER.join(
             name_caches["note"].get(nid, "") for nid in (s.flavor_note_ids_observed or [])
         )
@@ -590,7 +576,6 @@ def export_brews(
             {
                 "coffee_name": _neutralize_formula(coffee_name),
                 "roaster_name": _neutralize_formula(roaster_name),
-                "roast_date": bag_roast,
                 "recipe_name": _neutralize_formula(name_caches["recipe"].get(s.recipe_id, "")),
                 "brewer": _neutralize_formula(name_caches["equipment"].get(s.brewer_id, "")),
                 "grinder": _neutralize_formula(name_caches["equipment"].get(s.grinder_id, "")),
@@ -618,11 +603,10 @@ def export_brews(
 def _build_name_caches(db: Session, sessions: list[BrewSession]) -> dict[str, dict]:
     """Resolve every referenced id → name in one query per entity type.
 
-    Returns ``{"coffee": {id: (coffee_name, roaster_name)}, "bag": {id: roast},
+    Returns ``{"coffee": {id: (coffee_name, roaster_name)},
     "recipe": {id: name}, "equipment": {id: label}, "note": {id: name}}``.
     """
     coffee_ids = {s.coffee_id for s in sessions}
-    bag_ids = {s.bag_id for s in sessions if s.bag_id}
     recipe_ids = {s.recipe_id for s in sessions if s.recipe_id}
     equipment_ids = {eq for s in sessions for eq in (s.brewer_id, s.grinder_id, s.kettle_id) if eq}
     note_ids = {nid for s in sessions for nid in (s.flavor_note_ids_observed or [])}
@@ -635,13 +619,6 @@ def _build_name_caches(db: Session, sessions: list[BrewSession]) -> dict[str, di
             .where(Coffee.id.in_(coffee_ids))
         ).all():
             coffee[cid] = (cname or "", rname or "")
-
-    bag: dict[int, str] = {}
-    if bag_ids:
-        for bid, roast_date in db.execute(
-            select(Bag.id, Bag.roast_date).where(Bag.id.in_(bag_ids))
-        ).all():
-            bag[bid] = roast_date.isoformat() if roast_date else ""
 
     recipe: dict[int, str] = {}
     if recipe_ids:
@@ -666,7 +643,7 @@ def _build_name_caches(db: Session, sessions: list[BrewSession]) -> dict[str, di
         ).all():
             note[nid] = nname or ""
 
-    return {"coffee": coffee, "bag": bag, "recipe": recipe, "equipment": equipment, "note": note}
+    return {"coffee": coffee, "recipe": recipe, "equipment": equipment, "note": note}
 
 
 __all__ = [

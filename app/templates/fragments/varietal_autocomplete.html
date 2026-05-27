@@ -1,0 +1,44 @@
+{# Varietal autocomplete dropdown for the chip-builder (CATALOG-05 D-03).
+   Context keys:
+     - items: list of Varietal objects with .id and .name
+     - query: the user's typed string
+     - exact_match: bool — suppress "Add as new varietal" when exact match exists
+
+   Per-item click calls commitItem($el) on the enclosing varietalChips x-data scope.
+   The "Add as new varietal?" affordance posts to /coffees/varietals.
+   CSRF is handled globally by htmx-listeners.js (X-CSRF-Token header injected
+   from <meta name="csrf-token"> on every HTMX request — T-15.1-21 mitigated).
+#}
+<ul role="listbox" class="bg-cream-100 border border-espresso-200 rounded-lg max-h-64 overflow-y-auto dark:bg-espresso-900 dark:border-espresso-800">
+  {% for item in items %}
+    {% set lower = item.name|lower %}
+    {% set q_lower = query|lower %}
+    <li role="option"
+        x-on:click="commitItem($el)"
+        data-item-id="{{ item.id }}"
+        data-item-name="{{ item.name }}"
+        class="px-3 py-2 text-base hover:bg-cream-200 dark:hover:bg-espresso-800 cursor-pointer min-h-[44px]">
+      {% if q_lower in lower %}
+        {% set idx = lower.find(q_lower) %}
+        {{ item.name[:idx] }}<strong class="font-semibold">{{ item.name[idx:idx + query|length] }}</strong>{{ item.name[idx + query|length:] }}
+      {% else %}
+        {{ item.name }}
+      {% endif %}
+    </li>
+  {% endfor %}
+  {% if not exact_match and query %}
+    {# Create-on-the-fly affordance: hx-post to /coffees/varietals.
+       CSRF token injected automatically by htmx-listeners.js from
+       <meta name="csrf-token"> (T-15.1-21). The response is a chip
+       fragment appended to #varietal-chip-result via x-on:htmx:after-request
+       on the parent Alpine scope. #}
+    <li role="option"
+        class="px-3 py-2 text-base bg-espresso-700 text-cream-50 cursor-pointer min-h-[44px]"
+        hx-post="/coffees/varietals"
+        hx-vals='{"name": "{{ query }}"}'
+        hx-target="#varietal-new-chip-target"
+        hx-swap="afterbegin">
+      + Add "{{ query }}" as a new varietal
+    </li>
+  {% endif %}
+</ul>

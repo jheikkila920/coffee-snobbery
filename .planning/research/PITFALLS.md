@@ -1,7 +1,7 @@
 # Domain Pitfalls — Snobbery
 
 **Domain:** Self-hosted household coffee log with scheduled AI calls + web search, FastAPI + HTMX + Postgres + PWA on a single VPS
-**Researched:** 2026-05-16
+**Researched:** 2026-05-16 (v1.1); updated 2026-05-25 (v1.2 additions)
 **Confidence:** HIGH where verified via official docs / WebSearch corroboration; LOW marked inline.
 
 Each pitfall: **Warning signs (observable) → Prevention (one specific action) → Owning phase/layer.**
@@ -100,17 +100,343 @@ Each pitfall: **Warning signs (observable) → Prevention (one specific action) 
 
 ---
 
-## 8. Top 5 — Most Critical (required reading for every planner)
+## 8. v1.2 Feature-Specific Pitfalls
+
+These pitfalls are specific to new v1.2 capabilities: on-demand AI research + predict-rating, cafe quick-rate, prebuilt-image distribution, IA restructure, and the mobile-first full rework. They are in addition to the v1.1 pitfalls above, not replacements.
+
+---
+
+### v1.2-AI-1: On-Demand Research Removes the Cadence Gate — Surprise Bill Risk
+
+**What goes wrong:**
+The existing AI cost control is a single gate: signature-based nightly regen fires at most once per user per night. An on-demand "research a coffee + predict rating" button is a different contract — the user can tap it as many times as they want, each call consuming web-search quota. Two users tapping on 10 different coffees in an afternoon can spike costs 10–20× the normal nightly baseline.
+
+**Why it happens:**
+The nightly flow has natural throttling (one run per day per user, 30s+ execution, UI shows "Generating..." for a long time). The on-demand button does not — it returns fast for already-cached results and costs nothing, but on a cache miss it fires the full web-search stack.
+
+**How to avoid:**
+- DB cache table `coffee_research(coffee_id, provider, model, research_text, researched_at)` keyed on `(coffee_id, provider, model)`. Serve cached results if fresher than 7 days. Prediction from cached research is a non-search LLM call — cheap.
+- `slowapi` per-user per-day limit on `POST /ai/research` (recommend 10 calls/user/day). Return a 429 with a human-readable message including the reset time.
+- Expose remaining quota in the UI: "5 of 10 daily research calls used."
+- Separate the two steps at the API level: `POST /ai/research` (web search, cached) vs. `POST /ai/predict` (non-search, uses stored research text). The predict endpoint has no web-search cost.
+
+**Warning signs:**
+- No DB cache table for research results.
+- No `slowapi` decorator on the research route.
+- Research and prediction are a single atomic endpoint with no result reuse.
+- The endpoint accepts arbitrary free-text coffee names — not `coffee_id` FK — making caching impossible.
+
+**Phase to address:** AI Research + Predict phase. Both cache table and rate limit are blocking requirements, not optional polish.
+
+---
+
+### v1.2-AI-2: Predicted Rating Presented Without Uncertainty — Trust Erosion
+
+**What goes wrong:**
+The model returns a number. The UI displays it next to the coffee name using the same star-rating component as real brew sessions. The user brews the coffee, gives it a 2.5 when it predicted 4.2, and stops trusting the feature. On a 0–5 scale with 0.25 steps, a ±1 prediction window covers 40% of the range.
+
+**How to avoid:**
+- Display as a range or confidence band: "Likely 3.5–4.5" — not a point estimate.
+- Include the basis: "Based on your 12 sessions, 4 matching flavor notes."
+- Use a visually distinct component — not the star-rating widget used for real sessions. A text description ("probably a good fit," "may not match your preferences") is more honest than a false-precision number.
+- Gate prediction behind the cold-start threshold: ≥3 sessions AND ≥5 distinct flavor notes. The same gate that guards the nightly recommendation — reuse `analytics.get_ai_eligibility(user_id)`.
+- Store the prediction with `sessions_at_prediction` count so the UI can note "predicted when you had N sessions" — transparency about staleness.
+
+**Warning signs:**
+- Prediction displayed with the `<star-rating>` component used for real brew ratings.
+- No minimum-session gate on the prediction path.
+- The LLM prompt does not instruct the model to express uncertainty.
+
+**Phase to address:** AI Research + Predict phase.
+
+---
+
+### v1.2-CAFE-1: Cafe Sessions Pollute Brew Analytics and AI Signal
+
+**What goes wrong:**
+Cafe sessions have no grind, dose, ratio, or recipe — they're taste-only. If stored as `brew_sessions` rows with NULL fields, the analytics home page includes them in ratio preference derivations, equipment usage counts, and the AI input signature. A user with 20 cafe sessions gets skewed analytics (apparent grind preferences from NULL rows) and the AI signature changes on every cafe log, triggering unnecessary nightly regens.
+
+**Why it happens:**
+The obvious shortcut is to reuse `brew_sessions` with NULL columns for the brew-method fields. It avoids a migration and reuses the existing list/filter UI. But `analytics.py` queries assume NULLs mean "user didn't fill this in," not "this is a structurally different record type."
+
+**How to avoid:**
+- Add `session_type ENUM('brew', 'cafe')` to `brew_sessions` in one migration.
+- Filter `session_type = 'brew'` in ALL analytics queries: ratio derivations, equipment usage, grind preference, sweet spots. This is backward-compatible — all existing rows are `'brew'`.
+- AI input signature generator must exclude cafe sessions: `WHERE session_type = 'brew'`.
+- `equipment.usage_count` increments skip NULL `equipment_id` (already true for the FK path) — but explicitly verify the cafe create route does not touch `usage_count` at all.
+- Prefill resolver for `/brew/new` must filter `session_type = 'brew'` when finding the "last session."
+- CSV export: include `session_type` column. Import: reject rows with `session_type=cafe` that also have `recipe_id` set.
+
+**Warning signs:**
+- `brew_sessions` has no discriminator column.
+- `analytics.py` queries lack a `session_type` filter.
+- The prefill "last session" query does not filter by type.
+- `equipment.usage_count` count drifts after logging cafe sessions.
+
+**Phase to address:** Cafe Quick-Rate phase. The migration and analytics query updates are not optional cleanup — they must ship with the feature.
+
+---
+
+### v1.2-CAFE-2: Cafe Log "Prefill Fast Path" Pulls Irrelevant Data
+
+**What goes wrong:**
+The brew-session prefill logic resolves equipment, recipe, bag, and grind from the last session. A cafe quick-rate has none of these. If the prefill path is naively extended to the cafe form, it may pre-populate brew-specific fields (grinder, recipe) that have no meaning in a cafe context — and those "prefilled" nulls may be stored as intended values rather than omitted fields.
+
+**How to avoid:**
+- The cafe log form is a separate, simpler form — not the brew form with fields hidden. It should have: brand/name, origin (optional), brew method (select: espresso, filter, pour-over, etc.), rating, notes. No grind, no dose, no recipe, no equipment.
+- Do not route cafe logs through the brew prefill resolver. They have their own prefill: repeat the last cafe's brand/name if it's a regular spot (useful for "same cafe, different coffee").
+- Return `session_type` in the prefill fragment so the client knows which form context it's in.
+
+**Warning signs:**
+- The cafe form shares a Jinja template with the brew form, with fields conditionally hidden via Alpine.
+- The cafe create route calls `resolve_prefill()` and discards most of the result.
+- Brew-specific fields appear in the cafe database row with placeholder values.
+
+**Phase to address:** Cafe Quick-Rate phase.
+
+---
+
+### v1.2-IMAGE-1: Prebuilt Image Bakes Secrets Into Layers
+
+**What goes wrong:**
+A developer runs `docker compose build` locally with a `.env` file present. The Dockerfile has `ARG DATABASE_URL` or `ARG SECRET_KEY`. The build-time arg value ends up in the image layer metadata. Anyone who pulls the image can run `docker history <image>` and read the secrets.
+
+**How to avoid:**
+- `.dockerignore` must exclude `.env*`. Verify with `cat .dockerignore | grep env`.
+- No `ARG` for secrets in the Dockerfile. Secrets are runtime env vars only — never build-time.
+- Add a CI step before push: `docker history ghcr.io/org/snobbery:latest --no-trunc | grep -i "secret\|key\|pass\|database"` → fail if any match.
+- The published `docker-compose.yml` references only named env vars to be set by the operator — never default values for secrets.
+
+**Warning signs:**
+- `docker history <image>` output contains any of: `SECRET_KEY`, `DATABASE_URL`, `API_KEY`, `PASSWORD`.
+- Dockerfile has `ARG SECRET_KEY` or equivalent.
+- `.dockerignore` is missing or empty.
+
+**Phase to address:** Self-Host Packaging phase. Secret audit is a blocking gate before any registry push.
+
+---
+
+### v1.2-IMAGE-2: Fresh Operator Hits /login, Not /setup — Can't Bootstrap
+
+**What goes wrong:**
+A new operator pulls the image, runs `docker compose up`, navigates to the app. If zero users exist, the app serves the login form (because `/` redirects to `/login` when not authenticated). The operator tries to log in, fails, and thinks the app is broken. They have no way to know about `/setup`.
+
+**How to avoid:**
+- When `setup_completed = false` in `app_settings`, the `/` route should redirect to `/setup` instead of `/login`. This is a one-line change in the existing `require_user` dependency or the root route handler.
+- `entrypoint.sh` should log a startup message when setup is incomplete: `INFO: No users configured. Visit /setup to create the first admin account.`
+- The README deploy section must include "First run: visit /setup before anything else" as the first step after `docker compose up`.
+- Test this path explicitly: fresh volume + `docker compose up` → verify `/setup` is reachable and the redirect fires.
+
+**Warning signs:**
+- The root route only redirects authenticated users to `/`; unauthenticated users always see `/login`.
+- No startup log message for setup_completed=false.
+- README deploy section starts with "Log in" rather than "/setup."
+
+**Phase to address:** Self-Host Packaging phase.
+
+---
+
+### v1.2-IMAGE-3: G-01 Class Bug Recurs — Root-Owned Volumes on Operator Deploy
+
+**Prior art:** Snobbery already hit this. G-01 (STATE.md Deferred Items, still open): VPS named volumes were root-owned, blocking backup and photo writes. The Dockerfile was fixed to create app-owned mountpoints for fresh volumes, but this fix only applies to volumes created after the Dockerfile change. Existing volumes on the VPS predate the fix.
+
+**What goes wrong:**
+An operator runs `docker compose up` for the first time. If any volume was pre-created by a previous failed start (or by Docker's default initialization, which can run the container as root), the `/app/data` directory inside the container is owned by root. The app user cannot write backups or photos. The failure is silent — no error in the web UI, the backup scheduler logs a failure but continues.
+
+**How to avoid:**
+- Fix permanently in `entrypoint.sh`: before running alembic, check and fix ownership:
+  ```bash
+  chown -R app:app /app/data 2>/dev/null || true
+  ```
+  This requires the entrypoint to start as root and drop to the app user after the chown, via `exec gosu app uvicorn ...` or `su-exec`. This is the canonical fix for G-01 — not the Dockerfile `RUN chown` which only covers fresh volume creation.
+- Add a startup health check: verify `/app/data/backups` and `/app/data/photos` are writable; log a WARN if not.
+- G-01 is marked open in STATE.md. Closing it requires the entrypoint fix, not just documentation.
+
+**Warning signs:**
+- `entrypoint.sh` does not contain a runtime chown or ownership check.
+- The backup scheduler logs failures but the app continues running (silent failure pattern).
+- `ls -la /app/data` in the container shows `root root`.
+
+**Phase to address:** Self-Host Packaging phase (v1.1 debt cleanup). G-01 closes only when the entrypoint runtime chown is shipped.
+
+---
+
+### v1.2-IMAGE-4: Migration Race on First Boot — Postgres Not Ready
+
+**What goes wrong:**
+`docker compose up` starts both containers simultaneously. The web container reaches `alembic upgrade head` before the db container has finished initializing a fresh Postgres data directory (5–15 seconds). Alembic fails with a connection error. uvicorn starts against an empty schema. Every request returns 500.
+
+**How to avoid:**
+- Add `depends_on: condition: service_healthy` for the web service in `docker-compose.yml`, with a healthcheck on the db service:
+  ```yaml
+  coffee-snobbery-db:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  coffee-snobbery:
+    depends_on:
+      coffee-snobbery-db:
+        condition: service_healthy
+  ```
+- As a belt-and-suspenders backup, `entrypoint.sh` can also include a `pg_isready` wait loop — this helps operators using `docker run` directly without compose.
+
+**Warning signs:**
+- `docker-compose.yml` has `depends_on: coffee-snobbery-db` without `condition: service_healthy`.
+- On first `docker compose up`, the web container exits immediately with a database connection error.
+
+**Phase to address:** Self-Host Packaging phase.
+
+---
+
+### v1.2-IMAGE-5: Multi-Arch Image Missing — Breaks ARM Operators
+
+**What goes wrong:**
+The image is built on John's amd64 VPS and published as a single-arch manifest. Operators on Apple Silicon Macs or ARM VPSes (Hetzner ARM, AWS Graviton) either run under emulation (slow) or see a `no matching manifest` pull error.
+
+The Tailwind CLI binary download in the Dockerfile is the only arch-sensitive step. The current Dockerfile likely hardcodes `tailwindcss-linux-x64`.
+
+**How to avoid:**
+- Use `docker buildx build --platform linux/amd64,linux/arm64` in the CI publish job.
+- In the Dockerfile, use Docker's `TARGETARCH` build arg to select the correct Tailwind binary:
+  ```dockerfile
+  ARG TARGETARCH
+  RUN ARCH=${TARGETARCH:-amd64}; \
+      curl -fsSL "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-${ARCH}" \
+      -o /usr/local/bin/tailwindcss && chmod +x /usr/local/bin/tailwindcss
+  ```
+  Note: Tailwind uses `x64` not `amd64` in its binary names — map `amd64→x64`, `arm64→arm64`.
+- Verify the multi-arch manifest after push: `docker manifest inspect ghcr.io/org/snobbery:latest` should show both digests.
+
+**Warning signs:**
+- Dockerfile has a hardcoded `tailwindcss-linux-x64` URL.
+- Registry manifest has a single digest, not a manifest list.
+- CI uses `docker build` not `docker buildx build`.
+
+**Phase to address:** Self-Host Packaging phase. Multi-arch must be part of the initial image publishing setup.
+
+---
+
+### v1.2-IMAGE-6: Tailwind Glob Misses New Template Directories
+
+**What goes wrong:**
+The Dockerfile bakes the compiled Tailwind CSS at build time. New templates added for v1.2 (cafe quick-rate form, AI research page, reworked nav) live in new or existing directories. If `tailwind.config.js` content glob does not cover them, their utility classes are stripped from the compiled output. The feature looks correct in development (where Tailwind is run locally or CDN is used) but broken in the container.
+
+**Why it happens:**
+The glob `./app/templates/**/*.html` covers all subdirectories, so this is only a risk if templates are placed outside `app/templates/`. But it's worth verifying the glob also covers `*.js` files for Alpine component classes.
+
+**How to avoid:**
+- Keep the glob broad: `["./app/templates/**/*.html", "./app/static/js/**/*.js"]`. Verify it covers Alpine component files.
+- Add a Dockerfile step that fails the build if the compiled CSS is suspiciously small: `wc -c app/static/css/tailwind.css | awk '$1 < 50000 { exit 1 }'` (adjust threshold based on current compiled size).
+- Any phase that adds new templates must verify the glob catches them as an acceptance criterion.
+
+**Warning signs:**
+- Compiled `tailwind.css` is smaller after a build that added new templates.
+- New UI elements appear unstyled in the container but styled in dev.
+- Alpine component `.js` files use Tailwind classes that don't appear in the compiled CSS.
+
+**Phase to address:** Every phase adding new templates. Glob audit belongs in the phase plan's acceptance criteria.
+
+---
+
+### v1.2-IA-1: Service Worker Serves Stale Nav After IA Restructure Deploy
+
+**What goes wrong:**
+Snobbery's service worker precaches the app shell including the nav. After deploying the IA restructure (Admin off bottom nav, new AI page added), installed PWA users get the old nav for days — Admin still visible, no AI tab — until they manually clear site data.
+
+**Prior art:** Project memory documents: "Phase 13 C9 cache name bumps on template/CSS/JS content change (stage-1 COPY-gated), NOT every build; Python-only/no-op rebuilds don't bump (SWR backstops)." The existing content-deterministic cache versioning works, but only if template changes (including nav partial changes) actually change the baked CSS or SW cache string. If the IA change only modifies Python route handlers and Jinja template logic without touching any file that changes the compiled CSS, the SW cache key may not change.
+
+**How to avoid:**
+- Verify that the content-deterministic cache version string changes when `base.html` or the nav partial changes. If it only tracks CSS file content (not HTML), add a hash of the nav template to the version string.
+- The safest approach: include a `CACHE_VERSION` based on a hash of all files that affect the shell (CSS + nav templates), regenerated at build time and injected into the SW file.
+- After the IA deploy, add to the UAT checklist: install the old PWA on a test device, deploy, open the app, verify the new nav appears without a manual cache clear.
+- Ensure the SW `activate` event deletes all caches except the current version — this evicts stale shells on the next tab open.
+
+**Warning signs:**
+- The SW cache version string is hardcoded, not content-derived.
+- The nav partial is not included in the content hash used for SW versioning.
+- No on-device PWA cache-busting test in the deploy checklist.
+
+**Phase to address:** IA Restructure phase. Cache-busting verification is a required acceptance criterion.
+
+---
+
+### v1.2-IA-2: Nonce-CSP Blocks New AI Page Inline Scripts or HTMX Indicators
+
+**What goes wrong:**
+Adding a new AI page with HTMX progress indicators or Alpine components can re-trigger the nonce-CSP blocking issue Snobbery already hit. Project memory: "strict nonce-CSP previously blocked htmx's injected .htmx-indicator style; define it in tailwind.src.css or hx-indicator spinners show forever (Phase 9 backups stuck Running)."
+
+The AI research page likely needs a progress indicator while the web-search call runs (15–30s). If implemented with `hx-indicator` and the `.htmx-indicator` style is not defined in the compiled CSS, the spinner shows permanently.
+
+**How to avoid:**
+- Verify `.htmx-indicator { display: none; }` and `.htmx-request .htmx-indicator { display: inline-flex; }` (or equivalent) are present in `tailwind.src.css`. The Phase 9 fix covers this, but verify it survives the v1.2 Tailwind rebuild.
+- Every new `<script>` tag on the AI page must include `nonce="{{ csp_nonce }}"`. No exceptions.
+- Any new Alpine `x-data` expression must not use patterns that require `unsafe-eval` beyond what Alpine already needs. The existing `unsafe-eval` in the CSP covers Alpine's expression compiler — but do not add `new Function` or `eval()` calls in custom JS.
+- Add a CSP violation detection step to the AI page's acceptance criteria: open the page in a browser with DevTools, check the Console for any `Content Security Policy` errors.
+
+**Warning signs:**
+- HTMX indicators are always visible or always hidden on the AI page.
+- Browser console shows CSP violations after adding a new `<script>` without a nonce.
+- A new template includes `<script>` without `nonce="{{ csp_nonce }}"`.
+
+**Phase to address:** AI Page phase and IA Restructure phase.
+
+---
+
+### v1.2-MOBILE-1: iOS Safe-Area Bug Spread by Rework (Unverified Prior Fix)
+
+**What goes wrong:**
+Snobbery committed an iOS safe-area fix (commit `982c0e6`) that is explicitly marked as UNVERIFIED on-device (project memory: "safe-area fix unverified — commit 982c0e6 iOS bottom-nav safe-area fix is committed but UNVERIFIED on-device"). Phase 13 reused the same unproven technique for a top safe-area fix. The v1.2 mobile-first rework will touch every screen — if the safe-area approach is wrong, it propagates the bug across all screens.
+
+**How to avoid:**
+- Treat on-device verification of the safe-area fix as a blocking prerequisite before the mobile rework begins. This is a single task: install the PWA on an iPhone, verify bottom nav and sticky form buttons do not overlap the home indicator.
+- Document the verified CSS pattern in the `CLAUDE.md` Conventions section so every reworked screen uses it consistently.
+- The correct pattern: `padding-bottom: env(safe-area-inset-bottom, 0px)` on the bottom nav wrapper. Note `env()` is only available in PWA standalone mode — not in plain Safari tab. Test in PWA mode, not browser.
+- `constant()` (deprecated iOS 11 syntax) must not appear anywhere; use `env()` only.
+- The rework phase acceptance criteria must specify on-device testing, not just DevTools responsive mode.
+
+**Warning signs:**
+- The rework phase starts without an on-device verification step for the existing safe-area fix.
+- CSS uses `constant(safe-area-inset-bottom)` instead of `env(safe-area-inset-bottom)`.
+- The acceptance criteria say "tested at 375px" without specifying physical device + PWA install.
+
+**Phase to address:** Pre-rework: verify the safe-area fix on-device as a blocking task (own plan, own acceptance criterion). Mobile-First Rework phase: device testing in every screen's acceptance criteria.
+
+---
+
+### v1.2-MOBILE-2: Alpine |tojson Quoting Breaks New Templates
+
+**What goes wrong:**
+Project memory records: "`|tojson` MUST be in SINGLE-quoted attrs (it doesn't escape "); and how to mint an auth session + drive the live app in Edge/Playwright to repro Alpine/CSP/PWA bugs (a harness can hide them)."
+
+New templates for cafe quick-rate (Alpine tag input for flavor notes) and AI research page (Alpine-driven state for progress/result display) will inject server-side data via `|tojson`. If any developer writes `x-data="{{ data|tojson }}"` (double-quoted outer attribute), the JSON double-quotes break the HTML attribute — silent Alpine parse failure, visible only in the browser.
+
+**How to avoid:**
+- Project convention (add to `CLAUDE.md` Conventions): all Alpine `x-data` attributes containing server-injected data MUST use single-quoted outer HTML attributes: `x-data='{{ data|tojson }}'`.
+- Add a template linting check to CI: grep for the pattern `"x-data="{{ ` and fail if found.
+- Playwright smoke tests must cover Alpine-driven interactions on the new pages — the test harness catches what unit tests miss.
+
+**Warning signs:**
+- New template has `x-data="{{ ... |tojson }}"` (double-quoted outer).
+- Alpine `x-data` object appears correct in HTML source but Alpine logs a parse error in browser console.
+- The feature passes all unit tests but fails in the browser.
+
+**Phase to address:** Cafe Quick-Rate phase and AI Page phase. Convention enforcement before templates ship.
+
+---
+
+## 9. Top 5 — Most Critical (required reading for every planner)
 
 Ranked by **likelihood × impact × difficulty to retrofit later**.
 
 | Rank | Pitfall | Why It Matters Most |
 |------|---------|---------------------|
 | **1** | **AI-1: Web-search input-token cost dwarfs the per-search fee** | This is the cost story. The user has explicitly opted out of a token ceiling and is relying on signature-based regen alone. Without `max_uses` caps (also COST-5), per-search token counts, and visible warnings in the admin panel, a single AI run can balloon to 100k+ input tokens. Retrofitting cost telemetry after the first surprise bill is painful. **Build cost observability into `ai_recommendations` schema from the first migration**, not later. |
-| **2** | **SH-1: APScheduler missed nightly job on restart** | Backups and AI regens are the two scheduled jobs. If both silently miss after a restart, the user only finds out when (a) recommendations stay outdated for days or (b) a restore from backup is needed and the most recent backup is from before the last restart. Defaults are wrong; needs explicit config. Cheap to fix at scheduler-setup time, expensive to discover during a restore drill. |
-| **3** | **SEC-1: CSP + HTMX + Alpine + Tailwind CDN incompatibility** | The spec mandates a "restrictive CSP, no inline scripts." Alpine.js fundamentally requires `unsafe-eval`. Tailwind CDN injects styles. HTMX `hx-on:` handlers are inline event handlers. The "strict" CSP described in the spec is **incompatible** with the chosen frontend stack. This needs a deliberate, documented trade-off **before** the security hardening phase starts, not discovered as a build-blocker mid-phase. |
-| **4** | **HX-1: CSRF token rotation breaks HTMX after first POST** | The brew session form is the central UX surface; CSRF on every state-changing form is non-negotiable per the invariants. The most common CSRF pattern (rotate-per-request + `hx-headers` on `<body>`) breaks on the second POST because HTMX swaps fragments, not full pages. Get the pattern wrong and *every* multi-action form flow breaks. Picking the right pattern (recommend double-submit-cookie) at the start saves an architectural refactor. |
-| **5** | **MX-1: iOS Safari auto-zoom on form focus** | The spec is mobile-first at 375px; ~90% of usage is phone-in-hand. A 14px input on iOS triggers viewport zoom on focus and does *not* zoom back out. The brew session form has ~12 inputs. If even one is <16px, every tap into a different field stays zoomed, the form scrolls off-screen, the experience feels broken. Trivial to prevent up-front (one CSS rule), painful to find when you have an iPhone in hand and 18 templates to audit. |
+| **2** | **v1.2-AI-1: On-demand research removes the cadence gate** | Adding an on-demand research button without a DB cache + per-user rate limit turns a bounded cost model into an unbounded one. At 10 calls/user/day × 2 users × web-search cost, the bill can surprise. The cache table and slowapi decorator must be in the initial plan, not a follow-up. |
+| **3** | **v1.2-CAFE-1: Cafe sessions pollute brew analytics** | Without a discriminator column in the migration, every analytics query and the AI signature generator will include cafe sessions in brew-specific computations. Retrofitting this after data is in production requires a data migration. The discriminator must be part of the schema from day one. |
+| **4** | **v1.2-IMAGE-3: G-01 class root-volume bug (still open)** | G-01 is marked open in STATE.md. The Dockerfile fix only covers fresh volumes. An operator on a system with pre-existing root-owned volumes will hit silent backup and photo-write failures. The entrypoint runtime chown is the correct fix — it must ship with the prebuilt image. |
+| **5** | **v1.2-MOBILE-1: Unverified safe-area fix spread by rework** | The existing safe-area fix has never been verified on-device. The mobile-first rework will apply the same pattern to every screen. If the fix is wrong, the bug is now everywhere. Verifying it on a physical device before the rework starts is a cheap, mandatory prerequisite. |
 
 ---
 
@@ -124,22 +450,16 @@ Ranked by **likelihood × impact × difficulty to retrofit later**.
 - [HTMX Docs](https://htmx.org/docs/)
 - [HTMX CSRF Issue Discussion](https://github.com/bigskysoftware/htmx/issues/70)
 - [HTMX and CSP — Sjoerd Langkemper](https://www.sjoerdlangkemper.nl/2024/06/26/htmx-content-security-policy/)
-- [HTMX hx-boost CSRF with hx-boost Issue #3379](https://github.com/bigskysoftware/htmx/issues/3379)
 - [APScheduler User Guide](https://apscheduler.readthedocs.io/en/3.x/userguide.html)
-- [APScheduler Missed Jobs #146](https://github.com/agronholm/apscheduler/issues/146)
 - [PWA on iOS — Brainhub 2025 guide](https://brainhub.eu/library/pwa-on-ios)
 - [PWA iOS Limitations 2026 — MagicBell](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide)
-- [Safari 18.4 Release Notes — Apple](https://developer.apple.com/documentation/safari-release-notes/safari-18_4-release-notes)
 - [16px or Larger Prevents iOS Zoom — CSS-Tricks](https://css-tricks.com/16px-or-larger-text-prevents-ios-form-zoom/)
-- [Defensive CSS — Input Zoom on iOS](https://defensivecss.dev/tip/input-zoom-safari/)
 - [Screen Wake Lock API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API)
-- [Postgres Unique Constraints + Deadlocks — Russell Cohen](https://rcoh.me/posts/postgres-unique-constraints-deadlock/)
-- [pg_trgm vs Full Text Search — Aapeli Vuorinen](https://www.aapelivuorinen.com/blog/2021/02/24/postgres-text-search/)
 - [SQLAlchemy QueuePool Exhaustion — FastAPI Discussion #10450](https://github.com/fastapi/fastapi/discussions/10450)
 - [Docker PostgreSQL Permission Guide](https://www.w3tutorials.net/blog/permission-issue-with-postgresql-in-docker-container/)
 - [Fernet symmetric encryption — pyca/cryptography](https://cryptography.io/en/latest/fernet/)
 - [MultiFernet key rotation](https://www.geeksforgeeks.org/multifernet-module-in-python/)
-- [Cloudflare 403 / anti-bot — Scrapfly](https://scrapfly.io/blog/posts/403-forbidden-web-scraping)
 - [PWA Cache Invalidation — Infinity Interactive](https://iinteractive.com/resources/blog/taming-pwa-cache-behavior)
-- [HTMX hx-swap-oob](https://htmx.org/attributes/hx-swap-oob/)
-- [HTMX hx-push-url & back-button issues](https://github.com/bigskysoftware/htmx/issues/854)
+- Snobbery project memory (authoritative, project-specific): G-01 root-volume incident, service-worker staleness pattern, nonce-CSP/htmx-indicator incident, safe-area unverified fix, `|tojson` Alpine quoting requirement, Phase 13 C9 content-deterministic SW cache, test-isolation gaps
+- Snobbery `.planning/PROJECT.md` Key Decisions and Known Gaps
+- Snobbery `.planning/STATE.md` Deferred Items: G-01 (open), T-INFRA-1 (open)

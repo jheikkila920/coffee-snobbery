@@ -1,265 +1,231 @@
-# Research Synthesis — Snobbery
+# Project Research Summary
 
-**Synthesized:** 2026-05-16
-**Sources:** STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md, PROJECT.md
-
----
-
-## 1. TL;DR — Highest-Leverage Findings
-
-1. **Three foundational data-model gaps must be decided in Foundation, not later.** Bag-as-instance (separate from coffee catalog), brew-yield + ratio + optional TDS columns, and a wishlist table. All cheap now; all painful migrations once there are 500+ sessions. Without bag-as-instance, sweet-spots-by-roast-date is unreliable as soon as anyone reorders a bean.
-2. **Cost observability must be schema-baked from the first AI migration.** The user opted out of a token ceiling, leaving signature-based regen as the *only* cost control. `ai_recommendations` must persist `web_search_count`, `input_tokens_search`, `tokens_used`, `provider_used`, `model_used`, `tool_version`, `input_signature` — retrofitting after the first surprise bill is the painful path.
-3. **The spec's "restrictive CSP, no inline scripts" is incompatible with Alpine + Tailwind CDN + HTMX `hx-on:`.** This needs a documented trade-off *before* the security-hardening phase. Recommended resolution: Alpine CSP build + Tailwind standalone CLI binary in the Dockerfile (no npm), nonce-based CSP, forbid `|safe` in templates. If CDN Tailwind is kept, `unsafe-inline` for styles becomes permanent.
-4. **One uvicorn worker is non-negotiable.** APScheduler in-process and module-level in-memory AI locks both require single-process. Document loudly in README so a future `--workers 4` for "performance" doesn't silently fire every nightly job four times.
-5. **Build order is rigid for the first 7 phases; flexible after.** Middleware before routes, auth before features, encryption + settings before AI, catalog before sessions, sessions before analytics, analytics before AI, AI before scheduler. Search, PWA, admin slot in later with fewer dependencies.
-6. **Stack pins are clean but two spec items are stale.** HTMX 1.9 → use 2.x. Tailwind CDN → use standalone CLI binary baked into Dockerfile. OpenAI SDK is on 2.x with Responses API, not Chat Completions.
-7. **iOS is the source of nearly every mobile pitfall.** 16px+ font on inputs (else zoom-and-stick), Wake Lock re-acquire on `visibilitychange`, localStorage 7-day ITP eviction, install banner is mandatory because iOS never prompts, `capture="environment"` opens an action sheet, maskable icons for Android.
-8. **CSRF + HTMX needs double-submit-cookie, not rotated-per-request tokens.** Rotated tokens break on the second HTMX POST because fragments don't update `<body>` `hx-headers`. Pick at Phase 1 — refactoring later means touching every form.
+**Project:** Snobbery v1.2 — Polish & Mobile-First
+**Domain:** Self-hosted household coffee log (FastAPI + PostgreSQL + HTMX, PWA, AI-driven recommendations)
+**Researched:** 2026-05-25
+**Confidence:** HIGH
 
 ---
 
-## 2. Stack Decisions
+## Executive Summary
 
-| Item | Status | Decision / pin |
-|---|---|---|
-| Python | Locked | 3.12 |
-| FastAPI | Locked | `>=0.136,<0.137` — lifespan only |
-| Starlette | Locked | `>=1.0,<2.0` |
-| Uvicorn | Locked | `>=0.47,<0.48`, `--workers 1 --proxy-headers --forwarded-allow-ips=<trust list>` |
-| SQLAlchemy | Locked | `>=2.0.49,<2.1` (2.1 still beta) |
-| Postgres driver | Locked | `psycopg[binary]>=3.3,<3.4`, URL `postgresql+psycopg://` |
-| Postgres server | Locked | 16; install `postgresql-client-16` in web image for `pg_dump` version match |
-| Pydantic | Locked | `>=2.13,<3.0` |
-| HTMX | Decided, deviates from spec | **2.0.x**, not 1.9; `htmx-ext-sse@2.2.4` separately if SSE |
-| Tailwind | Decided, deviates from spec | **Standalone CLI binary in Dockerfile**, not CDN (v4 Play CDN forces `unsafe-inline`) |
-| Alpine.js | Locked, caveat | 3.x — **CSP build** (`alpinejs/dist/cdn.csp.min.js`) |
-| CSRF | Locked | `starlette-csrf>=3.0,<4`, double-submit-cookie |
-| Session store | Locked, hand-rolled | ~80 LOC custom middleware + `sessions` table; not Starlette stock |
-| Rate limiting | Locked | `slowapi>=0.1.9,<0.2`, single-worker only |
-| Logging | Locked | `structlog>=25.5,<26` + stdlib `ProcessorFormatter` |
-| AI SDKs | Locked, fast-moving | `anthropic>=0.102,<1.0`, `openai>=2.37,<3.0` (Responses API) |
-| Web search tool versions | Decided | `web_search_20250305` at v1; via `app_settings` for swap-without-redeploy; `max_uses=5`/`=3` |
-| Image processing | Locked | Pillow `>=12.2,<13` + manual magic-byte check |
-| Encryption | Locked | `cryptography>=48,<49`, **`MultiFernet` from day 1** |
-| Scheduler | Locked | `APScheduler>=3.11,<4` `AsyncIOScheduler`, `misfire_grace_time=3600`, `coalesce=True`, `max_instances=1`, **`SQLAlchemyJobStore`** |
-| Tests | Locked | `pytest>=9.0,<10` + `pytest-asyncio` + `respx` + `playwright>=1.59,<2` |
-| Lint/format | Locked | `ruff>=0.15.13,<0.16` |
-| Type checker | Locked, revisit | mypy `>=1.13,<2`; revisit `ty` next milestone |
-| PWA tooling | Locked, hand-rolled | Static manifest + ~60 LOC SW; no Workbox |
-| SSE vs polling for AI | Deferred to Phase 7 | Recommend polling first; SSE = v1.1 polish |
-| Search: FTS vs trigram | Deferred to Phase 10 | Both pure-Postgres; prototype both |
+Snobbery v1.2 is a polish and capability milestone on top of a fully shipped v1.1 product. The stack is locked and does not change — no new required Python dependencies exist for any confirmed v1.2 feature. Research confirms the existing FastAPI + SQLAlchemy + Jinja/HTMX + Alpine + Tailwind v3 architecture accommodates all planned features through schema additions, new routes, and template changes only. The highest-impact engineering work is in three areas: (1) getting the self-hosted image publishable to GHCR with multi-arch support and a clean operator first-run experience, (2) restructuring the IA (Admin off nav, AI as a bottom-nav destination), and (3) adding two new capabilities — cafe quick-rate and on-demand AI coffee research with predicted rating — both of which integrate into existing infrastructure without new services.
+
+The single highest-risk decision across all research is the cafe quick-rate data model. Three researchers independently proposed conflicting approaches: FEATURES.md recommends a boolean `is_cafe_log` field on `brew_sessions` (unified table); ARCHITECTURE.md recommends a separate `cafe_logs` table (clean isolation); PITFALLS.md recommends a `session_type` discriminator ENUM on `brew_sessions`. The architecture researcher read the actual `brew_sessions` model and `analytics.py` code and found a concrete blocking constraint: `brew_sessions.coffee_id` is `NOT NULL RESTRICT`, which makes the unified-table approach architecturally unsound without breaking an invariant. The separate-table approach is best-grounded and is the recommendation, but the final call belongs to plan-phase.
+
+The second highest-risk area is the on-demand AI research feature's cost model. Unlike the nightly signature-gated regen, on-demand research removes the cadence gate entirely. Without a DB cache table for research results and a per-user daily rate limit, costs scale with user curiosity rather than brew activity. Both the cache table and the rate limit are blocking requirements for this feature — they cannot be deferred to a follow-up phase.
 
 ---
 
-## 3. Schema Decisions to Make in Foundation Phase
+## Key Findings
 
-**The first migration set should reflect all of these**, even if v1 UI exposes them minimally.
+### Recommended Stack
 
-### 3.1 Bag-as-instance (FEATURES gap #1)
+The v1.1 stack is confirmed unchanged. Zero new required Python dependencies exist for v1.2. The release CI workflow is the only structural addition: a new `.github/workflows/release.yml` publishing to GHCR via `docker/build-push-action@v6` with QEMU for multi-arch (amd64 + arm64).
 
-```
-bags
-├── id (uuid)
-├── coffee_id (fk -> coffees.id)
-├── roast_date (date, nullable)
-├── weight_grams (numeric, nullable)
-├── opened_at, finished_at (timestamp, nullable)
-├── notes (text, nullable)
-└── created_at, updated_at
-```
+Two conditional dependencies depending on scope decisions: `segno>=1.6,<2` (QR code generation, if QR sharing is in scope — current research recommends skipping) and Chart.js 4.4.9 via CDN (if data visualization charts are in scope — current research recommends skipping).
 
-`brew_sessions.bag_id` (FK to bags) is the right grain; `coffee_id` derives via the bag. Roast freshness analytics use `bag.roast_date`, never `coffee.roast_date`.
+**Core technologies (unchanged):**
+- Python 3.12 + FastAPI 0.136 + Starlette 1.0: locked web framework
+- SQLAlchemy 2.0 + Alembic 1.18 + PostgreSQL 16: locked; all v1.2 schema changes are purely additive migrations
+- HTMX 2.0.10 + Alpine.js 3.16 + Tailwind v3 standalone CLI: locked frontend; no npm build pipeline
+- anthropic SDK 0.102 + openai SDK 2.37: AI research feature reuses these without change
+- APScheduler 3.x in-process: unchanged; on-demand AI research does NOT go through the scheduler
 
-### 3.2 Wishlist (FEATURES gap #2)
+**CI-only additions (not in requirements.txt):**
+`docker/setup-qemu-action@v3`, `docker/setup-buildx-action@v4`, `docker/login-action@v3`, `docker/metadata-action@v5`, `docker/build-push-action@v6`
 
-```
-wishlist_entries
-├── id (uuid)
-├── user_id (fk)
-├── coffee_id (fk -> coffees.id, nullable)
-├── url (text, nullable)
-├── name (text — required if no coffee_id)
-├── note (text, nullable)
-├── source ('manual' | 'ai_recommendation')
-└── created_at
-```
+### Expected Features
 
-AI coffee-rec card → "Add to wishlist" closes the loop on the differentiator.
+**Must have (table stakes):**
+- Background timer surviving phone sleep in Guided Brew Mode — Web Worker vs `setInterval` must be verified; if using `setInterval`, this is a real gap
+- Cafe quick-rate form — 20-second log for coffees tasted outside the home; minimum fields are coffee name and rating
+- Water profiles as named lookup table — replace freetext `water_type`; one table, one FK
 
-### 3.3 Brew yield / TDS on `brew_sessions` (FEATURES gap #3)
+**Should have (differentiators):**
+- AI research-a-coffee + predict rating — on-demand web search + preference matching; no other self-hosted household coffee log does this
+- Phase-based step timer in Guided Brew Mode — transforms it from a stopwatch to a brewing coach
+- First drip + bloom time optional fields — two nullable columns on `brew_sessions`
+- Self-host packaging: prebuilt GHCR image, simpler first-run
+- IA restructure: Admin off bottom nav, AI as fourth tab
+- Mobile-first full rework of every screen to 375px polish bar
 
-Already on `brew_sessions`: `dose_grams_actual`, `water_grams_actual`. Add:
-- `yield_grams_actual` (numeric, nullable)
-- `tds_pct` (numeric, nullable)
-- `extraction_yield_pct` (numeric, nullable; can be a `GENERATED` column = `(yield_g * tds_pct) / dose_g`)
+**Defer to v2+:**
+- BLE scale integration, QR/NFC sharing, SCA cupping, charts/data viz library, SSE streaming for AI, per-user/month AI cost ceiling
 
-Ratio (1:N) is purely derived in the UI via Alpine reactivity — **no schema column**.
+**Confirmed anti-features:**
+- Point-estimate AI rating ("you'll rate this 4.2") — use range + confidence level instead
+- Social sharing of brew cards — counter to private household identity
+- Bag inventory management / low-stock alerts — deferred to v2
 
-### 3.4 AI cost-observability columns
+### Architecture Approach
 
-```
-ai_recommendations
-├── id, user_id, recommendation_type
-├── input_signature (text, indexed)
-├── response_json (jsonb)
-├── provider_used ('anthropic' | 'openai')
-├── model_used (text)
-├── tool_version (text)         -- e.g. 'web_search_20250305'
-├── tokens_input (int)
-├── tokens_output (int)
-├── tokens_input_search (int)
-├── web_search_count (int)
-├── url_verified (bool, nullable)
-├── duration_ms (int)
-├── generated_at, generated_by ('scheduler' | 'manual_refresh')
-└── error_status (text, nullable)
-```
+The v1.1 architecture is clean and the v1.2 features slot in without structural surgery. New capabilities require: one new model/migration (`cafe_logs`), one new function in `ai_service.py` (`research_coffee_predict_rating`), one new Pydantic schema (`CoffeePredictSchema`), new routes on the existing `ai.py` router, and template changes for the IA restructure.
 
-Also feeds the admin "last AI run status" banner (COST-3 fix).
+**Confirmed unchanged by code read:** `analytics.py`, `scheduler.py`, `encryption.py`, `credentials.py`, `brew_session.py`, `ai_recommendation.py`, `entrypoint.sh`, `sw.js`, `manifest.json`, all existing AI route handlers.
 
-### 3.5 `sessions` table (architecture-mandated)
+**Major new/modified components:**
+1. `app/routers/ai.py` — add `GET /ai` shell, `GET /ai/cards/recommendation` (five-branch state machine relocated from home), `GET /ai/research`, `POST /ai/research`
+2. `app/services/ai_service.py` — add `research_coffee_predict_rating()` following the `generate_equipment_rec()` on-demand pattern
+3. `app/models/cafe_log.py` + migration — new `cafe_logs` table; purely additive
+4. `app/templates/base.html` — bottom nav: Admin tab → AI tab
+5. `app/templates/pages/config_hub.html` — add Admin card (conditional on `user.is_admin`)
+6. `docker-compose.yml` + `.github/workflows/release.yml` — operator compose + CI release workflow
 
-```
-sessions
-├── id (uuid PK — cookie value)
-├── user_id (fk)
-├── csrf_seed (text, optional)
-├── created_at, last_seen, expires_at
-└── user_agent (text, nullable)
-```
+### Critical Pitfalls
 
-Required for 30-day expiry with refresh-on-activity, admin session-count view, session-ID regeneration on login (SEC-3).
+1. **On-demand research removes the cadence gate — surprise bill risk (v1.2-AI-1)** — A DB cache table for research results (7-day TTL) and a slowapi per-user daily limit (10 calls/user/day) are blocking requirements, not optional polish. Both must be in the initial phase plan.
 
-### 3.6 `app_settings` seed rows
+2. **Cafe sessions polluting brew analytics and AI signature (v1.2-CAFE-1)** — Whatever data model is chosen, every analytics query and the AI input signature computation must explicitly exclude cafe-mode rows from brew-parameter analytics. Adding the discriminator/isolation must happen in the same migration as the feature — retroactive data migration is expensive.
 
-Seed in first migration:
-- `recommendation_region` = `US`
-- `min_sessions_for_ai` = `3`
-- `min_flavor_notes_for_ai` = `5` (AI-7)
-- `ai_primary_max_searches` = `5`
-- `ai_broadened_max_searches` = `3`
-- `anthropic_web_search_tool_version` = `web_search_20250305`
-- `openai_web_search_tool_version` = `web_search`
-- `setup_completed` = `false` (SEC-5)
+3. **G-01 root-volume bug still open (v1.2-IMAGE-3)** — The Dockerfile `RUN chown` only covers fresh volumes. The permanent fix is a runtime `chown -R app:app /app/data` in `entrypoint.sh` before dropping to the app user via `exec gosu app uvicorn ...`. Blocking requirement for the self-host packaging phase.
+
+4. **Unverified iOS safe-area fix spread by mobile rework (v1.2-MOBILE-1)** — Commit `982c0e6` introduced a safe-area fix never verified on a physical device. Verifying on a physical iPhone in PWA standalone mode is a mandatory prerequisite before the mobile rework begins.
+
+5. **Web-search input-token cost (AI-1, COST-5)** — `max_uses` must be capped on the web-search tool (5 for primary, 3 for broadened). Applies to both nightly regen and the new on-demand research feature.
 
 ---
 
-## 4. Cross-Cutting Concerns by Phase
+## Open Decisions (Flagged for Plan-Phase)
 
-| Concern | Origin | Lands in phase |
-|---|---|---|
-| Single uvicorn worker; document loudly | ARCH §5.2, PITFALLS AI-6, SH-2 | 0 (Dockerfile, entrypoint, README) |
-| Postgres extensions (citext, pg_trgm, unaccent) | STACK §1, ARCH map | 0 (first migration) |
-| Proxy-headers + trust list; `Secure` cookie depends on it | ARCH §4.1, SH-6 | 0 + 1 |
-| CSP trade-off (Alpine CSP build + Tailwind CLI + forbid `\|safe`) | SEC-1, ARCH §4.5 | 1 (decide before templates) |
-| Double-submit-cookie CSRF | HX-1, ARCH §4.5 | 1 |
-| `MultiFernet` from day 1 | SEC-2 | 3 |
-| `setup_completed` + `SELECT FOR UPDATE` on /setup | SEC-5 | 2 |
-| Session-ID regeneration on login/logout/privilege change | SEC-3 | 2 |
-| 16px+ font-size on every form input + Playwright assertion | MX-1 | 5 |
-| LocalStorage draft keys namespaced by user_id | MX-5 | 5 |
-| Tap-on-stars rating (not native range) | MX-6, FEATURES §1 | 5 |
-| Live ratio computation in form | FEATURES gap | 5 |
-| Staggered lazy-load on home + connection-pool sizing | HX-5, SH-2 | 6 |
-| AI cost telemetry columns + `max_uses` + 5-min manual-refresh throttle | AI-1, COST-2, COST-5 | 7 |
-| Citation-block projector before Pydantic validation | AI-3 | 7 |
-| URL verification: ranged GET, real UA, body-contains-name | AI-2 | 7 |
-| Fallback only on non-retryable errors; `max_retries=1` on SDKs | AI-4 | 7 |
-| Tool version as `app_settings` row, not hardcoded | AI-5 | 7 |
-| Content-hash signature; drop shared `equipment_count`/`recipe_count` | COST-1, COST-4 | 7 |
-| Postgres advisory lock alongside in-memory lock | AI-6 | 7 |
-| APScheduler config (`SQLAlchemyJobStore`, grace=3600, coalesce, max_instances=1) | SH-1, ARCH §5.4 | 8 |
-| `postgresql-client-16` in web image | SH-5 | 0 or 8 |
-| `/sw.js` served from root with `Service-Worker-Allowed: /` | PWA-3, ARCH §4.6 | 11 |
-| `start_url: "/?source=pwa"` returns 200 (no redirect) | PWA-2 | 11 |
-| Dual light/dark `theme-color` meta + maskable icons | PWA-5, PWA-6 | 11 |
-| iOS install banner (iOS never prompts) | PWA-1 | 11 |
-| Wake Lock re-acquire on `visibilitychange` + indicator + iOS fallback | MX-4, FEATURES §1 | 11 |
-| Server-side draft autosave on blur (iOS ITP belt-and-suspenders) | FEATURES §1 | 5 or 11 |
-| `Cache-Control: no-store` + `Vary: HX-Request` on fragment routes | HX-2 | 4+ (codify in router base helpers) |
-| CI grep test: forbid `\|safe` in `templates/pages/` | HX-6 | 12 |
+### Decision 1: Cafe Quick-Rate Data Model — ARCHITECTURE Recommendation (Separate Table)
+
+Three researchers proposed conflicting approaches. This must be resolved before the cafe-log phase is written.
+
+**Option A — Unified `brew_sessions` with `is_cafe_log` boolean (FEATURES.md)**
+*Problem:* `brew_sessions.coffee_id` is `NOT NULL` with `ForeignKey("coffees.id", ondelete="RESTRICT")` — verified from the actual model. Making it nullable breaks a documented schema invariant. Every analytics function does an INNER JOIN on `BrewSession.coffee_id` without guards — NULL rows would be silently excluded, a maintenance trap.
+
+**Option B — Discriminator ENUM `session_type` on `brew_sessions` (PITFALLS.md)**
+*Problem:* Same `coffee_id` constraint applies. PITFALLS.md did not read the model code and missed this. The ENUM approach also requires `coffee_id` to be nullable for cafe sessions, breaking the same invariant.
+
+**Option C — Separate `cafe_logs` table (ARCHITECTURE.md) — RECOMMENDED**
+New table: `user_id`, `brand` (text), `coffee_name` (text), `brew_method` (text), `rating`, `notes`, `logged_at`. No FK to `coffees`, `bags`, or `recipes`.
+
+*Why best-grounded:* ARCHITECTURE.md read the actual `brew_sessions` model and `analytics.py` before recommending this. Zero impact on existing analytics, AI signature computation, or scheduler logic. Migration is purely additive. Analytics isolation is explicit: cafe logs do NOT feed `compute_input_signature`, `get_top_coffees`, `get_preference_profile`, or `get_sweet_spots`. The plan-phase researcher should additionally decide whether cafe flavor notes / origin / ratings should feed AI preference derivation through a separate join, and design that if so.
+
+### Decision 2: Charts (Chart.js) and QR Sharing (segno)
+
+Both are conditional. Default is deferred. Confirm at requirements phase — do not add either without explicit scope confirmation from John.
+
+### Decision 3: SSE Streaming for AI Responses
+
+Default is deferred. Polling is adequate for the 15-30 second AI research call. Revisit in v1.3 if user feedback identifies this as a pain point.
+
+### Decision 4: AI Prediction Storage — `ai_recommendations` Reuse vs. New Table
+
+ARCHITECTURE.md recommends writing predictions to the existing `ai_recommendations` table with `rec_type="coffee_predict"`. FEATURES.md recommends a separate `ai_coffee_predictions` table to enable a future "did the prediction hold up?" comparison feature. Plan-phase must decide: simpler reuse vs. richer future capability. Either way, the research cache table and per-user rate limit are non-negotiable.
 
 ---
 
-## 5. Hard Ordering Constraints
+## Implications for Roadmap
 
-1. Middleware (Phase 1) before any router. Routers depend on `request.state.user`, CSRF, CSP nonce.
-2. Custom SessionMiddleware before `/login` exists.
-3. `sessions` table migration before SessionMiddleware tests pass (same Phase 1).
-4. `MultiFernet` encryption service before `api_credentials` table — else first encrypted row is single-key.
-5. `api_credentials` (Phase 3) before `ai_service` (Phase 7).
-6. `app_settings` (Phase 3) before `ai_service` — service reads region, tool versions, max_uses, min_sessions_for_ai.
-7. Shared catalog (Phase 4) before `brew_sessions` (Phase 5) — FK dependencies.
-8. `bags` (Phase 4) before `brew_sessions` (Phase 5) — sessions FK `bag_id`; backfill later has no source of truth for roast date.
-9. `brew_sessions` (Phase 5) before `analytics` (Phase 6).
-10. `analytics` (Phase 6) before `ai_service` (Phase 7) — AI consumes profile-derivation queries and signature compute.
-11. `ai_recommendations` table (Phase 7) before scheduler (Phase 8) — nightly job writes it.
-12. `ai_service` (Phase 7) before `nightly_ai_refresh` job (Phase 8).
-13. Scheduler (Phase 8) before backup admin UI (Phase 9) — admin reads job status the scheduler populates.
-14. CSP design (Phase 1) before any template uses Alpine or HTMX `hx-on:` (Phase 2+).
-15. Tailwind decision (Phase 0) before any template uses Tailwind classes (Phase 2+).
-16. `postgresql-client-16` in web image (Phase 0) before backup job runs (Phase 8).
-17. PWA (Phase 11) after most UI exists (Phases 5–6 min) — else cache churns with templates.
+### Suggested Phase Structure (8 phases)
+
+**Phase 1: v1.1 Debt Cleanup**
+Rationale: G-01 and safe-area verification are prerequisite gates for the self-host and mobile-rework phases. T-INFRA-1 gates test suite expansion.
+Delivers: Closed G-01 (entrypoint runtime chown via gosu), closed T-INFRA-1 (test isolation), on-device safe-area verification, pending human UAT, `human_needed` sign-offs.
+Avoids: v1.2-IMAGE-3 (root-volume bug), v1.2-MOBILE-1 (unverified safe-area spreading to every screen).
+
+**Phase 2: Cafe Quick-Rate**
+Rationale: Schema changes are highest-dependency; getting the migration verified early de-risks all dependent work.
+Delivers: `cafe_logs` table migration, `CafeLog` model, cafe router with basic CRUD form, no analytics integration yet.
+Avoids: v1.2-CAFE-1 (analytics pollution — isolation correct from day one), v1.2-CAFE-2 (brew prefill pulled into cafe form).
+Research flag: Plan-phase must resolve the open data model decision before writing this phase.
+
+**Phase 3: IA Restructure**
+Rationale: Nav change is prerequisite for AI page consolidation.
+Delivers: Updated `base.html` + `config_hub.html` + `nav-bar.js`, new `pages/ai.html` shell, relocated AI rec hero + equipment rec fragments, home page stripped of AI sections, 5 `test_nav.py` updates.
+Avoids: v1.2-IA-1 (stale nav in PWA — verify cache-busting), v1.2-IA-2 (nonce-CSP on new AI page).
+
+**Phase 4: Self-Host Packaging**
+Rationale: Parallelizable with Phase 3; no shared files. G-01 fix from Phase 1 is prerequisite.
+Delivers: GHCR multi-arch image, `release.yml` CI workflow, operator compose (`image:` not `build:`), `/setup` redirect for fresh installs, `depends_on: service_healthy` in compose, `pg_isready` wait in `entrypoint.sh`, updated README + NPM deploy guide.
+Avoids: v1.2-IMAGE-1 through v1.2-IMAGE-5.
+
+**Phase 5: AI Page Consolidation + Research/Predict Feature**
+Rationale: Depends on Phase 3 (AI page shell). Building consolidation and new predict feature together avoids two waves of AI page template changes.
+Delivers: Fully wired `/ai` page (rec hero, equipment rec, sweet spots prose); new `/ai/research` with `research_coffee_predict_rating()`, `CoffeePredictSchema`, result fragment showing predicted range + confidence + rationale + sources + "Add to wishlist" button; DB cache table for research results (7-day TTL); slowapi per-user daily rate limit with UI quota display.
+Avoids: v1.2-AI-1 (cost surprise — cache + rate limit are required deliverables), v1.2-AI-2 (point-estimate rating), AI-1 (web-search token cost — `max_uses` cap), COST-2 (manual refresh throttle).
+Research flag: Plan-phase must decide prediction storage approach (open decision 4).
+
+**Phase 6: Guided Brew Mode Polish**
+Rationale: Self-contained within the brew flow; can run parallel with Phase 5 if capacity allows. Depends on Phase 1 (safe-area verified).
+Delivers: Web Worker-based timer surviving phone sleep, phase-based step timer from recipe steps, first drip + bloom time nullable columns on `brew_sessions`, water profiles lookup table with FK, wake-lock re-acquisition on visibility return.
+Avoids: MX-4 (wake lock released on tab switch).
+Research flag: Plan-phase should verify existing Guided Brew timer implementation before prescribing the fix approach.
+
+**Phase 7: Mobile-First Full Rework**
+Rationale: Depends on Phase 1 (safe-area fix verified on-device) and Phases 3-5 (IA and new pages stable). Reworking unstable templates is wasted effort.
+Delivers: Every screen audited at 375px; MX-1 fix (16px min on form inputs), MX-3 fix (sticky form actions with safe-area above bottom nav), MX-6 fix (tap-on-stars rating component), MX-5 fix (localStorage draft namespaced by user ID), PWA-1 fix (iOS install banner), PWA-5 fix (theme-color dark/light meta), PWA-6 fix (maskable icon variants).
+Avoids: v1.2-MOBILE-1 (must use verified safe-area pattern), v1.2-MOBILE-2 (`|tojson` quoting convention in CLAUDE.md before templates ship), MX-1 through MX-6.
+
+**Phase 8: Verification and Release**
+Delivers: Full test suite green, Playwright 375px smoke at every new page, on-device verification, `git tag v1.2.0` → GHCR image push, GitHub release notes.
+
+### Phase Ordering Rationale
+
+- Phase 1 first: G-01 gates Phase 4 (self-host); safe-area verification gates Phase 7 (mobile rework)
+- Phase 2 early: schema migrations are lowest-risk, highest-dependency; UI builds on a verified schema
+- Phase 3 before Phase 5: AI page shell must exist before AI features live there
+- Phase 4 parallelizable with Phase 3: no shared files
+- Phase 6 parallelizable with Phase 5: no cross-dependencies
+- Phase 7 last among feature phases: reworks every screen, so all new screens must be stable first
+- Phase 8 closes with tagged image push
+
+### Research Flags
+
+Phases needing deeper research during plan-phase:
+- **Phase 2:** Open data model decision must be resolved. ARCHITECTURE's separate-table recommendation is best-grounded; planner must additionally decide whether cafe flavor/origin signal should feed AI preference derivation.
+- **Phase 5:** Decide between `ai_recommendations` table reuse vs. new `ai_coffee_predictions` table. Decide cache key design (coffee name text vs. normalized ID).
+
+Phases with standard patterns (skip additional research):
+- **Phase 1:** All items are known and specified; clear fixes documented in STATE.md and project memory
+- **Phase 3:** ARCHITECTURE.md provides a complete file-by-file change list
+- **Phase 4:** STACK.md provides the complete GitHub Actions workflow pattern and Dockerfile fix
+- **Phase 6:** Web Worker timer and wake-lock re-acquisition are well-documented browser APIs
+- **Phase 7:** PITFALLS.md provides specific, actionable fixes for every mobile pitfall with exact CSS/JS patterns
+- **Phase 8:** Standard milestone release gate
 
 ---
 
-## 6. Top 10 Pitfalls (Filtered)
-
-| # | Pitfall | Phase | Mitigation (one-liner) |
-|---|---|---|---|
-| 1 | AI-1: web-search input tokens dominate the bill | 7 | Persist token/search counts in `ai_recommendations`; `max_uses=5/3`; admin warn at >50k tokens/run |
-| 2 | SH-1: APScheduler misses nightly jobs after restart | 8 | `SQLAlchemyJobStore` + grace=3600 + coalesce; start in `lifespan` |
-| 3 | SEC-1: strict CSP incompatible with Alpine + Tailwind CDN + HTMX `hx-on:` | 1 | Alpine CSP build, Tailwind CLI (no CDN), forbid `\|safe`; document any residual `'unsafe-eval'` in `docs/decisions/` |
-| 4 | HX-1: CSRF token rotation breaks HTMX on 2nd POST | 1 | Double-submit-cookie pattern |
-| 5 | MX-1: iOS Safari auto-zoom on form focus, stays zoomed | 5 | Global CSS `input,select,textarea { font-size: 16px; }`; Playwright assertion |
-| 6 | AI-2: hallucinated/blocked product URLs verify wrong | 7 | Ranged GET, realistic UA, body-contains-name check, no cross-host redirects |
-| 7 | COST-4: shared `equipment_count`/`recipe_count` in signature → 2× bill | 7 | Drop those fields; content-hash of user's own sessions only |
-| 8 | SEC-3: session not regenerated on login → fixation | 2 | Delete old session row, mint new ID on every login/privilege change |
-| 9 | PWA-3: service worker scope too narrow under `/static/` | 11 | Serve `/sw.js` from root with `Service-Worker-Allowed: /` |
-| 10 | SH-6: `X-Forwarded-Proto` not honored → Secure cookie dropped → redirect loop | 0 + 1 | `uvicorn --proxy-headers --forwarded-allow-ips=<trusted>`; `/debug/proxy` smoke check |
-
-Honorable mentions to flag in their phase: HX-5 (lazy-load thundering herd), COST-1 (signature collision), MX-4 (wake lock not re-acquired), PWA-7 (SW caching itself), SEC-4 (polyglot image upload), SEC-2 (Fernet key rotation orphans data), AI-6 (advisory-lock backstop).
-
----
-
-## 7. Open Questions for Roadmap Creator
-
-1. **Include `bags` table in v1 Foundation?** Strong recommend yes; deviates from spec's single-row coffee model. Needs John sign-off.
-2. **Wishlist in v1?** Recommend yes — landing pad for the AI coffee rec.
-3. **TDS / yield columns in v1?** Recommend yes — 2 nullable + 1 derived; signals audience awareness.
-4. **CSV import alongside export in v1?** Recommend yes, scope-limited to "import sessions; refuse if coffee not in catalog." Day-1 data unlocks AI.
-5. **SSE or polling for AI streaming?** Recommend polling for v1; SSE v1.1 polish.
-6. **Tailwind CLI in Dockerfile** (not CDN) — needs sign-off because it deviates from spec wording.
-7. **HTMX 2.x vs 1.9** — recommend 2.x; needs sign-off because spec wording ("1.9+") predates 2.x stable.
-8. **Onboarding seed for cold start?** AI gates at ≥3 sessions + ≥5 distinct flavor notes. Decide: "Add 3 sample brews" UI, CSV import, or accept the cliff.
-9. **Lock down the Alpine CSP trade-off in Phase 1.** Phase 1 planner should prototype intended Alpine directives against the CSP build to confirm `'unsafe-eval'` can be avoided.
-10. **Admin "API health" panel scope.** Not in spec; required to surface AI failures (COST-3, AI-5). Recommend Phase 9.
-11. **Server-side draft autosave-on-blur in v1?** Spec defers offline writes; iOS ITP 7-day eviction creates a real but narrow data-loss path for non-installed iOS users. Cheap belt-and-suspenders if added in Phase 5.
-
----
-
-## Confidence Summary
+## Confidence Assessment
 
 | Area | Confidence | Notes |
-|---|---|---|
-| Stack pins | HIGH | PyPI authoritative as of 2026-05-16 |
-| HTMX 2.x deltas | HIGH | Official migration guide |
-| Tailwind CDN/CLI trade-off | MEDIUM | Production warning firm; operational impact judgment |
-| Anthropic/OpenAI tool versions | HIGH | Verified against official docs |
-| Feature gaps (bag, wishlist, yield/TDS) | HIGH | Multiple shipping competitors confirm |
-| iOS PWA limits (ITP, Wake Lock, install, capture) | HIGH | MDN + WebKit bugs corroborated |
-| Architecture component boundaries | HIGH | FastAPI/Starlette/uvicorn docs |
-| Build-order DAG | MEDIUM | Defensible but judgment-based |
-| SSE vs polling | MEDIUM | Genuine trade-off |
-| Slowapi as rate-limit pick | MEDIUM | Works widely; no recent releases — yellow flag |
-| AI cost-telemetry necessity | HIGH | Anthropic billing semantics + Ahrefs hallucination data |
+|------|------------|-------|
+| Stack | HIGH | All versions verified against PyPI; Docker/GHCR workflow from official documentation; no version ambiguity |
+| Features | HIGH (verdicts) / MEDIUM (accuracy estimates) | Adopt/skip verdicts well-reasoned from official sources; AI prediction accuracy (±0.5 error) from academic sources is directional |
+| Architecture | HIGH | All findings grounded in direct source code reads of the v1.1 codebase; data model analysis read the actual SQLAlchemy model and analytics.py |
+| Pitfalls | HIGH | v1.1 pitfalls verified via official docs; v1.2 pitfalls grounded in actual project history (G-01, safe-area commit, `|tojson` quoting, SW cache behavior) — authoritative |
+
+**Overall confidence:** HIGH
+
+### Gaps to Address
+
+- **Cafe data model open decision:** Resolve at plan-phase. ARCHITECTURE's separate-table recommendation is best-grounded.
+- **AI prediction storage approach:** Resolve at plan-phase. `ai_recommendations` reuse vs. new `ai_coffee_predictions` table.
+- **SSE streaming scope:** Confirm deferred at requirements phase. Default is deferred.
+- **Charts and QR code:** Confirm deferred at requirements phase. Default is both deferred.
+- **Safe-area verification:** Not a gap — a concrete gating task that must appear as Phase 1's first acceptance criterion.
+- **AI research cold-start gate:** Plan-phase should verify whether `analytics.get_ai_eligibility()` (or equivalent) already exists or needs to be added.
 
 ---
 
-## Suggested Phase Count
+## Sources
 
-**13 phases** (mirrors ARCHITECTURE.md DAG).
+### Primary (HIGH confidence)
+- ARCHITECTURE.md — direct reads of `brew_session.py`, `analytics.py`, `ai_service.py`, `scheduler.py`, `base.html`, `nav-bar.js`, `sw.js`, `entrypoint.sh`, `Dockerfile`, `PROJECT.md`
+- STACK.md — PyPI version pages, Docker Multi-Platform GitHub Actions official docs, GHCR official docs, segno PyPI, Chart.js GitHub releases
+- PITFALLS.md — Anthropic web search tool official docs, APScheduler user guide, MDN Screen Wake Lock API, Snobbery project memory (authoritative on G-01, safe-area fix, SW cache, `|tojson` quoting, nonce-CSP/htmx-indicator incident)
+- FEATURES.md — Beanconqueror GitHub repo + official site + changelog; app store sources; arXiv on AI rating prediction
 
-**Research flags — needs deeper per-phase research:** Phase 1 (CSP/Alpine prototype), Phase 7 (AI service — SSE vs polling, URL verification approach, citation-block projection), Phase 10 (Search — FTS vs trigram prototype), Phase 11 (PWA on iOS — Wake Lock fallback testing).
+### Secondary (MEDIUM confidence)
+- Cafe quick-rate UX patterns — modeled from competitor UX; not validated against production data
+- AI predict-rating accuracy claims — academic sources; actual household accuracy unknown until shipped
 
-**Standard patterns — skip dedicated phase research:** Phase 0 (Docker/Compose), Phase 2 (auth), Phase 4 (CRUD), Phase 8 (APScheduler + pg_dump), Phase 9 (admin CRUD).
+### Tertiary (LOW confidence)
+- structlog performance claim ("25% faster") — single recent source; treat as directional
+
+---
+
+*Research completed: 2026-05-25*
+*Ready for roadmap: yes — open decisions flagged above must be resolved by plan-phase researcher before the cafe-log and AI-research phases are written*

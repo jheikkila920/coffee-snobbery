@@ -17,14 +17,10 @@
 {% set is_edit = mode == "edit" %}
 {% if is_edit %}
   {% set form_action = "/recipes/" ~ recipe_id %}
-  {% set form_target = "closest [data-row]" %}
-  {% set form_swap = "outerHTML" %}
 {% else %}
   {% set form_action = "/recipes" %}
-  {% set form_target = "#recipe-form-mount" %}
-  {% set form_swap = "innerHTML" %}
 {% endif %}
-<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800"
+<div {% if is_edit %}data-row {% endif %}class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800"
      x-data="recipeStepBuilder"
      data-initial-steps="{{ steps_json }}">
   <form hx-post="{{ form_action }}"
@@ -33,6 +29,9 @@
         class="flex flex-col gap-4">
     {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
     <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    {% if layout == "desktop" %}
+    <input type="hidden" name="layout" value="desktop">
+    {% endif %}
 
     <label class="flex flex-col gap-1">
       <span class="text-sm font-semibold">Name</span>
@@ -124,13 +123,23 @@
     {% endif %}
 
     <div class="flex gap-3 mt-2">
+      {% if is_edit %}
       <button type="button"
-              hx-get="/recipes/empty-form"
-              hx-target="#recipe-form-mount"
-              hx-swap="innerHTML"
+              hx-get="/recipes/{{ recipe_id }}/row"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>
+      {% else %}
+      <button type="button"
+              hx-get="/recipes/empty-form"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      {% endif %}
       <button type="submit"
               class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
         Save

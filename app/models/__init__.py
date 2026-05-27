@@ -20,12 +20,14 @@ from app.models.base import Base
 from app.models.brew_draft import BrewDraft
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
+from app.models.coffee_origin import CoffeeOrigin
 from app.models.equipment import Equipment
 from app.models.flavor_note import FlavorNote
 from app.models.recipe import Recipe
 from app.models.roaster import Roaster
 from app.models.session import Session
 from app.models.user import User
+from app.models.varietal import Varietal, coffee_varietals  # noqa: F401
 from app.models.wishlist_entry import WishlistEntry
 
 __all__ = [
@@ -37,11 +39,13 @@ __all__ = [
     "BrewDraft",
     "BrewSession",
     "Coffee",
+    "CoffeeOrigin",
     "Equipment",
     "FlavorNote",
     "Recipe",
     "Roaster",
     "Session",
     "User",
+    "Varietal",
     "WishlistEntry",
 ]

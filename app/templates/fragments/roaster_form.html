@@ -12,8 +12,6 @@
 {% set is_modal = mode == "modal" %}
 {% if is_edit %}
   {% set form_action = "/roasters/" ~ roaster_id %}
-  {% set form_target = "closest [data-row]" %}
-  {% set form_swap = "outerHTML" %}
 {% elif is_modal %}
   {# Plan 04-11: in modal mode the form lives inside #modal-mount. On
      validation failure the router re-renders this fragment INSIDE the
@@ -27,10 +25,8 @@
   {% set form_swap = "innerHTML" %}
 {% else %}
   {% set form_action = "/roasters" %}
-  {% set form_target = "#roaster-form-mount" %}
-  {% set form_swap = "innerHTML" %}
 {% endif %}
-<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+<div {% if is_edit %}data-row {% endif %}class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
   <form hx-post="{{ form_action }}"
         hx-target="{{ form_target }}"
         hx-swap="{{ form_swap }}"
@@ -40,6 +36,9 @@
     <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
     {% if is_modal %}
       <input type="hidden" name="as_modal" value="true">
+    {% endif %}
+    {% if layout == "desktop" %}
+    <input type="hidden" name="layout" value="desktop">
     {% endif %}
     <label class="flex flex-col gap-1">
       <span class="text-sm font-semibold">Name</span>
@@ -92,11 +91,19 @@
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Discard
       </button>
+      {% elif is_edit %}
+      <button type="button"
+              hx-get="/roasters/{{ roaster_id }}/row"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
       {% else %}
       <button type="button"
               hx-get="/roasters/empty-form"
-              hx-target="#roaster-form-mount"
-              hx-swap="innerHTML"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>

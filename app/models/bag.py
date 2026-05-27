@@ -26,9 +26,9 @@ is still load-bearing.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
-from sqlalchemy import BigInteger, Date, ForeignKey, Identity, Index, Integer, Text
+from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -51,7 +51,6 @@ class Bag(Base):
         ForeignKey("coffees.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    roast_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     weight_grams: Mapped[int | None] = mapped_column(Integer, nullable=True)
     opened_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)

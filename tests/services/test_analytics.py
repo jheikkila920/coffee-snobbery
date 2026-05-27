@@ -12,7 +12,7 @@ fixture that wipes test rows before and after each test.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -62,7 +62,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     - 1 user
     - 1 roaster
     - 4 coffees: 2 brewed+rated, 1 never brewed (unrated candidate), 1 archived+never brewed
-    - bags with roast_date (varied dates for two freshness buckets)
+    - bags (no roast_date — column removed in Phase 15.1 D-16)
     - 1 brewer Equipment row (V60)
     - 1 recipe
     - 6 flavor notes
@@ -78,6 +78,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     from app.models.bag import Bag
     from app.models.brew_session import BrewSession
     from app.models.coffee import Coffee
+    from app.models.coffee_origin import CoffeeOrigin
     from app.models.equipment import Equipment
     from app.models.flavor_note import FlavorNote
     from app.models.recipe import Recipe
@@ -102,7 +103,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee1 = Coffee(
         name=f"analyticstest-Coffee1-{username}",
         roaster_id=roaster.id,
-        origin="Ethiopia",
+        origins=[CoffeeOrigin(country="Ethiopia", sort_order=0)],
         process="washed",
         roast_level="light",
     )
@@ -113,7 +114,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee2 = Coffee(
         name=f"analyticstest-Coffee2-{username}",
         roaster_id=roaster.id,
-        origin="Colombia",
+        origins=[CoffeeOrigin(country="Colombia", sort_order=0)],
         process="natural",
         roast_level="medium",
     )
@@ -124,7 +125,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee3 = Coffee(
         name=f"analyticstest-Coffee3-{username}",
         roaster_id=roaster.id,
-        origin="Kenya",
+        origins=[CoffeeOrigin(country="Kenya", sort_order=0)],
         process="washed",
         roast_level="light",
     )
@@ -135,7 +136,7 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     coffee_archived = Coffee(
         name=f"analyticstest-CoffeeArchived-{username}",
         roaster_id=roaster.id,
-        origin="Brazil",
+        origins=[CoffeeOrigin(country="Brazil", sort_order=0)],
         process="natural",
         roast_level="dark",
         archived=True,
@@ -144,14 +145,12 @@ def _seed_analytics_scenario(db, *, username: str) -> tuple[int, int, int]:
     db.flush()
     archived_coffee_id = coffee_archived.id
 
-    # Bags with roast_date for HOME-04 freshness buckets
-    # bag1: brewed_at 2026-03-10, roast_date 2026-03-08 → 2 days fresh → "0-3 days" bucket
-    bag1 = Bag(coffee_id=coffee1.id, roast_date=date(2026, 3, 8))
+    # Bags — roast_date column removed in Phase 15.1 (D-16)
+    bag1 = Bag(coffee_id=coffee1.id)
     db.add(bag1)
     db.flush()
 
-    # bag2: brewed_at 2026-03-10, roast_date 2026-03-01 → 9 days fresh → "8-14 days" bucket
-    bag2 = Bag(coffee_id=coffee2.id, roast_date=date(2026, 3, 1))
+    bag2 = Bag(coffee_id=coffee2.id)
     db.add(bag2)
     db.flush()
 
@@ -452,31 +451,6 @@ def test_flavor_descriptors(clean_analytics: None) -> None:
     # We seeded primary notes (blueberry/jasmine/chocolate) in 4 coffee1 sessions rated 4.5
     # and all 6 notes in 2 coffee2 sessions rated 4.0. All qualify at 4.0+ and count>=2.
     assert len(rows) >= 3  # at least the 3 primary notes appear in >=4 sessions each
-
-
-def test_roast_freshness_buckets(clean_analytics: None) -> None:
-    """HOME-04: freshness buckets using bags.roast_date only, min 2 rated sessions."""
-    _require_postgres()
-    _require_analytics_tables()
-    from app.db import SessionLocal
-    from app.services import analytics
-
-    with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-freshness")
-
-    with SessionLocal() as db:
-        rows = analytics.get_roast_freshness_buckets(db, uid)
-
-    valid_buckets = {"0-3 days", "4-7 days", "8-14 days", "15-21 days", "22+ days"}
-    for row in rows:
-        assert row.freshness_bucket in valid_buckets
-        assert row.session_count >= 2  # D-07 floor
-
-    bucket_labels = {r.freshness_bucket for r in rows}
-    # bag1 (2 days fresh, 4 sessions) → "0-3 days" bucket
-    assert "0-3 days" in bucket_labels
-    # bag2 (9 days fresh, 2 sessions) → "8-14 days" bucket
-    assert "8-14 days" in bucket_labels
 
 
 def test_sweet_spots(clean_analytics: None) -> None:

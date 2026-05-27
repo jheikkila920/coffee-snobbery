@@ -59,7 +59,9 @@ from app.events import (
 )
 from app.models.bag import Bag
 from app.models.coffee import Coffee
+from app.models.coffee_origin import CoffeeOrigin
 from app.models.flavor_note import FlavorNote
+from app.models.varietal import Varietal
 
 log = structlog.get_logger(__name__)
 
@@ -76,8 +78,10 @@ COFFEE_PROCESSES: tuple[str, ...] = (
     "unknown",
 )
 
-# Locked 6-value roast-level enum (same defense-in-depth posture).
+# 8-value roast-level enum (CATALOG-04: ultra-light + nordic-light added).
 COFFEE_ROAST_LEVELS: tuple[str, ...] = (
+    "ultra-light",
+    "nordic-light",
     "light",
     "medium-light",
     "medium",
@@ -92,34 +96,53 @@ def create_coffee(
     *,
     name: str,
     roaster_id: int | None,
-    country: str | None,
-    origin: str | None,
     process: str | None,
     roast_level: str | None,
-    varietal: str | None,
     notes: str,
     advertised_flavor_note_ids: list[int],
+    origins: list[tuple[str, str | None]] | None = None,
+    varietal_ids: list[int] | None = None,
     by_user_id: int,
 ) -> Coffee:
     """Insert a new coffee row and emit ``catalog.coffee.created``.
 
-    ORM instantiate → ``add`` → ``flush`` (populate id) → ``commit``.
+    ORM instantiate → ``add`` → ``flush`` (populate id) → add CoffeeOrigin rows
+    + assign varietal m2m → ``commit``. Origins are a list of ``(country, region)``
+    tuples (D-22). varietal_ids are FK references to the varietals table (CATALOG-05).
+
     SQLAlchemy 2.0 + psycopg 3 handle the ``ARRAY(BigInteger)`` round-
     trip natively — pass the list straight to the column.
     """
     coffee = Coffee(
         name=name,
         roaster_id=roaster_id,
-        country=country,
-        origin=origin,
         process=process,
         roast_level=roast_level,
-        varietal=varietal,
         notes=notes,
         advertised_flavor_note_ids=list(advertised_flavor_note_ids),
     )
     db.add(coffee)
-    db.flush()
+    db.flush()  # populate coffee.id for FK on origin rows + m2m assignment
+
+    # Insert origin rows in sort_order sequence (D-22).
+    for i, (country, region) in enumerate(origins or []):
+        db.add(
+            CoffeeOrigin(
+                coffee_id=coffee.id,
+                country=country,
+                region=region,
+                sort_order=i,
+            )
+        )
+
+    # Assign varietal m2m (CATALOG-05). Load Varietal objects by ID and assign
+    # to the relationship; SQLAlchemy handles the join-table inserts.
+    if varietal_ids:
+        varietals = list(
+            db.execute(select(Varietal).where(Varietal.id.in_(varietal_ids))).scalars().all()
+        )
+        coffee.varietals = varietals
+
     db.commit()
     log.info(
         CATALOG_COFFEE_CREATED,
@@ -174,15 +197,15 @@ def list_coffees(
     * ``archived=False`` (default) → only non-archived rows.
     * ``archived=True`` → only archived rows (UI-SPEC lock — NOT a union).
     * ``roaster_id`` → exact match (FK).
-    * ``country`` → exact match (the filter dropdown is populated from
-      :func:`list_distinct_countries`, so exact match is correct and
-      cheap).
+    * ``country`` → exact match against coffee_origins.country (D-05:
+      country column moved to coffee_origins join table; URL param name
+      ``country`` is preserved for URL stability per plan 15.1-01).
     * ``process`` → exact match against the 6-value enum.
 
     All filter params are bound via SQLAlchemy parameterized ``where``
     clauses — no string concatenation, no SQLi exposure.
     """
-    stmt = select(Coffee)
+    stmt = select(Coffee).distinct()
     if archived:
         stmt = stmt.where(Coffee.archived.is_(True))
     else:
@@ -190,7 +213,10 @@ def list_coffees(
     if roaster_id is not None:
         stmt = stmt.where(Coffee.roaster_id == roaster_id)
     if country:
-        stmt = stmt.where(Coffee.country == country)
+        # Join coffee_origins to filter by origin country (D-05).
+        stmt = stmt.join(CoffeeOrigin, CoffeeOrigin.coffee_id == Coffee.id).where(
+            CoffeeOrigin.country == country
+        )
     if process:
         stmt = stmt.where(Coffee.process == process)
     stmt = stmt.order_by(Coffee.name)
@@ -203,13 +229,12 @@ def update_coffee(
     coffee_id: int,
     name: str,
     roaster_id: int | None,
-    country: str | None,
-    origin: str | None,
     process: str | None,
     roast_level: str | None,
-    varietal: str | None,
     notes: str,
     advertised_flavor_note_ids: list[int],
+    origins: list[tuple[str, str | None]] | None = None,
+    varietal_ids: list[int] | None = None,
     by_user_id: int,
 ) -> Coffee:
     """UPDATE the row, commit, re-fetch, emit ``catalog.coffee.updated``.
@@ -218,6 +243,15 @@ def update_coffee(
     same statement (mirrors :func:`app.services.roasters.update_roaster`).
     The array column is overwritten wholesale on every update — Postgres
     array assignment replaces the entire value, not a merge.
+
+    Origins use a replace strategy: delete all existing coffee_origins rows
+    for the coffee, then insert the new set. Both ops happen in the same
+    transaction as the Coffee row update (D-22 implicit blend promotion).
+
+    Varietals use the ORM relationship assignment: load the existing coffee
+    object, replace coffee.varietals with the new Varietal objects. SQLAlchemy
+    handles the join-table deletes and inserts within the same transaction
+    (CATALOG-05).
     """
     db.execute(
         update(Coffee)
@@ -225,17 +259,40 @@ def update_coffee(
         .values(
             name=name,
             roaster_id=roaster_id,
-            country=country,
-            origin=origin,
             process=process,
             roast_level=roast_level,
-            varietal=varietal,
             notes=notes,
             advertised_flavor_note_ids=list(advertised_flavor_note_ids),
             updated_at=func.now(),
         )
     )
+
+    # Replace origin rows (delete-then-insert within the same transaction).
+    from sqlalchemy import delete as sql_delete
+
+    db.execute(sql_delete(CoffeeOrigin).where(CoffeeOrigin.coffee_id == coffee_id))
+    for i, (country, region) in enumerate(origins or []):
+        db.add(
+            CoffeeOrigin(
+                coffee_id=coffee_id,
+                country=country,
+                region=region,
+                sort_order=i,
+            )
+        )
+
+    # Replace varietal m2m (CATALOG-05). Load the coffee object and reassign
+    # the varietals relationship — SQLAlchemy syncs the join table.
+    coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one()
+    if varietal_ids is not None:
+        new_varietals = list(
+            db.execute(select(Varietal).where(Varietal.id.in_(varietal_ids))).scalars().all()
+        )
+        coffee.varietals = new_varietals
+
     db.commit()
+    # Re-fetch to pick up all relationship data (origins + varietals).
+    db.expire(coffee)
     coffee = db.execute(select(Coffee).where(Coffee.id == coffee_id)).scalar_one()
     log.info(
         CATALOG_COFFEE_UPDATED,
@@ -260,15 +317,17 @@ def archive_coffee(db: Session, *, coffee_id: int, by_user_id: int) -> None:
 
 
 def list_distinct_countries(db: Session) -> list[str]:
-    """Return distinct non-null country values for the filter-bar dropdown.
+    """Return distinct country values from coffee_origins for the filter-bar dropdown.
 
     Ordered ascending. The dropdown is rebuilt on every list-page render
     so new coffees with new countries surface immediately; the optional
     ``GET /filters-panel`` endpoint reuses this for a partial refresh.
+
+    Queries coffee_origins.country (D-05: coffees.country column removed,
+    origin data lives in the join table). Function name preserved for URL
+    stability and minimal call-site churn.
     """
-    stmt = (
-        select(Coffee.country).where(Coffee.country.isnot(None)).distinct().order_by(Coffee.country)
-    )
+    stmt = select(CoffeeOrigin.country).distinct().order_by(CoffeeOrigin.country)
     return [row for row in db.execute(stmt).scalars().all() if row]
 
 

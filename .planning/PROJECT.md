@@ -49,7 +49,7 @@ A returning user — phone in hand, kettle nearby — can log a brew session in 
 <!-- Current scope. Building toward v1.2 (see Current Milestone above). REQUIREMENTS.md holds the REQ-ID breakdown once defined. -->
 
 v1.2 Polish & Mobile-First (in planning). High-level scope:
-- [ ] v1.1 debt cleanup (G-01, T-INFRA-1, Phase 11 nav verify, human UAT, human_needed sign-offs)
+- [x] v1.1 debt cleanup -- Phase 15 complete 2026-05-26 (G-01, T-INFRA-1, DEBT-03 on-device nav/sign-out, D-13 safe-area, Phase 09 AI respect/force all closed; 5 catalogued UAT items deferred with reason to Phase 15.1 verification gap-closure)
 - [ ] Self-host packaging (prebuilt image, deploy/NPM docs, README, simpler first-run)
 - [ ] Mobile-first audit + rework of every screen to a major-company polish bar
 - [ ] IA restructuring (Admin off nav, new AI page, simplified home)
@@ -66,14 +66,18 @@ v1.2 Polish & Mobile-First (in planning). High-level scope:
 
 ### Known Gaps (deferred at v1.1 close)
 
-<!-- Acknowledged debt carried past the milestone, not closed. Also in STATE.md "Deferred Items". -->
+<!-- Acknowledged debt carried past the milestone. Phase 15 (v1.1 Debt Cleanup, 2026-05-26) closed the majority; 5 catalogued items remain, retargeted to Phase 15.1. -->
 
-- [ ] Human UAT pending: Phase 01 (3 scenarios), 02 (1), 07 (2), 11 (3); Phase 09 partial
-- [ ] `human_needed` verification: Phases 01, 02, 07, 09, 10, 11
-- [ ] Phase 14 manual UAT: 375px search full-screen sheet behavior + p95 latency
-- [ ] Phase 11 nav + sign-out: 11-03 marked complete but project memory flags a possible gap — verify on-device
-- [ ] G-01: VPS named volumes are root-owned — next deploy needs one-time `chown -R app:app /app/data`
-- [ ] T-INFRA-1: full-suite test isolation gaps (catalog TRUNCATE teardown + settings cache clear)
+- [x] G-01 closed (Phase 15.01): entrypoint.sh starts as root, conditionally chowns /app/data when UID != 1000, runs migrations, then `exec gosu app uvicorn` drops to UID 1000. Manual VPS chown workaround retired.
+- [x] T-INFRA-1 closed (Phase 15.02): `_svc._cache.clear()` guard in `test_setup_concurrent_race` + CI "Pytest isolation double-run" step. Full suite green twice (999/999) against the same DB.
+- [x] Phase 11 nav + sign-out closed (Phase 15.03 / DEBT-03): all 10 authenticated pages verified on physical iPhone (375px) + desktop browser (>=768px); sign-out clears the session at both viewports.
+- [x] D-13 safe-area closed (Phase 15.03): commit `982c0e6` verified on John's iPhone PWA standalone; NEW-13 Log/sessions bottom-nav resolved. Unblocks Phases 20 and 21.
+- [x] Phase 09 item 6 closed (Phase 15.03): AI refresh respect/force modes confirmed against live AI on the VPS.
+- [~] Human UAT partial (Phase 15.03): 7 of 12 closed in-session (02-UAT-1, 07-UAT-1 with findings, 07-UAT-2, 10-VERIF-1, 10-VERIF-2, 11-UAT-1, 11-UAT-3); 5 deferred to Phase 15.1 with written reason -- 01-UAT-1/2/3, 10-VERIF-3, 11-UAT-2.
+- [~] `human_needed` partial (Phase 15.03): mirrors DEBT-04 outcomes; Phase 09 distinct item closed.
+- [~] Phase 14 manual UAT mapped to Phase 10 (RESEARCH Open Q #3): 10-VERIF-1/2 closed; 10-VERIF-3 (p95 latency) deferred to Phase 15.1.
+- [ ] **Phase 15.1 (verification gap-closure)** -- 5 items: 01-UAT-1 (NGINX proxy curl), 01-UAT-2 (CSP nonce DevTools), 01-UAT-3 (HTMX CSRF double-submit), 10-VERIF-3 (search p95 load-gen), 11-UAT-2 (Lighthouse PWA installability).
+- [ ] **Follow-up TODOs from 07-UAT-1**: AI hero regen latency (several minutes vs typical 10-60s) -- investigate. AI grounding surfaced an ARCHIVED/unavailable coffee -- filter by purchase availability.
 
 ### Out of Scope
 
@@ -178,4 +182,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 — v1.2 Polish & Mobile-First milestone started. Direction: self-host-friendly distribution (not multi-user), mobile-first audit + rework (not rewrite), AI consolidated to its own bottom-nav page, v1.1 debt folded in early. Public/hosted multi-user deferred to v2.0. v1.1 archive preserved in milestones/v1.1-REQUIREMENTS.md, milestones/v1.1-ROADMAP.md, and milestones/v1.1-phases/. Next: research -> requirements -> roadmap.*
+*Last updated: 2026-05-26 -- Phase 15 (v1.1 Debt Cleanup) complete: 13 items closed (DEBT-01 entrypoint chown+gosu, DEBT-02 test isolation double-run, DEBT-03 on-device nav/sign-out, D-13 safe-area, Phase 09 AI respect/force, 7 of 12 human UAT items), 5 deferred to Phase 15.1 (verification gap-closure) with written reasons + target phase. Code review: 0 BLOCKER / 5 WARNING / 3 INFO (advisory). Verifier: passed 5/5 must-haves. Phases 20/21 unblocked by D-13. Two follow-up TODOs captured against 07-UAT-1 (AI regen latency; AI surfaced archived coffee). Next: Phase 16 (Cafe Quick-Rate).*

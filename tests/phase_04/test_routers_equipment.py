@@ -173,8 +173,11 @@ def test_create_valid_brewer(authed_client: Any, clean_equipment: None) -> None:
     assert 'hx-swap-oob="innerHTML"' in resp.text
     # List-container markers appear inside the OOB div.
     assert "space-y-3" in resp.text or 'class="hidden md:block"' in resp.text
-    # form-mount ID must NOT appear in the response body (it's the swap target, not content).
-    assert "equipment-form-mount" not in resp.text
+    # No form is rendered in the response — only the row + the OOB list update.
+    # (15.1-05 added per-row desktop edit buttons that reference #equipment-form-mount
+    # as hx-target, so the literal string is now present in row markup; the contract
+    # being tested is the absence of a re-rendered <form>.)
+    assert "<form " not in resp.text
 
 
 def test_create_rejects_unknown_type(authed_client: Any, clean_equipment: None) -> None:

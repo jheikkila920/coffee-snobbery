@@ -22,10 +22,12 @@ from dataclasses import dataclass, field
 import structlog
 from markupsafe import Markup, escape
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.orm import Session
 
 from app.models.brew_session import BrewSession
 from app.models.coffee import Coffee
+from app.models.coffee_origin import CoffeeOrigin
 from app.models.equipment import Equipment
 from app.models.flavor_note import FlavorNote
 from app.models.recipe import Recipe
@@ -131,12 +133,27 @@ def run_search(db: Session, query: str, user_id: int) -> SearchResults:
 
     # ------------------------------------------------------------------ #
     # 1. Coffees — include archived (D-12); JOIN Roaster for context      #
+    #    Origin became multi-row via coffee_origins (D-01); aggregate to  #
+    #    a comma-joined string ordered by sort_order so a blend like      #
+    #    "Yirg + Bourbon" still renders on one search hit.                #
     # ------------------------------------------------------------------ #
+    origin_subq = (
+        select(
+            func.array_to_string(
+                func.array_agg(aggregate_order_by(CoffeeOrigin.country, CoffeeOrigin.sort_order)),
+                ", ",
+            )
+        )
+        .where(CoffeeOrigin.coffee_id == Coffee.id)
+        .correlate(Coffee)
+        .scalar_subquery()
+        .label("origin")
+    )
     coffee_stmt = (
         select(
             Coffee.id,
             Coffee.name,
-            Coffee.origin,
+            origin_subq,
             Coffee.archived,
             Roaster.name.label("roaster_name"),
         )

@@ -45,20 +45,19 @@
 {% set is_edit = mode == "edit" %}
 {% if is_edit %}
   {% set form_action = "/coffees/" ~ coffee_id %}
-  {% set form_target = "closest [data-row]" %}
-  {% set form_swap = "outerHTML" %}
 {% else %}
   {% set form_action = "/coffees" %}
-  {% set form_target = "#coffee-form-mount" %}
-  {% set form_swap = "innerHTML" %}
 {% endif %}
-<div class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
+<div {% if is_edit %}data-row {% endif %}class="rounded-lg border border-espresso-200 bg-cream-100 p-6 mb-4 dark:bg-espresso-900 dark:border-espresso-800">
   <form hx-post="{{ form_action }}"
         hx-target="{{ form_target }}"
         hx-swap="{{ form_swap }}"
         class="flex flex-col gap-4">
     {# D-15: CSRFFormFieldShim hoists this field into the X-CSRF-Token header. #}
     <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+    {% if layout == "desktop" %}
+    <input type="hidden" name="layout" value="desktop">
+    {% endif %}
 
     <label class="flex flex-col gap-1">
       <span class="text-sm font-semibold">Name</span>
@@ -112,27 +111,33 @@
       {% endif %}
     </div>
 
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-semibold">Country</span>
-      <input name="country"
-             maxlength="80"
-             value="{{ values.get('country', '') or '' }}"
-             class="rounded border px-2 py-2 text-base{% if errors.get('country') %} border-red-300{% else %} border-espresso-200{% endif %}">
-      {% if errors.get('country') %}
-        <p class="text-sm text-red-700 mt-1">{{ errors['country'] }}</p>
+    {# Origin rows — multi-origin support (D-22 Plan 15.1-01).
+       Each row is an include of coffee_origin_row.html.
+       First row: removable=False (prevents removing down to zero).
+       Subsequent rows (edit/validation re-render): removable=True.
+       + Add another origin fires hx-get to append a new empty row.
+       This block must NOT be inside any x-data scope (RESEARCH A2). #}
+    <div class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Origins</span>
+      {% if errors.get('origins') %}
+        <p class="text-sm text-red-700 mb-1">{{ errors['origins'] }}</p>
       {% endif %}
-    </label>
-
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-semibold">Origin</span>
-      <input name="origin"
-             maxlength="120"
-             value="{{ values.get('origin', '') or '' }}"
-             class="rounded border px-2 py-2 text-base{% if errors.get('origin') %} border-red-300{% else %} border-espresso-200{% endif %}">
-      {% if errors.get('origin') %}
-        <p class="text-sm text-red-700 mt-1">{{ errors['origin'] }}</p>
-      {% endif %}
-    </label>
+      <div id="origin-rows-container" class="flex flex-col gap-2">
+        {% for origin in origins %}
+          {% set country = origin[0] %}
+          {% set region = origin[1] %}
+          {% set removable = not loop.first %}
+          {% include "fragments/coffee_origin_row.html" with context %}
+        {% endfor %}
+      </div>
+      <button type="button"
+              hx-get="/coffees/origin-row-template"
+              hx-target="#origin-rows-container"
+              hx-swap="beforeend"
+              class="mt-1 self-start text-sm text-espresso-700 hover:underline dark:text-cream-200">
+        + Add another origin
+      </button>
+    </div>
 
     <label class="flex flex-col gap-1">
       <span class="text-sm font-semibold">Process</span>
@@ -162,16 +167,68 @@
       {% endif %}
     </label>
 
-    <label class="flex flex-col gap-1">
-      <span class="text-sm font-semibold">Varietal</span>
-      <input name="varietal"
-             maxlength="120"
-             value="{{ values.get('varietal', '') or '' }}"
-             class="rounded border px-2 py-2 text-base{% if errors.get('varietal') %} border-red-300{% else %} border-espresso-200{% endif %}">
-      {% if errors.get('varietal') %}
-        <p class="text-sm text-red-700 mt-1">{{ errors['varietal'] }}</p>
-      {% endif %}
-    </label>
+    {# Varietal chip-builder (CATALOG-05).
+       Mirrors the flavorNoteChips scope exactly; uses a distinct x-data scope
+       `varietalChips` to avoid collision with the flavor-note chip-builder above.
+       The data-initial-chips attribute MUST use single quotes (Pitfall 5 —
+       |tojson emits double quotes; double-quoting the attr breaks HTML parsing).
+       Server-seed chips render pre-hydration; Alpine clears them on init() and
+       drives from selectedChips. Hidden inputs named "varietal_ids" are
+       collected via getlist("varietal_ids") in _parse_form_payload (bypasses
+       Pydantic, same pattern as origins_country/origins_region). #}
+    <div id="varietal-chips"
+         class="field varietal-chips-field flex flex-col gap-1"
+         x-data="varietalChips"
+         data-initial-chips='{{ selected_varietals|tojson }}'>
+      <span class="text-sm font-semibold">Varietals</span>
+      <div id="varietal-chip-list" class="flex flex-wrap gap-2 mb-2">
+        {% for chip in selected_varietals %}
+          <span data-seed-chip
+                class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
+            {{ chip.name }}
+          </span>
+        {% endfor %}
+        <template x-for="chip in selectedChips" :key="chip.id">
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded text-sm bg-cream-200 text-espresso-900 dark:bg-espresso-800 dark:text-cream-200">
+            <span x-text="chip.name"></span>
+            <button type="button"
+                    x-on:click="removeChip(chip.id)"
+                    :aria-label="'Remove ' + chip.name"
+                    class="w-6 h-6 inline-flex items-center justify-center rounded hover:bg-cream-300 dark:hover:bg-espresso-700">
+              &times;
+            </button>
+          </span>
+        </template>
+      </div>
+      <div id="varietal-hidden-inputs" data-seed-hidden-container>
+        {% for chip in selected_varietals %}
+          <input type="hidden" name="varietal_ids" value="{{ chip.id }}">
+        {% endfor %}
+        <template x-for="chip in selectedChips" :key="'vh-' + chip.id">
+          <input type="hidden" name="varietal_ids" :value="chip.id">
+        </template>
+      </div>
+      {# Target for the create-on-the-fly chip response (hx-swap="afterbegin"). #}
+      <div id="varietal-new-chip-target" class="hidden"></div>
+      <div class="relative">
+        <input type="text"
+               name="varietal_query"
+               :value="query"
+               x-on:input="onInput($el)"
+               x-on:focus="onFocus()"
+               x-on:blur="onBlur()"
+               x-on:keydown="onKeydown($event)"
+               autocomplete="off"
+               hx-get="/coffees/varietal-autocomplete"
+               hx-trigger="input changed delay:200ms[target.value.length >= 2], focus once from:closest .field"
+               hx-sync="this:replace"
+               hx-target="#varietal-dropdown"
+               hx-swap="innerHTML"
+               placeholder="Type 2+ chars to add a varietal…"
+               class="w-full rounded border px-2 py-2 text-base border-espresso-200">
+        <div id="varietal-dropdown" x-show="open" class="absolute top-full left-0 right-0 z-10 mt-1"></div>
+      </div>
+    </div>
 
     {# Advertised flavor notes — chip-builder (D-15 + D-16 + plan 04-11).
        Wraps the input + chip list + hidden inputs in a single
@@ -297,13 +354,23 @@
     {% endif %}
 
     <div class="flex gap-3 mt-2">
+      {% if is_edit %}
       <button type="button"
-              hx-get="/coffees/empty-form"
-              hx-target="#coffee-form-mount"
-              hx-swap="innerHTML"
+              hx-get="/coffees/{{ coffee_id }}/row"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
               class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
         Cancel
       </button>
+      {% else %}
+      <button type="button"
+              hx-get="/coffees/empty-form"
+              hx-target="{{ form_target }}"
+              hx-swap="{{ form_swap }}"
+              class="rounded border border-espresso-300 px-4 py-2 text-espresso-800 hover:bg-espresso-50 dark:border-espresso-700 dark:text-cream-200 dark:hover:bg-espresso-900">
+        Cancel
+      </button>
+      {% endif %}
       <button type="submit"
               class="rounded bg-espresso-700 px-4 py-2 text-cream-50 hover:bg-espresso-800">
         Save
