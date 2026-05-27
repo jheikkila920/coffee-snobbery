@@ -26,6 +26,7 @@ from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session, aliased
 
 from app.models.brew_session import BrewSession
+from app.models.cafe_log import CafeLog
 from app.models.coffee import Coffee
 from app.models.coffee_origin import CoffeeOrigin
 from app.models.equipment import Equipment
@@ -351,21 +352,34 @@ def get_cold_start_counts(db: Session, user_id: int) -> dict[str, Any]:
 
 
 def compute_input_signature(db: Session, user_id: int) -> str:
-    """SHA256 hex over this user's RATED sessions' AI-input fields (D-08/D-09, COST-4).
+    """SHA256 hex over this user's RATED brew + cafe rows' AI-input fields (D-08/D-09/D-12, COST-4).
 
-    Inputs per session: (coffee_id, float(rating), sorted flavor_note_ids_observed,
-    recipe_id, brewer_id).
+    Payload shape: ``[brew_list, cafe_list]`` — a list of TWO lists, NOT a flat
+    concatenation. This is critical for two reasons:
+    1. Pitfall 3 (namespace defense): a brew row with ``coffee_id=N`` and a cafe row
+       with ``id=N`` cannot produce identical 5-tuples because they sit in different
+       outer-list positions. Row-identity collision is impossible.
+    2. Pitfall 9 (one-time AI regen): the shape change from the old flat ``[...brews]``
+       payload to ``[[...brews], [...cafes]]`` triggers a one-time signature churn for
+       every existing user on the first nightly run post-deploy. This is the accepted
+       disposition (Option (a) per RESEARCH.md § Pitfall 9) — ~6 users × 1 extra AI
+       call, cost <$0.10. Documented in SUMMARY.
 
-    Free-text notes and timestamps are EXCLUDED so a notes typo-fix never
-    invalidates the recommendation.
+    Brew row shape: ``[coffee_id, float(rating), sorted flavor_note_ids_observed,
+    recipe_id, brewer_id]``.
+    Cafe row shape: ``[cafe_log_id, float(rating), sorted flavor_note_ids,
+    roaster_id, origin_country]``.
 
-    Rows ordered by BrewSession.id (ascending, stable monotonic IDs) for
-    determinism (Pitfall 5). Returns _EMPTY_SIGNATURE when zero rated sessions.
+    Both row lists ordered by their own primary key ASC for determinism (Pitfall 5).
+    Returns ``_EMPTY_SIGNATURE`` only when BOTH brew_rows AND cafe_rows are empty.
 
-    COST-4: scope is strictly this user's OWN sessions; never shared catalog
-    counts like equipment_count/recipe_count.
+    COST-4: scope is strictly this user's OWN rows (WHERE user_id == user_id on both
+    sides); never shared catalog counts.
+
+    T-16-05-02 IDOR defense: CafeLog.user_id == user_id scopes the cafe SELECT to
+    the requesting user. user_id is a typed function arg, never a global or request param.
     """
-    stmt = (
+    brew_stmt = (
         select(
             BrewSession.id,
             BrewSession.coffee_id,
@@ -380,12 +394,30 @@ def compute_input_signature(db: Session, user_id: int) -> str:
         )
         .order_by(BrewSession.id)  # deterministic sort (Pitfall 5)
     )
-    rows = db.execute(stmt).all()
+    brew_rows = db.execute(brew_stmt).all()
 
-    if not rows:
+    # NEW (D-12 / CAFE-04): cafe rows as second payload sublist.
+    cafe_stmt = (
+        select(
+            CafeLog.id,
+            CafeLog.rating,
+            CafeLog.flavor_note_ids,
+            CafeLog.roaster_id,
+            CafeLog.origin_country,
+        )
+        .where(
+            CafeLog.user_id == user_id,
+            CafeLog.rating.is_not(None),  # unrated cafe logs excluded (Pitfall 3)
+        )
+        .order_by(CafeLog.id)  # deterministic (Pitfall 5 applied to cafe sublist)
+    )
+    cafe_rows = db.execute(cafe_stmt).all()
+
+    # Empty sentinel only when BOTH lists are empty (Pitfall 3 + Pitfall 9 defense).
+    if not brew_rows and not cafe_rows:
         return _EMPTY_SIGNATURE
 
-    def _serialize_row(row: Row) -> list:  # type: ignore[type-arg]
+    def _serialize_brew(row: Row) -> list:  # type: ignore[type-arg]
         return [
             row.coffee_id,
             float(row.rating),  # Decimal → float for JSON
@@ -394,6 +426,19 @@ def compute_input_signature(db: Session, user_id: int) -> str:
             row.brewer_id,
         ]
 
-    payload = [_serialize_row(r) for r in rows]
+    def _serialize_cafe(row: Row) -> list:  # type: ignore[type-arg]
+        return [
+            row.id,  # cafe_log_id — different namespace from coffee_id (Pitfall 3)
+            float(row.rating),
+            sorted(row.flavor_note_ids or []),
+            row.roaster_id,
+            row.origin_country,  # str | None — json.dumps serializes None as null
+        ]
+
+    # Two-element top-level list: position 0 = brew, position 1 = cafe.
+    payload = [
+        [_serialize_brew(r) for r in brew_rows],
+        [_serialize_cafe(r) for r in cafe_rows],
+    ]
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
