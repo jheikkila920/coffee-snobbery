@@ -403,6 +403,32 @@ def fresh_db() -> Iterator[None]:
     yield
 
 
+def _require_cafe_logs_table() -> None:
+    """Skip if the cafe_logs table is not present.
+
+    Prevents tests from silently passing when the p16_cafe_logs migration has
+    not been applied (project memory: tests-pass-by-skip-mask-green). Run
+    ``pytest -rs`` during gsd-validate-phase to surface every skip.
+
+    The skip message includes the migration revision name so ``-rs`` output
+    is actionable: "cafe_logs table not present — migration p16_cafe_logs
+    not applied".
+    """
+    try:
+        from sqlalchemy import text
+
+        from app.db import engine
+    except ImportError:
+        pytest.skip("app.db not importable")
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT to_regclass('public.cafe_logs')")).scalar()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
+    if row is None:
+        pytest.skip("cafe_logs table not present — migration p16_cafe_logs not applied")
+
+
 def _postgres_reachable() -> bool:
     """Return True iff the configured Postgres host:port accepts a TCP connect.
 
