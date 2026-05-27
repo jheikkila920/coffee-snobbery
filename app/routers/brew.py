@@ -694,6 +694,25 @@ def new_brew_form(
     )
     server_draft = brew_drafts_service.get_draft(db, by_user_id=user.id)
 
+    # D-10: Draft restore — union draft chips with current coffee's advertised chips.
+    # Additive merge: new advertised chips appear in the restored draft; chips
+    # removed from advertised after the draft was saved are still kept in the draft.
+    if server_draft is not None and "flavor_note_ids_observed" in server_draft:
+        coffee_id_from_draft = server_draft.get("coffee_id")
+        if coffee_id_from_draft:
+            from sqlalchemy import select as sa_select
+
+            from app.models.coffee import Coffee
+
+            current_chips = db.execute(
+                sa_select(Coffee.advertised_flavor_note_ids).where(
+                    Coffee.id == coffee_id_from_draft
+                )
+            ).scalar_one_or_none()
+            server_draft["flavor_note_ids_observed"] = sorted(
+                set(server_draft["flavor_note_ids_observed"]) | set(current_chips or [])
+            )
+
     context = _hydrate_form_context(
         db,
         user=user,
