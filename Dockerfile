@@ -71,6 +71,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
+# Build-time version stamp (D-12). The release workflow passes
+# APP_VERSION=${{ github.ref_name }} (e.g. v1.2.0). Local builds default to
+# "dev". Consumed by app/routers/admin/system.py via os.environ["APP_VERSION"].
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 # Install postgresql-client-16 from the PostgreSQL official APT repo so
 # pg_dump matches the Postgres 16 server (PITFALL SH-5). Source:
 # https://wiki.postgresql.org/wiki/Apt
@@ -118,6 +124,17 @@ RUN chmod +x entrypoint.sh
 # (or volume recreation). SCHED-04 backups and Phase 4 photo uploads both
 # write here.
 RUN mkdir -p /app/data/photos /app/data/backups && chown -R app:app /app/data
+
+# OCI image labels — visible via `docker inspect`. The release workflow's
+# docker/metadata-action additionally stamps org.opencontainers.image.{created,
+# revision} at build time, which override the static values below. Plan 02
+# provides the static fallback for local builds outside CI.
+LABEL org.opencontainers.image.title="Snobbery" \
+      org.opencontainers.image.description="Self-hosted household coffee log for pour-over enthusiasts" \
+      org.opencontainers.image.url="https://github.com/jheikkila54/coffee-snobbery" \
+      org.opencontainers.image.source="https://github.com/jheikkila54/coffee-snobbery" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.licenses="Proprietary"
 
 EXPOSE 8000
 
