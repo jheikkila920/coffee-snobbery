@@ -7,11 +7,8 @@ Requirements traceability:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Test: count_calls_last_24h correctly filters rows
@@ -21,10 +18,6 @@ import pytest
 def test_quota_count() -> None:
     """AIX-05/D-08: counts only successful rows inside the 24h window."""
     from app.services.ai_quota import count_calls_last_24h
-
-    now = datetime.now(timezone.utc)
-    inside = now - timedelta(hours=12)   # within 24h
-    outside = now - timedelta(hours=25)  # older than 24h
 
     mock_db = MagicMock()
 
@@ -66,7 +59,7 @@ def test_reset_time_computation() -> None:
     """D-09: reset time is oldest in-window call + 24h; None when window empty."""
     from app.services.ai_quota import get_quota_reset_time
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     oldest_in_window = now - timedelta(hours=20)
     expected_reset = oldest_in_window + timedelta(hours=24)
 
@@ -149,9 +142,10 @@ def test_quota_remaining() -> None:
 
     mock_db = MagicMock()
 
-    with patch("app.services.ai_quota.count_calls_last_24h") as mock_count, \
-         patch("app.services.ai_quota.get_quota_cap") as mock_cap:
-
+    with (
+        patch("app.services.ai_quota.count_calls_last_24h") as mock_count,
+        patch("app.services.ai_quota.get_quota_cap") as mock_cap,
+    ):
         mock_count.return_value = 5
         mock_cap.return_value = 20
         assert remaining(mock_db, user_id=1, rec_type="coffee_research") == 15

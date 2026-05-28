@@ -23,11 +23,10 @@ Requirements traceability:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Schema validation tests (Task 1 — Wave 0, kept for regression)
@@ -169,7 +168,10 @@ def test_cache_key_normalization() -> None:
     assert normalize_cache_key("Yirgacheffe", "Counter Culture") == "yirgacheffe|counter culture"
 
     # Whitespace stripped
-    assert normalize_cache_key("  Yirgacheffe  ", "  Counter Culture  ") == "yirgacheffe|counter culture"
+    assert (
+        normalize_cache_key("  Yirgacheffe  ", "  Counter Culture  ")
+        == "yirgacheffe|counter culture"
+    )
 
     # Mixed case folds
     assert normalize_cache_key("YIRGACHEFFE", "COUNTER CULTURE") == "yirgacheffe|counter culture"
@@ -210,7 +212,7 @@ def test_cache_hit_skips_llm() -> None:
     """AIX-04: cache hit returns the cached row; no LLM call; no quota decrement."""
     from app.services.ai_research import get_cached_research
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     live_cache_row = MagicMock()
     live_cache_row.expires_at = now + timedelta(days=15)
     live_cache_row.cache_key = "yirgacheffe|counter culture"
@@ -266,9 +268,6 @@ def test_sse_event_contract() -> None:
         mock_cred.model_name = "claude-opus-4-5"
         mock_cred.key = "test-key"
 
-        # Quota: user has capacity
-        mock_quota = MagicMock(return_value=5)
-
         # Build a mock Anthropic async stream context manager
         mock_stream = AsyncMock()
         mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
@@ -302,17 +301,17 @@ def test_sse_event_contract() -> None:
         mock_final_msg.usage.output_tokens = 50
 
         events = []
-        with patch("app.services.ai_research.analytics_service") as mock_analytics, \
-             patch("app.services.ai_research.credentials_service") as mock_creds, \
-             patch("app.services.ai_research.ai_quota") as mock_ai_quota, \
-             patch("app.services.ai_research._write_research_telemetry") as mock_telemetry, \
-             patch("app.services.ai_research._write_cache_row") as mock_write_cache, \
-             patch("app.services.ai_research.get_or_refresh_prediction") as mock_pred, \
-             patch("app.services.ai_research.anthropic.AsyncAnthropic") as mock_anth_cls, \
-             patch("app.services.ai_research._try_advisory_lock") as mock_lock, \
-             patch("app.services.ai_research._get_lock") as mock_get_lock, \
-             patch("app.services.ai_research.Jinja2Templates") as mock_tpl:
-
+        with (
+            patch("app.services.ai_research.analytics_service") as mock_analytics,
+            patch("app.services.ai_research.credentials_service") as mock_creds,
+            patch("app.services.ai_research.ai_quota") as mock_ai_quota,
+            patch("app.services.ai_research._write_research_telemetry") as mock_telemetry,
+            patch("app.services.ai_research._write_cache_row") as mock_write_cache,
+            patch("app.services.ai_research.get_or_refresh_prediction") as mock_pred,
+            patch("app.services.ai_research.anthropic.AsyncAnthropic") as mock_anth_cls,
+            patch("app.services.ai_research._try_advisory_lock") as mock_lock,
+            patch("app.services.ai_research._get_lock") as mock_get_lock,
+        ):
             mock_analytics.get_cold_start_counts.return_value = mock_gate
             mock_analytics.compute_input_signature.return_value = "sig123"
             mock_creds.get_provider_credential.return_value = mock_cred
@@ -325,8 +324,9 @@ def test_sse_event_contract() -> None:
             inner_lock = asyncio.Lock()
             mock_get_lock.return_value = inner_lock
 
-            # Anthropic stream
-            mock_anth_instance = AsyncMock()
+            # Anthropic stream — messages.stream() must return the context manager directly
+            # (not a coroutine), since it's used as `async with client.messages.stream(...)`
+            mock_anth_instance = MagicMock()
             mock_anth_cls.return_value = mock_anth_instance
             mock_anth_instance.messages.stream.return_value = mock_stream
 
@@ -335,13 +335,10 @@ def test_sse_event_contract() -> None:
             mock_db.execute.return_value = MagicMock()
 
             mock_telemetry.return_value = MagicMock()
-            mock_write_cache.return_value = MagicMock()
+            mock_write_cache.return_value = MagicMock(
+                response_json={"coffee_name": "Yirgacheffe Kochere"}
+            )
             mock_pred.return_value = MagicMock()
-
-            # Jinja render
-            mock_tpl_instance = MagicMock()
-            mock_tpl.return_value = mock_tpl_instance
-            mock_tpl_instance.get_template.return_value.render.return_value = "<div>result</div>"
 
             gen = generate_coffee_research(
                 mock_db,
@@ -400,13 +397,14 @@ def test_sse_event_contract_error_on_validation_failure() -> None:
         mock_stream.get_final_message = AsyncMock(return_value=mock_final_msg)
 
         events = []
-        with patch("app.services.ai_research.analytics_service") as mock_analytics, \
-             patch("app.services.ai_research.credentials_service") as mock_creds, \
-             patch("app.services.ai_research.ai_quota") as mock_ai_quota, \
-             patch("app.services.ai_research.anthropic.AsyncAnthropic") as mock_anth_cls, \
-             patch("app.services.ai_research._try_advisory_lock") as mock_lock, \
-             patch("app.services.ai_research._get_lock") as mock_get_lock:
-
+        with (
+            patch("app.services.ai_research.analytics_service") as mock_analytics,
+            patch("app.services.ai_research.credentials_service") as mock_creds,
+            patch("app.services.ai_research.ai_quota") as mock_ai_quota,
+            patch("app.services.ai_research.anthropic.AsyncAnthropic") as mock_anth_cls,
+            patch("app.services.ai_research._try_advisory_lock") as mock_lock,
+            patch("app.services.ai_research._get_lock") as mock_get_lock,
+        ):
             mock_analytics.get_cold_start_counts.return_value = {"gate_open": True}
             mock_analytics.compute_input_signature.return_value = "sig123"
             mock_creds.get_provider_credential.return_value = mock_cred
@@ -415,7 +413,7 @@ def test_sse_event_contract_error_on_validation_failure() -> None:
             inner_lock = asyncio.Lock()
             mock_get_lock.return_value = inner_lock
 
-            mock_anth_instance = AsyncMock()
+            mock_anth_instance = MagicMock()
             mock_anth_cls.return_value = mock_anth_instance
             mock_anth_instance.messages.stream.return_value = mock_stream
             mock_db.execute.return_value = MagicMock()
@@ -458,16 +456,15 @@ def test_advisory_lock_blocks_duplicate() -> None:
         mock_cred.model_name = "claude-opus-4-5"
         mock_cred.key = "test-key"
 
-        llm_call_count = 0
-
         events = []
-        with patch("app.services.ai_research.analytics_service") as mock_analytics, \
-             patch("app.services.ai_research.credentials_service") as mock_creds, \
-             patch("app.services.ai_research.ai_quota") as mock_ai_quota, \
-             patch("app.services.ai_research._try_advisory_lock") as mock_lock, \
-             patch("app.services.ai_research._get_lock") as mock_get_lock, \
-             patch("app.services.ai_research.anthropic.AsyncAnthropic") as mock_anth_cls:
-
+        with (
+            patch("app.services.ai_research.analytics_service") as mock_analytics,
+            patch("app.services.ai_research.credentials_service") as mock_creds,
+            patch("app.services.ai_research.ai_quota") as mock_ai_quota,
+            patch("app.services.ai_research._try_advisory_lock") as mock_lock,
+            patch("app.services.ai_research._get_lock") as mock_get_lock,
+            patch("app.services.ai_research.anthropic.AsyncAnthropic") as mock_anth_cls,
+        ):
             mock_analytics.get_cold_start_counts.return_value = {"gate_open": True}
             mock_analytics.compute_input_signature.return_value = "sig"
             mock_creds.get_provider_credential.return_value = mock_cred
@@ -480,11 +477,11 @@ def test_advisory_lock_blocks_duplicate() -> None:
             inner_lock = asyncio.Lock()
             mock_get_lock.return_value = inner_lock
 
-            mock_anth_instance = AsyncMock()
+            mock_anth_instance = MagicMock()
             mock_anth_cls.return_value = mock_anth_instance
             # If LLM is called, mark it
-            mock_anth_instance.messages.stream.side_effect = lambda *a, **kw: (_ for _ in ()).throw(
-                AssertionError("LLM called when lock not held")
+            mock_anth_instance.messages.stream.side_effect = AssertionError(
+                "LLM called when lock not held"
             )
 
             gen = generate_coffee_research(
@@ -510,7 +507,7 @@ def test_advisory_lock_blocks_duplicate() -> None:
 
 
 def test_duration_ms_written() -> None:
-    """AIX-13: ai_recommendations row written with rec_type='coffee_research' and duration_ms non-null."""
+    """AIX-13: ai_recommendations row written with rec_type='coffee_research' and duration_ms."""
     # Verify _write_research_telemetry is called with correct rec_type and duration_ms.
     # We import and call it directly to verify the call signature passes correctly.
     from app.services.ai_research import _write_research_telemetry
