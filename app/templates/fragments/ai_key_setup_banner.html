@@ -1,0 +1,36 @@
+{# DIST-07 AI key setup banner (Phase 17 / Plan 17-03).
+
+   Renders ONLY for an admin user who has no resolvable AI credential
+   (D-19 / D-20). Server-side gate is defense-in-depth — the client cannot
+   re-enable the banner by clearing sessionStorage if the user is not an
+   admin or already has a key. The banner is reusable: plan 17-04 includes
+   the same fragment on /ai.
+
+   Default state is visible (style="display: block") so the first paint shows
+   the banner before Alpine boots; Alpine then takes over via x-show. Tap × →
+   dismiss() → sessionStorage flag → x-show hides the card for the session. #}
+{% if request.state.user.is_admin and not ai_key_present %}
+<div x-data="bannerDismiss" x-show="!dismissed" style="display: block"
+     class="mx-auto max-w-6xl px-6 mt-4">
+  <div class="flex items-start justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 dark:bg-amber-900/20 dark:border-amber-700">
+    <div class="flex-1">
+      <p class="text-base font-semibold text-espresso-900 dark:text-cream-100">
+        Welcome — add your AI API key in Admin to enable recommendations.
+      </p>
+      <a href="/admin/credentials"
+         class="mt-2 inline-flex items-center rounded bg-espresso-700 px-3 py-1.5 text-sm font-semibold text-cream-50 hover:bg-espresso-800 min-h-[44px]">
+        Go to Admin
+      </a>
+    </div>
+    <button type="button" x-on:click="dismiss()" aria-label="Dismiss banner"
+            class="flex items-center justify-center min-h-[44px] min-w-[44px] text-espresso-700 dark:text-cream-100">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+           aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  </div>
+</div>
+{% endif %}
