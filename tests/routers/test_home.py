@@ -217,77 +217,16 @@ def test_unrated_coffees_fragment_requires_auth(app: Any, clean_home_router: Non
     assert resp.status_code == 401
 
 
-def test_cold_start_branch_renders_meter(
-    app: Any, seeded_regular_user: dict, clean_home_router: None
-) -> None:
-    """A user with 0 sessions sees the cold-start progress meter (gate-closed branch)."""
-    _require_postgres()
-    _require_analytics_tables()
+# Phase 17 D-11 removed the cold-start meter from home.html — below-gate users now
+# see the same composition as above-gate users (the meter lives on /ai in plan 17-04).
+# The original below-gate progress-meter assertion (test_cold_start_branch_renders_meter)
+# was removed in plan 17-02 Task 4 and is replaced by tests below confirming the
+# composition is invariant across gate states (test_home_top_coffees_no_floor_integration
+# + test_home_renders_top_coffees_eagerly).
 
-    # seeded_regular_user has no brew sessions; cold-start gate is not cleared.
-    client = _authed_client(app, seeded_regular_user["signed_cookie"])
-    resp = client.get("/")
-    assert resp.status_code == 200
-    assert "Build your taste profile." in resp.text
-    assert 'role="progressbar"' in resp.text
-
-
-def test_ai_slot_placeholder_present(
-    app: Any, seeded_regular_user: dict, clean_home_router: None
-) -> None:
-    """Gate-open user renders the aggregate slots and the AI hero slot (D-01).
-
-    Phase 7 (plan 07-06) replaced the Jinja comment placeholder with a real
-    lazy-load hero section.  This test verifies:
-    1. The gate-open branch renders (aggregate slot headings visible).
-    2. The AI hero slot is rendered as a live hx-get div (load delay:600ms pattern).
-    3. The old "revealed" trigger pattern (Phase 6 placeholder) is NOT present.
-    4. The live slot uses hx-get="/home/cards/ai-recommendation".
-    """
-    _require_postgres()
-    _require_analytics_tables()
-
-    # Import and reuse the gate-cleared fixture from Plan 06-01 tests
-    from app.db import SessionLocal
-    from tests.services.test_analytics import _seed_analytics_scenario
-
-    uid: int
-    with SessionLocal() as db:
-        uid, _coffee3_id, _archived_id = _seed_analytics_scenario(
-            db, username="analyticstest-hometest-gate"
-        )
-
-    # Build an authed client for this seeded user (not seeded_regular_user)
-    import asyncio
-
-    from app.main import async_session_factory
-    from app.services.sessions import regenerate_session
-    from app.signing import sign_session_id
-
-    async def _make_session() -> str:
-        async with async_session_factory() as db:
-            session_id = await regenerate_session(db, None, uid)
-            return sign_session_id(session_id)
-
-    signed = asyncio.run(_make_session())
-
-    client = _authed_client(app, signed)
-    resp = client.get("/")
-    assert resp.status_code == 200
-
-    body = resp.text
-
-    # Gate-open branch: at least one aggregate card heading should appear
-    assert "Top Coffees" in body
-
-    # Phase 7 AI hero slot is now live in the rendered HTML (D-01)
-    assert 'hx-get="/home/cards/ai-recommendation"' in body
-
-    # Must use load delay pattern (not the old "revealed" trigger from the Phase 6 comment)
-    assert 'hx-trigger="revealed"' not in body
-
-    # The live AI card slot heading should appear
-    assert "What to buy next" in body
+# Phase 17 D-07 / D-08 removed the AI hero hx-get + the lazy aggregate cards from the
+# home composition. The replacement assertions live below
+# (test_home_does_not_mount_ai_cards, test_home_renders_top_coffees_eagerly).
 
 
 # --------------------------------------------------------------------------- #
@@ -557,65 +496,13 @@ def test_sweet_spots_no_ai_placeholder(
 # --- HOME-09 staggered lazy-load regression (GAP fill) ----------------------
 
 
-def test_home_shell_staggered_lazy_load(app: Any, clean_home_router: None) -> None:
-    """Gate-open home shell renders >=4 staggered hx-trigger delays, distinct and ascending.
-
-    Requirement HOME-09: the aggregate cards use staggered hx-trigger="load delay:Nms"
-    to spread fragment requests. Post-CATALOG-07 (Phase 15.1) the roast-freshness card
-    (400ms slot) was removed, leaving 4 aggregate cards at 100/200/300/500ms.
-    The unrated-coffees slot (150ms) and AI-hero slot (600ms) are unrelated lazy slots.
-    A future edit that collapses delays to a single value or drops slots would silently
-    break this requirement without this test.
-
-    The test seeds a GATE-OPEN user (reuses _seed_analytics_scenario from Plan 06-01),
-    GETs /, and asserts that the rendered HTML contains at least 4 aggregate-card slots
-    whose millisecond values are distinct and strictly ascending.
-    """
-    _require_postgres()
-    _require_analytics_tables()
-
-    from app.db import SessionLocal
-    from tests.services.test_analytics import _seed_analytics_scenario
-
-    with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-stagger")
-
-    client = _make_authed_client_for_user(app, uid)
-    resp = client.get("/")
-    assert resp.status_code == 200
-
-    body = resp.text
-
-    # Extract all hx-trigger="load delay:Nms" delay values from the rendered HTML.
-    # The gate-open branch must contain at least 5 such slots (one per aggregate card).
-    # The unrated-coffees slot (150ms) also appears, so total >= 6 -- but we only
-    # require the five aggregate-card delays which must be distinct and ascending.
-    delay_matches = re.findall(r'hx-trigger="load delay:(\d+)ms"', body)
-    delay_values = [int(m) for m in delay_matches]
-
-    assert len(delay_values) >= 4, (
-        f"Expected >=4 hx-trigger='load delay:Nms' slots in gate-open home shell, "
-        f"got {len(delay_values)}: {delay_values}"
-    )
-
-    # Post-CATALOG-07: 4 aggregate-card delays at 100/200/300/500ms.
-    # (The 400ms slot belonged to the now-removed roast-freshness card.)
-    # Other lazy slots in the shell (150ms unrated-coffees, 600ms AI hero) are
-    # filtered out before the ascending-order check.
-    expected_aggregate_delays = {100, 200, 300, 500}
-    actual_delay_set = set(delay_values)
-    assert expected_aggregate_delays <= actual_delay_set, (
-        f"Expected aggregate card delays {expected_aggregate_delays} to be present; "
-        f"found delay values: {sorted(actual_delay_set)}"
-    )
-
-    # The aggregate delays must be strictly ascending (100 < 200 < 300 < 500),
-    # proving they are staggered in DOM order as the spec requires.
-    aggregate_delays_in_order = [v for v in delay_values if v in expected_aggregate_delays]
-    assert aggregate_delays_in_order == sorted(aggregate_delays_in_order), (
-        f"Aggregate card delays must appear in ascending order in the DOM; "
-        f"found: {aggregate_delays_in_order}"
-    )
+# Phase 17 D-07 / D-08 removed the staggered lazy-loaded aggregate cards (Top Coffees,
+# Preference Profile, Flavor Descriptors, Sweet Spots, AI hero) from home.html.
+# The original staggered-delay regression test (test_home_shell_staggered_lazy_load)
+# pinned the old composition (100/200/300/500ms aggregate-card delays) and is no
+# longer applicable. The same fragment endpoints survive at /home/cards/* and the
+# tests above (test_top_coffees_fragment_headers, etc.) still pin them; plan 17-04
+# adds the /ai-page-mounts-the-same-endpoints coverage.
 
 
 # --------------------------------------------------------------------------- #
@@ -821,31 +708,73 @@ def test_sweet_spots_prose_in_context(
 # --------------------------------------------------------------------------- #
 
 
-def test_home_links_to_ai_pages(app: Any, clean_home_router: None) -> None:
-    """Gate-open home shell contains /ai/paste-rank and /ai/wishlist links (D-05/D-07/D-09)."""
+# Phase 17 IA-03 / D-07 removed the AI tools section (paste-rank, equipment button)
+# from the home shell. /ai/paste-rank and /ai/equipment now live on the /ai page
+# (plan 17-04). The single Wishlist link on home is asserted by
+# test_home_has_wishlist_card below. The Phase 7 tests test_home_links_to_ai_pages
+# and test_home_has_equipment_button were removed in plan 17-02 Task 1.
+
+
+# --------------------------------------------------------------------------- #
+# Phase 17 — IA-03 / IA-04 / IA-06 / D-06..D-11 home composition tests        #
+# --------------------------------------------------------------------------- #
+
+
+def test_home_renders_personalized_greeting(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """D-10: home H1 is a personalized greeting bucket + username.
+
+    The bucket (morning/afternoon/evening) is derived server-side from
+    APP_TIMEZONE; this test does not freeze time — it just asserts the H1
+    follows the documented shape. Time-bucket coverage lives in the
+    derive_greeting unit tests below.
+    """
     _require_postgres()
     _require_analytics_tables()
 
-    from app.db import SessionLocal
-    from tests.services.test_analytics import _seed_analytics_scenario
-
-    with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-links")
-
-    client = _make_authed_client_for_user(app, uid)
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
     resp = client.get("/")
     assert resp.status_code == 200
 
     body = resp.text
-    assert "/ai/paste-rank" in body, "Home page must link to /ai/paste-rank (D-07)"
-    assert "/ai/wishlist" in body, "Home page must link to /ai/wishlist (D-09)"
+    match = re.search(r"<h1[^>]*>Good (morning|afternoon|evening), [^<]+</h1>", body)
+    assert match is not None, (
+        f"Home page H1 must be a personalized greeting (D-10); "
+        f"no <h1>Good morning/afternoon/evening, USER</h1> found in body"
+    )
 
 
-def test_home_has_equipment_button(app: Any, clean_home_router: None) -> None:
-    """Gate-open home shell contains the equipment hx-post button (D-05).
+def test_home_does_not_mount_ai_cards(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """IA-03 / D-07: home no longer mounts the AI hero or AI lazy-card endpoints."""
+    _require_postgres()
+    _require_analytics_tables()
 
-    The button must have hx-post="/ai/equipment" and target #equipment-rec-result.
-    The result div must be present in the DOM but empty (not auto-loaded).
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    for forbidden in (
+        'hx-get="/home/cards/ai-recommendation"',
+        'hx-get="/home/cards/preference-profile"',
+        'hx-get="/home/cards/flavor-descriptors"',
+        'hx-get="/home/cards/sweet-spots"',
+    ):
+        assert forbidden not in body, (
+            f"IA-03 violation: home.html still mounts {forbidden!r}"
+        )
+
+
+def test_home_renders_top_coffees_eagerly(
+    app: Any, clean_home_router: None
+) -> None:
+    """D-08: Top Coffees on home is server-rendered, not a lazy hx-get placeholder.
+
+    Seeds two coffees with two rated brews each; expects both names inline in the
+    response body and NO hx-get='/home/cards/top-coffees' placeholder.
     """
     _require_postgres()
     _require_analytics_tables()
@@ -854,18 +783,224 @@ def test_home_has_equipment_button(app: Any, clean_home_router: None) -> None:
     from tests.services.test_analytics import _seed_analytics_scenario
 
     with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-equipment")
+        uid, _c3, _ca = _seed_analytics_scenario(
+            db, username="analyticstest-hometest-top-eager"
+        )
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/")
     assert resp.status_code == 200
 
     body = resp.text
-    assert 'hx-post="/ai/equipment"' in body, "Home page must have equipment hx-post button (D-05)"
-    assert 'id="equipment-rec-result"' in body, (
-        "Home page must have #equipment-rec-result target div"
+    assert 'hx-get="/home/cards/top-coffees"' not in body, (
+        "D-08 violation: Top Coffees must render eagerly (no lazy placeholder)"
     )
-    # The result div must NOT be auto-loading (no hx-get or hx-trigger on it)
-    assert 'hx-get="/ai/equipment"' not in body, (
-        "Equipment result must NOT auto-load — generate-on-click only (D-05)"
+    # _seed_analytics_scenario creates Coffee1 and Coffee2 with 4 + 2 rated sessions
+    assert "analyticstest-Coffee1-analyticstest-hometest-top-eager" in body, (
+        "Top Coffees eager include must render the seeded coffee names inline"
     )
+
+
+def test_home_top_coffees_no_floor_integration(
+    app: Any, clean_home_router: None
+) -> None:
+    """IA-06 / D-09: home Top Coffees surfaces single-session coffees end-to-end."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        uid = _seed_single_session_user(
+            db, username="hometest-nofloor-single"
+        )
+
+    client = _make_authed_client_for_user(app, uid)
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    assert "analyticstest-OneSessionCoffee" in body, (
+        "D-09 integration: a single-session coffee MUST surface in home Top Coffees "
+        "(min_sessions=0). If the home view path is still using the default >=2 floor "
+        "the coffee will not appear."
+    )
+
+
+def test_home_action_row_has_no_admin_button_for_admin(
+    app: Any, seeded_admin_user: dict, clean_home_router: None
+) -> None:
+    """D-07: home action row contains NO <a href='/admin'> Admin button.
+
+    The top-nav admin link (outside <main>) stays per D-18. This test scopes
+    its assertion to the action-row <header> block at the top of <main> only.
+    """
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_admin_user["signed_cookie"])
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    # Extract just the <main>...</main> region first to scope away the top nav.
+    main_match = re.search(r"<main[\s\S]*?</main>", body)
+    assert main_match is not None, "home.html must contain a <main> element"
+    main_block = main_match.group(0)
+
+    # Within <main>, the action-row <header> must not contain an Admin link.
+    header_match = re.search(r"<header[\s\S]*?</header>", main_block)
+    assert header_match is not None, (
+        "home.html <main> must contain a <header> block for the action row"
+    )
+    header_block = header_match.group(0)
+    assert 'href="/admin"' not in header_block, (
+        "D-07 violation: home action-row <header> still contains a /admin link"
+    )
+
+
+def test_home_action_row_has_quick_rate(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """D-06: home action row links to /cafe-logs/new with anchor text 'Quick rate'."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    # Scope to <main>'s <header> (action row)
+    main_match = re.search(r"<main[\s\S]*?</main>", body)
+    assert main_match is not None
+    header_match = re.search(r"<header[\s\S]*?</header>", main_match.group(0))
+    assert header_match is not None
+    header_block = header_match.group(0)
+
+    assert 'href="/cafe-logs/new"' in header_block, (
+        "D-06 violation: action row must contain href='/cafe-logs/new'"
+    )
+    assert "Quick rate" in header_block, (
+        "D-06 violation: action row must contain anchor text 'Quick rate'"
+    )
+
+
+def test_home_has_see_ai_recommendations_link(
+    app: Any, seeded_regular_user: dict, clean_home_router: None
+) -> None:
+    """D-06 / IA-04: home contains a small 'See AI recommendations →' link to /ai."""
+    _require_postgres()
+    _require_analytics_tables()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+    body = resp.text
+    match = re.search(
+        r'<a[^>]*href="/ai"[^>]*>[^<]*See AI recommendations[^<]*</a>', body
+    )
+    assert match is not None, (
+        "D-06/IA-04 violation: home must contain an <a href='/ai'> link with "
+        "anchor text 'See AI recommendations'"
+    )
+
+
+def _seed_single_session_user(db: Any, *, username: str) -> int:
+    """Helper for D-09 integration test: one rated brew on one coffee.
+
+    Returns user_id. Uses the analyticstest- naming prefix so clean_home_router
+    sweeps the rows.
+    """
+    from app.models.brew_session import BrewSession
+    from app.models.coffee import Coffee
+    from app.models.roaster import Roaster
+    from app.models.user import User
+
+    user = User(
+        username=username,
+        password_hash="x" * 16,
+        is_admin=False,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    uid = user.id
+
+    roaster = Roaster(name=f"analyticstest-Roaster-NoFloorHome-{username}")
+    db.add(roaster)
+    db.flush()
+
+    coffee = Coffee(
+        name=f"analyticstest-OneSessionCoffee-{username}",
+        roaster_id=roaster.id,
+    )
+    db.add(coffee)
+    db.flush()
+
+    from datetime import datetime as _dt
+    db.add(
+        BrewSession(
+            user_id=uid,
+            coffee_id=coffee.id,
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            rating=Decimal("4.0"),
+            flavor_note_ids_observed=[],
+            brewed_at=_dt(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+        )
+    )
+    db.commit()
+    return uid
+
+
+# --------------------------------------------------------------------------- #
+# Phase 17 — D-10 derive_greeting time-of-day unit tests                      #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("hour", "expected_bucket"),
+    [
+        (5, "morning"),
+        (8, "morning"),
+        (11, "morning"),
+        (12, "afternoon"),
+        (15, "afternoon"),
+        (16, "afternoon"),
+        (17, "evening"),
+        (21, "evening"),
+        (23, "evening"),
+        (0, "evening"),
+        (3, "evening"),
+        (4, "evening"),
+    ],
+)
+def test_derive_greeting_buckets(hour: int, expected_bucket: str) -> None:
+    """D-10: derive_greeting maps hour-of-day to morning/afternoon/evening buckets.
+
+    Buckets per D-10: [5, 12) morning, [12, 17) afternoon, [17, 5) evening.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.routers.home import derive_greeting
+
+    now = datetime(2026, 5, 27, hour, 30, 0, tzinfo=ZoneInfo("America/Chicago"))
+    result = derive_greeting("john", now=now)
+    assert result == f"Good {expected_bucket}, john", (
+        f"Hour {hour} expected '{expected_bucket}'; got result={result!r}"
+    )
+
+
+def test_derive_greeting_falls_back_to_home_when_username_missing() -> None:
+    """D-10 defensive fallback: empty/None username returns the literal 'Home'."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.routers.home import derive_greeting
+
+    now = datetime(2026, 5, 27, 10, 0, 0, tzinfo=ZoneInfo("America/Chicago"))
+    assert derive_greeting(None, now=now) == "Home"
+    assert derive_greeting("", now=now) == "Home"
