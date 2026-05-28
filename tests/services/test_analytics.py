@@ -345,9 +345,7 @@ def _require_cafe_logs_table() -> None:
     _gate()
 
 
-def _seed_top_coffees_no_floor(
-    db, *, username: str, coffees: list[tuple[str, float]]
-) -> int:
+def _seed_top_coffees_no_floor(db, *, username: str, coffees: list[tuple[str, float]]) -> int:
     """Seed N coffees, each with exactly one rated brew session, for the no-floor variant.
 
     Creates one User + one Roaster + len(coffees) Coffees + one rated BrewSession
@@ -377,7 +375,7 @@ def _seed_top_coffees_no_floor(
     db.flush()
 
     brew_ts = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
-    for idx, (coffee_name, rating) in enumerate(coffees):
+    for coffee_name, rating in coffees:
         coffee = Coffee(
             name=f"analyticstest-{coffee_name}-{username}",
             roaster_id=roaster.id,
@@ -1470,9 +1468,7 @@ def test_get_top_coffees_no_floor_caps_at_5(clean_analytics: None) -> None:
     with SessionLocal() as db:
         rows = analytics.get_top_coffees(db, uid, min_sessions=0)
 
-    assert len(rows) == 5, (
-        f"min_sessions=0 must still cap at 5 (IA-06 limit); got {len(rows)}"
-    )
+    assert len(rows) == 5, f"min_sessions=0 must still cap at 5 (IA-06 limit); got {len(rows)}"
     # Highest-rated should appear first
     ratings = [float(r.avg_rating) for r in rows]
     assert ratings == sorted(ratings, reverse=True)
@@ -1490,8 +1486,8 @@ def test_get_top_coffees_default_still_enforces_min_two(
     _require_postgres()
     _require_analytics_tables()
     from app.db import SessionLocal
-    from app.services import analytics
     from app.models.brew_session import BrewSession
+    from app.services import analytics
 
     # Coffee A has one rated session, Coffee B has two — only B should rank by default.
     with SessionLocal() as db:
@@ -1501,14 +1497,11 @@ def test_get_top_coffees_default_still_enforces_min_two(
             coffees=[("CoffeeA", 4.5), ("CoffeeB", 4.0)],
         )
         # Add a SECOND rated session to CoffeeB
-        coffee_b_id = (
-            db.execute(
-                __import__("sqlalchemy").text(
-                    "SELECT id FROM coffees WHERE name LIKE 'analyticstest-CoffeeB-%' LIMIT 1"
-                )
+        coffee_b_id = db.execute(
+            __import__("sqlalchemy").text(
+                "SELECT id FROM coffees WHERE name LIKE 'analyticstest-CoffeeB-%' LIMIT 1"
             )
-            .scalar()
-        )
+        ).scalar()
         db.add(
             BrewSession(
                 user_id=uid,
@@ -1525,9 +1518,7 @@ def test_get_top_coffees_default_still_enforces_min_two(
     with SessionLocal() as db:
         rows = analytics.get_top_coffees(db, uid)
 
-    assert len(rows) == 1, (
-        f"Default >=2 floor must exclude CoffeeA (1 session); got {len(rows)}"
-    )
+    assert len(rows) == 1, f"Default >=2 floor must exclude CoffeeA (1 session); got {len(rows)}"
     assert rows[0].session_count == 2
     # Returned row should be CoffeeB (the one with 2 sessions)
     assert "CoffeeB" in rows[0].name

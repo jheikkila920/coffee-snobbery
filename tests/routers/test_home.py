@@ -740,8 +740,8 @@ def test_home_renders_personalized_greeting(
     body = resp.text
     match = re.search(r"<h1[^>]*>Good (morning|afternoon|evening), [^<]+</h1>", body)
     assert match is not None, (
-        f"Home page H1 must be a personalized greeting (D-10); "
-        f"no <h1>Good morning/afternoon/evening, USER</h1> found in body"
+        "Home page H1 must be a personalized greeting (D-10); "
+        "no <h1>Good morning/afternoon/evening, USER</h1> found in body"
     )
 
 
@@ -763,14 +763,10 @@ def test_home_does_not_mount_ai_cards(
         'hx-get="/home/cards/flavor-descriptors"',
         'hx-get="/home/cards/sweet-spots"',
     ):
-        assert forbidden not in body, (
-            f"IA-03 violation: home.html still mounts {forbidden!r}"
-        )
+        assert forbidden not in body, f"IA-03 violation: home.html still mounts {forbidden!r}"
 
 
-def test_home_renders_top_coffees_eagerly(
-    app: Any, clean_home_router: None
-) -> None:
+def test_home_renders_top_coffees_eagerly(app: Any, clean_home_router: None) -> None:
     """D-08: Top Coffees on home is server-rendered, not a lazy hx-get placeholder.
 
     Seeds two coffees with two rated brews each; expects both names inline in the
@@ -783,9 +779,7 @@ def test_home_renders_top_coffees_eagerly(
     from tests.services.test_analytics import _seed_analytics_scenario
 
     with SessionLocal() as db:
-        uid, _c3, _ca = _seed_analytics_scenario(
-            db, username="analyticstest-hometest-top-eager"
-        )
+        uid, _c3, _ca = _seed_analytics_scenario(db, username="analyticstest-hometest-top-eager")
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/")
@@ -801,9 +795,7 @@ def test_home_renders_top_coffees_eagerly(
     )
 
 
-def test_home_top_coffees_no_floor_integration(
-    app: Any, clean_home_router: None
-) -> None:
+def test_home_top_coffees_no_floor_integration(app: Any, clean_home_router: None) -> None:
     """IA-06 / D-09: home Top Coffees surfaces single-session coffees end-to-end."""
     _require_postgres()
     _require_analytics_tables()
@@ -811,9 +803,7 @@ def test_home_top_coffees_no_floor_integration(
     from app.db import SessionLocal
 
     with SessionLocal() as db:
-        uid = _seed_single_session_user(
-            db, username="hometest-nofloor-single"
-        )
+        uid = _seed_single_session_user(db, username="hometest-nofloor-single")
 
     client = _make_authed_client_for_user(app, uid)
     resp = client.get("/")
@@ -898,9 +888,7 @@ def test_home_has_see_ai_recommendations_link(
     assert resp.status_code == 200
 
     body = resp.text
-    match = re.search(
-        r'<a[^>]*href="/ai"[^>]*>[^<]*See AI recommendations[^<]*</a>', body
-    )
+    match = re.search(r'<a[^>]*href="/ai"[^>]*>[^<]*See AI recommendations[^<]*</a>', body)
     assert match is not None, (
         "D-06/IA-04 violation: home must contain an <a href='/ai'> link with "
         "anchor text 'See AI recommendations'"
@@ -940,6 +928,7 @@ def _seed_single_session_user(db: Any, *, username: str) -> int:
     db.flush()
 
     from datetime import datetime as _dt
+
     db.add(
         BrewSession(
             user_id=uid,
