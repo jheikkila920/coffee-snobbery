@@ -1,0 +1,168 @@
+name: Release
+
+# D-09: Single trigger — push of a tag matching v*. No workflow_dispatch fallback.
+# Re-running a failed release: git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z
+# && git tag vX.Y.Z && git push --tags.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Test gate — verbatim copy of .github/workflows/ci.yml's test job.
+  # Memory: executors-skip-ruff-ci-gates-both (both ruff steps run).
+  # Memory: tailwind-v3-not-v4 (Tailwind v3.4.17 binary, NOT v4).
+  # Memory: full-suite-test-isolation-gaps (double-run with SNOB_CI=1).
+  # D-10: build-push is gated on this job via `needs: test`.
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: snobbery
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+
+      # Build the content-hashed Tailwind CSS file that app/main.py requires at
+      # startup.  Mirrors Dockerfile stage 1 exactly: same binary version,
+      # same sha256 hash scheme, same --minify flag.  Without this step
+      # app.main raises RuntimeError("Tailwind CSS missing...") and the
+      # app fixture skips — producing hollow-green results that SNOB_CI=1
+      # is designed to prevent.
+      - name: Build Tailwind CSS
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64" \
+            -o /usr/local/bin/tailwindcss
+          chmod +x /usr/local/bin/tailwindcss
+          HASH="$(sha256sum app/static/css/tailwind.src.css | cut -c1-8)"
+          tailwindcss \
+            -i app/static/css/tailwind.src.css \
+            -o "app/static/css/tailwind.${HASH}.css" \
+            --minify
+
+      # Memory `executors-skip-ruff-ci-gates-both` — BOTH steps required.
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Pytest full suite
+        env:
+          DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/snobbery
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: snobbery
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY || 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }}
+          APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789a=' }}
+          SNOB_CI: "1"
+        run: python -m pytest tests/ -rs --tb=short --ignore=tests/e2e
+
+      - name: Pytest isolation double-run
+        env:
+          DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/snobbery
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: snobbery
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY || 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }}
+          APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789a=' }}
+          SNOB_CI: "1"
+        run: |
+          # Second run against the SAME database (no drop/recreate).
+          # Teardown residue from run 1 surfaces here as cross-module state pollution.
+          # _provision_test_db is idempotent (checks existence before creating) so
+          # run 2 reuses the existing DB — proving teardown actually fires (D-07).
+          python -m pytest tests/ -rs --tb=short --ignore=tests/e2e
+
+  # ---------------------------------------------------------------------------
+  # Build + push — multi-arch GHCR publish, gated on `needs: test`.
+  # D-13: docker/setup-qemu + setup-buildx + build-push-action.
+  # D-11: docker/metadata-action `flavor: latest=auto` handles pre-release filter.
+  # D-12: APP_VERSION build-arg consumed by Dockerfile ARG (Plan 02).
+  # ---------------------------------------------------------------------------
+  build-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/jheikkila54/coffee-snobbery
+          # D-03 tag matrix:
+          #   - {{raw}}        : exact verbatim tag (v1.2.0 or v1.2.0-rc1)
+          #   - {{major.minor}}: 1.2  (auto-skipped on pre-release per metadata-action docs)
+          #   - {{major}}      : 1    (disabled on v0.x to avoid false stable signal)
+          # latest is added by flavor=auto on stable tags only (D-11 pre-release filter).
+          tags: |
+            type=semver,pattern={{raw}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+          flavor: |
+            latest=auto
+          labels: |
+            org.opencontainers.image.title=Snobbery
+            org.opencontainers.image.description=Self-hosted household coffee log for pour-over enthusiasts
+            org.opencontainers.image.licenses=Proprietary
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          # target: runtime is mandatory — without it, the `dev` stage runs pytest
+          # as ENTRYPOINT (the operator image would restart-loop on `up -d`).
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # D-12: stamp the git tag into the Dockerfile ARG APP_VERSION (Plan 02).
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+          # GHA cache backend speeds up reruns ~50% by caching the Tailwind builder
+          # stage + pip layer; 10 GB limit per repo, ample for household scale.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
