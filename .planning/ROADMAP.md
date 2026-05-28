@@ -149,7 +149,16 @@ Plans:
   4. The deploy guide covers Nginx Proxy Manager setup, including the `TRUSTED_PROXY_IPS` env var and shared docker network requirement
   5. A fresh install auto-runs migrations on first start and lands the operator at `/setup`
   6. `.env.example` documents every required env var with generation hints for `APP_SECRET_KEY` and `APP_ENCRYPTION_KEY`
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+**Wave 1**
+- [x] 18-01-PLAN.md — DIST-01 compose split: pin GHCR image, drop build:, drop test service, override.yml.example + ignores (D-04/D-05/D-06/D-08)
+- [x] 18-02-PLAN.md — DIST-02 Dockerfile ARG APP_VERSION + OCI labels + system.py env-var fallback + pyproject 1.2.0 bump (D-12)
+- [x] 18-03-PLAN.md — DIST-06 .env.example audit + NPM TRUSTED_PROXY_IPS prose (D-17)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 18-04-PLAN.md — DIST-02 release.yml: tag-triggered test -> multi-arch GHCR push, latest=auto, APP_VERSION build-arg (D-09/D-10/D-11/D-12/D-13)
+- [ ] 18-05-PLAN.md — DIST-03/04/05 README operator-first rewrite + CONTRIBUTING.md carve-out + CLAUDE.md pointers + DIST-05 smoke procedure (D-07/D-14/D-15/D-16/D-18/D-19/D-20)
 
 ### Phase 19: AI Page & Research/Predict
 **Goal**: The AI page is fully wired with consolidated recommendations, on-demand coffee research, predicted personal rating, and trend charts — with cost controls that are non-negotiable
@@ -229,7 +238,7 @@ Plans:
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
-| 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
+| 18. Self-Host Packaging | v1.2 | 3/5 | In Progress|  |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |

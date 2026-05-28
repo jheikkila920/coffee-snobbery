@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
-status: planning
+status: executing
 stopped_at: Phase 18 context gathered
-last_updated: "2026-05-28T14:47:01.173Z"
-last_activity: 2026-05-28
+last_updated: "2026-05-28T15:33:42.355Z"
+last_activity: 2026-05-28 -- Phase 18 execution started
 progress:
   total_phases: 9
   completed_phases: 4
-  total_plans: 19
+  total_plans: 24
   completed_plans: 19
-  percent: 100
+  percent: 79
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 17 — IA Restructure
+**Current focus:** Phase 18 — self-host-packaging
 
 ## Current Position
 
-Phase: 18
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-28
+Phase: 18 (self-host-packaging) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 18
+Last activity: 2026-05-28 -- Phase 18 execution started
 
 Progress: [██████████] 100% plans / verification incomplete
 
