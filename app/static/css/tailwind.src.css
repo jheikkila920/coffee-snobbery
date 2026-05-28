@@ -82,6 +82,18 @@
 .htmx-request .htmx-indicator { opacity: 1; }
 .htmx-request.htmx-indicator { opacity: 1; }
 
+/* Chart.js canvas sizing — RESEARCH Pitfall 3: Chart.js v4 injects an inline style
+ * attribute on the canvas element (width/height) which violates strict style-src CSP
+ * when style-src 'unsafe-inline' is absent. Workaround: size the canvas via HTML
+ * width/height attributes (not CSS) and set maintainAspectRatio:false in the chart
+ * config. This class ensures the canvas fills its container responsively without an
+ * inline style attr. Placed outside @layer so it is not purged. */
+.chart-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
 @layer base {
   /* 16px floor (PITFALL MX-1): iOS Safari auto-zooms a focused input whose
      computed font-size is < 16px. */

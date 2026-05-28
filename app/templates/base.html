@@ -54,6 +54,13 @@
     {# Phase 13 dark-mode toggle component (plan 13-05 C4) — registers Alpine.data('darkToggle')
        before the @alpinejs/csp core boots; uses snobbery:theme localStorage key. #}
     <script defer src="/static/js/alpine-components/dark-toggle.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 19 chart-trends component (plan 19-06 VIZ-01) — registers Alpine.data('chartTrends')
+       before the @alpinejs/csp core boots. Chart.js CDN (below) must also load first;
+       both are defer-loaded but ordering within defer batch is document order. #}
+    <script defer src="/static/js/alpine-components/chart-trends.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Chart.js v4.5.1 via CDN — UMD build, no eval, CSP-nonce safe (VIZ-01 / RESEARCH §Pattern 6).
+       Placed before @alpinejs/csp so chart-trends.js can reference window.Chart on init(). #}
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Phase 11: per-page head extras (e.g. GBM's NoSleep.js). Empty by default.
        Populate from page templates via {% block head_extra %}...{% endblock %}. #}
     {% block head_extra %}{% endblock %}
@@ -65,6 +72,9 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.15.12/dist/cdn.min.js" nonce="{{ csp_nonce(request) }}"></script>
     {# HTMX 2.0.10 core — exact version pin per RESEARCH §1 + STACK.md §1. #}
     <script defer src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# htmx-ext-sse@2.2.4 — SSE extension (htmx 2.x removed SSE from core). Loaded AFTER
+       the htmx core so hx-ext="sse" is available on first DOM scan (D-16 / RESEARCH §Pattern 2). #}
+    <script defer src="https://cdn.jsdelivr.net/npm/htmx-ext-sse@2.2.4/dist/sse.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Local HTMX listeners (Plan 01-05) — MUST load AFTER the htmx core script so htmx.config.allowEval=false runs after htmx is defined. #}
     <script defer src="/static/js/htmx-listeners.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Service worker registration — nonce-tagged per CSP; must be inline (not a
