@@ -1,0 +1,47 @@
+{# Trends card — two Chart.js v4 canvases (VIZ-01 / D-17).
+   Lazy-mounted with 700ms stagger from ai.html.
+   Alpine chartTrends component (chart-trends.js) fetches data and renders
+   both charts; MutationObserver re-themes on .dark toggle.
+
+   Canvas sizing: explicit width/height HTML attrs + maintainAspectRatio:false
+   in chart config (RESEARCH Pitfall 3 — avoids inline style CSP violation).
+   CSS class .chart-canvas (tailwind.src.css) handles responsive display.
+
+   Context: none (chart data fetched client-side from /ai/charts/* endpoints).
+   CSP-clean. No |safe. No inline event handlers.
+#}
+<section aria-labelledby="trends-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800"
+         x-data="chartTrends('/ai/charts/rating-over-time', '/ai/charts/flavor-distribution')">
+
+  <h2 id="trends-heading" class="text-xl font-semibold mb-4">Trends</h2>
+
+  <div class="space-y-6">
+
+    {# Rating over time — line chart #}
+    <div>
+      <h3 class="text-sm font-semibold text-espresso-600 dark:text-cream-300 mb-2">Rating over time (last 90 days)</h3>
+      <div class="relative" style="height:200px">
+        <canvas x-ref="ratingCanvas"
+                width="100"
+                height="200"
+                class="chart-canvas"
+                aria-label="Rating over time chart"></canvas>
+      </div>
+    </div>
+
+    {# Flavor distribution — horizontal bar chart #}
+    <div>
+      <h3 class="text-sm font-semibold text-espresso-600 dark:text-cream-300 mb-2">Top flavor notes</h3>
+      <div class="relative" style="height:260px">
+        <canvas x-ref="flavorCanvas"
+                width="100"
+                height="260"
+                class="chart-canvas"
+                aria-label="Flavor distribution chart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+</section>

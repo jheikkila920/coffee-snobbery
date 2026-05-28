@@ -94,6 +94,26 @@ def get_ai_page(
     anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
     openai_cred = credentials_service.get_provider_credential(db, "openai")
     ai_key_present = anthropic_cred is not None or openai_cred is not None
+
+    # Research quota context — passed through to research_form.html include (D-09).
+    # Only computed when gate is open + key present (avoid extra queries when not needed).
+    remaining = 0
+    quota_cap = 20
+    reset_in = None
+    if gate["gate_open"] and ai_key_present:
+        remaining = ai_quota.remaining(db, user.id, "coffee_research")
+        quota_cap = ai_quota.get_quota_cap("coffee_research")
+        if remaining == 0:
+            from datetime import UTC, datetime
+
+            reset_time = ai_quota.get_quota_reset_time(db, user.id, "coffee_research")
+            if reset_time:
+                delta = reset_time - datetime.now(UTC)
+                total_secs = max(0, int(delta.total_seconds()))
+                hours = total_secs // 3600
+                mins = (total_secs % 3600) // 60
+                reset_in = f"{hours}h {mins}m"
+
     return templates.TemplateResponse(
         request=request,
         name="pages/ai.html",
@@ -101,6 +121,9 @@ def get_ai_page(
             "gate": gate,
             "ai_key_present": ai_key_present,
             "user": user,
+            "remaining": remaining,
+            "quota_cap": quota_cap,
+            "reset_in": reset_in,
         },
     )
 

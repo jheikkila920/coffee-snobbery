@@ -203,18 +203,24 @@ def card_preference_profile(
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Fragment endpoint for the preference-profile card (HOME-02).
+    """Fragment endpoint for the preference-profile card (HOME-02 / AIX-09 / D-10).
 
-    Rating-dependent: passes ``all_unrated`` to the template (D-05).
-    The ``profile`` dict has keys origin/process/roaster/roast_level.
+    Phase 19 Plan 06 update: returns AI prose (preference_profile_prose.html)
+    instead of the structured origin/process/roaster/roast_level table.
+
+    Reads the latest ``preference_profile_prose`` row from ``ai_recommendations``
+    (written by ``generate_preference_profile_prose`` in the nightly scheduler
+    or manual refresh).  Falls back to ``all_unrated`` / sparse empty-state
+    when no prose row exists yet.
     """
-    profile = analytics.get_preference_profile(db, user.id)
-    profile_empty = not any(profile.values())
-    all_unrated = profile_empty and not _has_rated_sessions(db, user.id)
+    row = ai_service.get_latest_recommendation(
+        db, user_id=user.id, rec_type="preference_profile_prose"
+    )
+    all_unrated = row is None and not _has_rated_sessions(db, user.id)
     return templates.TemplateResponse(
         request=request,
-        name="fragments/home/preference_profile.html",
-        context={"profile": profile, "all_unrated": all_unrated},
+        name="fragments/ai/preference_profile_prose.html",
+        context={"row": row, "all_unrated": all_unrated},
     )
 
 

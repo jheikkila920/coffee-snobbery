@@ -1,36 +1,37 @@
 {# Coach a brew — session picker fragment (D-12 / AIX-12)
-   Lists the user's last ~20 brew sessions for the /ai/coach picker.
-   Each entry links to the brew edit page where improve-brew auto-triggers.
-   19-06 will wire the hx-trigger="load" pattern on the edit page.
+   Lists the user's last ~20 brew sessions as an inline Alpine expandable list.
+   Selecting a session navigates to /brew/{id}/edit where improve-brew auto-triggers
+   via hx-trigger="load" when ?coach=1 is present (19-06 Task 3).
+
+   Context:
+     sessions — list[BrewSession]: last 20 sessions, each with .id, .coffee,
+                .coffee_id, .brewed_at, .rating
+   CSP-clean. All values autoescaped. No |safe.
 #}
 <div id="coach-picker" class="space-y-2">
   {% if sessions %}
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-      Select a brew to coach:
+    <p class="text-sm text-espresso-600 dark:text-cream-300 mb-3">
+      Select a brew to get AI improvement suggestions:
     </p>
-    <ul class="divide-y divide-gray-100 dark:divide-gray-700">
+    <ul class="divide-y divide-espresso-100 dark:divide-espresso-800">
       {% for session in sessions %}
         <li>
-          <a href="/brew/{{ session.id }}/edit"
-             class="flex items-center justify-between py-2 px-1 text-sm hover:bg-gray-50
-                    dark:hover:bg-gray-800 rounded">
-            <span class="font-medium text-gray-800 dark:text-gray-200">
+          <a href="/brew/{{ session.id }}/edit?coach=1"
+             class="flex items-center justify-between py-2 px-1 text-sm text-espresso-800 dark:text-cream-100
+                    hover:bg-espresso-100 dark:hover:bg-espresso-800 rounded min-h-[44px]">
+            <span class="font-medium">
               {{ session.coffee.name if session.coffee else "Coffee #" ~ session.coffee_id }}
             </span>
-            <span class="text-gray-400 dark:text-gray-500 text-xs ml-2">
-              {% if session.brewed_at %}
-                {{ session.brewed_at.strftime("%b %d") }}
-              {% endif %}
-              {% if session.rating %}
-                &middot; {{ session.rating }}
-              {% endif %}
+            <span class="text-espresso-500 dark:text-cream-400 text-xs ml-2 shrink-0">
+              {% if session.brewed_at %}{{ session.brewed_at.strftime("%b %d") }}{% endif %}
+              {% if session.rating %}&middot; {{ session.rating }}{% endif %}
             </span>
           </a>
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p class="text-sm text-gray-500 dark:text-gray-400">
+    <p class="text-sm text-espresso-600 dark:text-cream-300">
       No brew sessions yet. Log a brew first to get coaching suggestions.
     </p>
   {% endif %}

@@ -1,21 +1,19 @@
 {% extends "base.html" %}
 {% block page_title %}AI{% endblock %}
 {% block content %}
-  {# Phase 17 /ai page shell (IA-02 / IA-03 / AIX-08, D-13..D-16 + D-20).
+  {# Phase 19 /ai page — updated for Plan 19-06 (research card + prose prefs + trends).
+     D-10 card stack order (above-gate + key-present branch):
+       Research → What to buy next hero → Preference Profile (prose) →
+       Sweet Spots → AI tools → Trends
 
      Three-branch composition keyed on (gate_open, ai_key_present, is_admin):
        - Below gate                           → cold-start meter (D-14).
        - Above gate, no key, admin            → AIX-08 admin callout (D-15).
        - Above gate, no key, non-admin        → D-16 social-action callout.
-       - Above gate, key present              → AI hero + Preference Profile
-                                                + Top Flavor Descriptors +
-                                                Sweet Spots + AI tools +
-                                                Research stub (D-13).
+       - Above gate, key present              → D-10 card stack (see above).
 
-     The DIST-07 banner from plan 17-03 is included at the top of <main> and
-     self-gates on is_admin AND not ai_key_present (D-20 coexistence). When
-     visible it sits above the branched content; the hero card slot is still
-     replaced by the AIX-08 admin callout below.
+     Phase 17 research stub replaced by the real research form (Plan 19-06).
+     Top Flavor Descriptors section DELETED per AIX-09 / D-10.
 
      All values autoescaped. CSP-clean. #}
   <main class="mx-auto max-w-6xl px-6 py-12">
@@ -35,12 +33,13 @@
           {% include "fragments/ai/_no_key_non_admin_callout.html" %}
         {% endif %}
       {% else %}
+        {# === Research a coffee — D-04 pinned at the TOP, above hero. ===
+           Quota state rendered eagerly (single COUNT query on page load). #}
+        {% include "fragments/ai/research_form.html" %}
+
         {# === AI hero: lazy mount of /home/cards/ai-recommendation. ===
-           Delay dropped from 600ms (home pre-17-02) to 100ms — hero is now
-           the first card on /ai, no other lazy mounts above it to stagger
-           against. The /home/cards/ai-recommendation URL is RETAINED per
-           RESEARCH Open Question #3 (rename deferred to reduce SW cache
-           churn). #}
+           Delay 100ms — hero is now the second card, short stagger after
+           the Research card which is eagerly rendered. #}
         <section aria-labelledby="ai-rec-heading"
                  class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
           <h2 id="ai-rec-heading" class="text-xl font-semibold mb-4">What to buy next</h2>
@@ -55,7 +54,8 @@
           </div>
         </section>
 
-        {# === Preference Profile: lazy mount, 200ms stagger. === #}
+        {# === Preference Profile: lazy mount, 200ms stagger.
+           Updated by Plan 19-06 to render AI prose (AIX-09 / D-10). === #}
         <section aria-labelledby="preference-heading"
                  class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
           <h2 id="preference-heading" class="text-xl font-semibold mb-4">Preference Profile</h2>
@@ -69,11 +69,14 @@
           </div>
         </section>
 
-        {# === Top Flavor Descriptors: lazy mount, 300ms stagger. === #}
-        <section aria-labelledby="flavor-heading"
+        {# Top Flavor Descriptors section DELETED per AIX-09 / D-10. #}
+
+        {# === Sweet Spots: lazy mount, 300ms stagger (was 500ms; compacted
+           after deleting Top Flavor Descriptors above). === #}
+        <section aria-labelledby="sweet-spots-heading"
                  class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="flavor-heading" class="text-xl font-semibold mb-4">Top Flavor Descriptors</h2>
-          <div hx-get="/home/cards/flavor-descriptors"
+          <h2 id="sweet-spots-heading" class="text-xl font-semibold mb-4">Sweet Spots</h2>
+          <div hx-get="/home/cards/sweet-spots"
                hx-trigger="load delay:300ms"
                hx-swap="innerHTML">
             <div class="animate-pulse space-y-2">
@@ -83,56 +86,75 @@
           </div>
         </section>
 
-        {# === Sweet Spots: lazy mount, 500ms stagger. === #}
-        <section aria-labelledby="sweet-spots-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="sweet-spots-heading" class="text-xl font-semibold mb-4">Sweet Spots</h2>
-          <div hx-get="/home/cards/sweet-spots"
-               hx-trigger="load delay:500ms"
-               hx-swap="innerHTML">
-            <div class="animate-pulse space-y-2">
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-            </div>
-          </div>
-        </section>
-
-        {# === AI tools (paste-rank link + wishlist link + equipment form). ===
-           Recovered from snippets/ai-surfaces-pre-17-02.html (canonical source).
-           Wishlist link is a duplicate affordance — Wishlist also has its own
-           card on home per D-06; both surfaces are intentional per CONTEXT.md. #}
+        {# === AI tools (paste-rank link + wishlist link + equipment form +
+           Coach a brew). AI tools section gains:
+             - hx-indicator + hx-disabled-elt on equipment button (AIX-10)
+             - Coach a brew link opening the inline session picker (D-12) === #}
         <section aria-labelledby="ai-tools-heading"
                  class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
           <h2 id="ai-tools-heading" class="text-xl font-semibold mb-4">AI tools</h2>
           <div class="flex flex-wrap gap-3 mb-4">
             <a href="/ai/paste-rank"
-               class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+               class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50 min-h-[44px] inline-flex items-center">
               Rank these for me
             </a>
             <a href="/ai/wishlist"
-               class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+               class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800 min-h-[44px] inline-flex items-center">
               Wishlist
             </a>
+            {# Coach a brew: inline Alpine expandable list (D-12 / AIX-12) #}
+            <div x-data="{ open: false }">
+              <button type="button"
+                      x-on:click="open = !open"
+                      :aria-expanded="open"
+                      class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800 min-h-[44px] inline-flex items-center gap-2">
+                Coach a brew
+                <svg class="h-4 w-4 transition-transform" :class="open ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+              <div x-show="open"
+                   x-on:click.outside="open = false"
+                   class="mt-2 rounded-lg border border-espresso-200 dark:border-espresso-700 bg-cream-50 dark:bg-espresso-950 p-3 shadow-lg max-h-80 overflow-y-auto"
+                   hx-get="/ai/coach"
+                   hx-trigger="revealed once"
+                   hx-swap="innerHTML">
+                <p class="text-sm text-espresso-500 dark:text-cream-400 animate-pulse">Loading sessions&hellip;</p>
+              </div>
+            </div>
           </div>
-          {# Equipment rec: generate-on-click (D-05). Never auto-loads. #}
+          {# Equipment rec: generate-on-click (D-05 / AIX-10). Never auto-loads.
+             hx-indicator + hx-disabled-elt added for AIX-10 progress feedback. #}
           <div>
             <form hx-post="/ai/equipment"
                   hx-target="#equipment-rec-result"
-                  hx-swap="innerHTML">
+                  hx-swap="innerHTML"
+                  hx-indicator="#equipment-spinner"
+                  hx-disabled-elt="find button[type=submit]">
               <input type="hidden"
                      name="X-CSRF-Token"
                      value="{{ request.cookies.get('csrftoken', '') }}">
               <button type="submit"
-                      class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800">
+                      class="inline-flex items-center gap-2 rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800 min-h-[44px]">
                 Analyze my setup
+                <span id="equipment-spinner" class="htmx-indicator" aria-hidden="true">
+                  <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                </span>
               </button>
             </form>
             <div id="equipment-rec-result" class="mt-3"></div>
           </div>
         </section>
 
-        {# === Research a coffee — Phase 19 stub (D-13). === #}
-        {% include "fragments/research_coming_soon.html" %}
+        {# === Trends card: two Chart.js v4 canvases (VIZ-01 / D-17).
+           Included directly — chart data is fetched client-side by the
+           Alpine chartTrends component via /ai/charts/* endpoints.
+           No server-side lazy load needed (no per-user data in the template). === #}
+        {% include "fragments/ai/trends_card.html" %}
+
       {% endif %}
     </div>
   </main>

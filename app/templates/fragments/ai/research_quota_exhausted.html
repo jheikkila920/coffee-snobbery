@@ -1,0 +1,23 @@
+{# Research quota exhausted — friendly inline 429 fragment (D-09 / AIX-05).
+   Rendered by POST /ai/research when the user's daily quota is exhausted.
+   Replaces #research-card via HX-Retarget + HX-Reswap: outerHTML on 429.
+
+   Context:
+     reset_in — str | None: "Hh Mm" countdown, or None when window is empty
+   CSP-clean. All values autoescaped. No |safe.
+#}
+<section id="research-card"
+         aria-labelledby="research-quota-heading"
+         class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:bg-espresso-900 dark:border-amber-700">
+  <h2 id="research-quota-heading" class="text-xl font-semibold mb-2 text-amber-700 dark:text-amber-400">Daily research limit reached</h2>
+  <p class="text-sm text-espresso-700 dark:text-cream-300">
+    {% if reset_in %}
+      Your quota resets in {{ reset_in }}. Each research call counts against your 24-hour window.
+    {% else %}
+      Your daily research quota has been used. Try again in about 24 hours.
+    {% endif %}
+  </p>
+  <p class="text-xs text-espresso-500 dark:text-cream-400 mt-2">
+    Tip: repeated lookups for the same coffee return instantly from cache and do not use quota.
+  </p>
+</section>

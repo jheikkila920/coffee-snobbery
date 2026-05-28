@@ -1,0 +1,92 @@
+{# Research a coffee — input form + quota counter + SSE result mount
+   (AIX-01 / AIX-05 / AIX-06 / D-01 / D-03 / D-04 / D-09 / D-13 / D-16).
+
+   Context:
+     remaining     — int: remaining research calls today
+     quota_cap     — int: total daily cap (default 20)
+     reset_in      — str | None: "Hh Mm" countdown when remaining == 0
+
+   SSE pattern (D-16 / RESEARCH Pattern 2):
+     - Form POSTs to POST /ai/research which returns text/event-stream
+     - hx-ext="sse" on the form processes the streaming response
+     - sse-swap="complete" replaces #research-result-region on event:complete
+     - sse-close="complete error" closes the stream on terminal events
+     - hx-indicator spinner styles from tailwind.src.css (project memory
+       strict-csp-blocks-htmx-indicator — NOT auto-injected)
+
+   CSP-clean. All values autoescaped. No |safe. No inline event handlers.
+#}
+<section id="research-card"
+         aria-labelledby="research-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="research-heading" class="text-xl font-semibold mb-1">Research a coffee</h2>
+
+  {# Quota counter — eager render (D-09). Swappable by GET /ai/research/quota. #}
+  <p class="text-sm text-espresso-600 dark:text-cream-300 mb-4">
+    <span id="research-quota">
+      {% if remaining == 0 %}
+        {% if reset_in %}Resets in {{ reset_in }}{% else %}Daily quota used{% endif %}
+      {% else %}
+        {{ remaining }}/{{ quota_cap }} research calls remaining today
+      {% endif %}
+    </span>
+  </p>
+
+  {# hx-ext="sse" on the form container enables the SSE extension for this form's POST
+     response. sse-swap="complete" + sse-close="complete error" handle the terminal events.
+     The POST /ai/research route returns EventSourceResponse (text/event-stream). #}
+  <form id="research-form"
+        hx-post="/ai/research"
+        hx-ext="sse"
+        hx-target="#research-result-region"
+        hx-swap="innerHTML"
+        hx-indicator="#research-spinner"
+        hx-disabled-elt="find button[type=submit]"
+        sse-connect=""
+        sse-swap="complete"
+        sse-close="complete error"
+        class="space-y-3">
+    {# CSRF double-submit cookie — required on every state-changing POST #}
+    <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Coffee name <span class="text-red-600" aria-hidden="true">*</span></span>
+      <input type="text"
+             name="coffee_name"
+             required
+             autocomplete="off"
+             placeholder="e.g. Ethiopia Yirgacheffe Natural"
+             class="w-full rounded border border-espresso-200 px-3 py-2 text-base text-espresso-900 dark:text-cream-100">
+    </label>
+
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Roaster <span class="text-xs font-normal text-espresso-500 dark:text-cream-400">(optional)</span></span>
+      <input type="text"
+             name="roaster_name"
+             autocomplete="off"
+             placeholder="e.g. Onyx Coffee Lab"
+             class="w-full rounded border border-espresso-200 px-3 py-2 text-base text-espresso-900 dark:text-cream-100">
+    </label>
+
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              {% if remaining == 0 %}disabled{% endif %}
+              class="inline-flex items-center gap-2 rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]">
+        Research
+        <span id="research-spinner" class="htmx-indicator" aria-hidden="true">
+          <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        </span>
+      </button>
+    </div>
+  </form>
+
+  {# SSE result mount — receives event:complete HTML fragment via sse-swap.
+     Starts empty; replaced by research_result.html or research_quota_exhausted.html. #}
+  <div id="research-result-region"
+       class="mt-4">
+  </div>
+
+</section>

@@ -1,0 +1,52 @@
+{# Preference Profile prose — AI-generated in-depth prose summary (AIX-09 / D-10).
+   Replaces the structured origin/process/roaster/roast_level rows on /ai.
+   Rendered by GET /home/cards/preference-profile after 19-06 updates home.py.
+
+   Context:
+     row          — AIRecommendation | None: latest preference_profile_prose row
+     all_unrated  — bool: True when user has no rated sessions (D-05)
+
+   CSP-clean. All values autoescaped. Never use the safe filter.
+   Newlines rendered via line-splitting (T-19-21).
+#}
+
+{% if row and row.response_json and row.response_json.get('summary_prose') %}
+  <div class="prose-like text-base text-espresso-800 dark:text-cream-200 leading-relaxed">
+    {% set prose = row.response_json['summary_prose'] %}
+    {% for line in prose.split('\n') %}
+      {% if line.strip() %}
+        <p class="mb-2">{{ line }}</p>
+      {% endif %}
+    {% endfor %}
+  </div>
+  <div class="mt-3">
+    <form hx-post="/ai/refresh"
+          hx-target="closest section"
+          hx-swap="outerHTML"
+          hx-indicator="#pref-refresh-spinner"
+          hx-disabled-elt="find button[type=submit]">
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+      <input type="hidden" name="refresh_type" value="preference_profile_prose">
+      <button type="submit"
+              class="inline-flex items-center gap-2 text-xs text-espresso-500 dark:text-cream-400 hover:text-espresso-700 dark:hover:text-cream-200 min-h-[44px]">
+        Refresh
+        <span id="pref-refresh-spinner" class="htmx-indicator" aria-hidden="true">
+          <svg class="h-3 w-3 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        </span>
+      </button>
+    </form>
+  </div>
+
+{% elif all_unrated %}
+  {% set hint_type = "unrated" %}
+  {% set unrated_text = "Rate some brews to unlock your AI preference profile." %}
+  {% include "fragments/home/_card_sparse.html" %}
+
+{% else %}
+  {% set hint_type = "sparse" %}
+  {% set sparse_text = "Keep logging brews — your preference profile will appear here once there is enough data." %}
+  {% include "fragments/home/_card_sparse.html" %}
+{% endif %}
