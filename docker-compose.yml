@@ -1,7 +1,7 @@
-# Snobbery — Compose stack (Phase 0 / Plan 00-05).
+# Snobbery — operator-facing Compose stack.
 #
 # Two services on the coffee-snobbery-net bridge:
-#   - coffee-snobbery     : FastAPI + uvicorn (single worker) — host-bound to 127.0.0.1:8080
+#   - coffee-snobbery     : FastAPI + uvicorn (single worker), pulled from GHCR
 #   - coffee-snobbery-db  : Postgres 16 — no host port; reachable only via the bridge
 #
 # Three named volumes (CONTEXT D-03 / FOUND-03):
@@ -16,6 +16,9 @@
 # host proxies to 127.0.0.1:8080 (see README NGINX server-block snippet).
 #
 # No `version:` key — Compose v2 ignores it and emits a deprecation warning.
+#
+# Dev loop: `cp docker-compose.override.yml.example docker-compose.override.yml`
+# (gitignored) — Compose auto-merges and rebuilds locally on `docker compose up`.
 
 name: coffee-snobbery
 
@@ -53,14 +56,10 @@ services:
       start_period: 10s
 
   coffee-snobbery:
-    image: coffee-snobbery:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-      # Pin the prod image to the runtime stage. Without this, an omitted target
-      # builds the LAST Dockerfile stage (`dev`), whose ENTRYPOINT is pytest — so
-      # `up -d` runs the test suite and restart-loops instead of serving uvicorn.
-      target: runtime
+    # CONTEXT D-04: pinned to the current semver. Operators who want to float
+    # on :latest, :1, or :1.2 can edit this line. Upgrade: edit tag, then
+    # `docker compose pull && docker compose up -d`.
+    image: ghcr.io/jheikkila54/coffee-snobbery:v1.2.0
     container_name: coffee-snobbery
     restart: unless-stopped
     security_opt:
@@ -85,39 +84,6 @@ services:
     # CONTEXT D-09: localhost-only host bind. NGINX on the host proxies to this.
     ports:
       - "127.0.0.1:8080:8000"
-
-  coffee-snobbery-test:
-    # Test runner — gated behind the `test` profile so `docker compose up -d`
-    # never starts it. One-command gate: docker compose run --rm coffee-snobbery-test
-    # Uses the `dev` Dockerfile stage (FROM runtime AS dev) which carries pytest,
-    # playwright, and the Chromium binary (T-12-10 / T-12-11).
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: dev
-    profiles: [test]
-    depends_on:
-      coffee-snobbery-db:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      # Same inline URL as the prod service; conftest creates a sibling *_test DB
-      # and only ever touches that (T-12-11 / SNOB_CI interlock).
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@coffee-snobbery-db:5432/${POSTGRES_DB}
-      SNOB_CI: "1"
-    networks:
-      - coffee-snobbery-net
-    # No source bind-mount on purpose. A `.:/app` mount masks the image's baked
-    # (gitignored) app/static/css/tailwind.<hash>.css, making app.main unimportable
-    # and silently skipping ~a third of the suite ("Tailwind CSS missing") — exactly
-    # the hollow green-by-skip the D-02 gate forbids. The gate runs the BAKED tree,
-    # so refresh code with a rebuild before running:
-    #   docker compose build coffee-snobbery-test && docker compose run --rm coffee-snobbery-test
-    # (or one-shot: docker compose run --build --rm coffee-snobbery-test).
-    # Fast per-file iteration: `docker compose cp` into the live coffee-snobbery
-    # container (see CLAUDE.md). No container_name (parallel `run`), no restart,
-    # no ports, no photo/backup volumes.
 
 networks:
   coffee-snobbery-net:
