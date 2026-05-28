@@ -29,3 +29,7 @@ app/static/css/tailwind.*.css
 # Build artifact written by the Dockerfile stage-1 RUN block; generated per build,
 # not stored in the repo (C9 — SW cache versioning).
 app/static/build_id.txt
+
+# Dev compose override — gitignored so the committed docker-compose.yml stays
+# operator-facing. Devs copy docker-compose.override.yml.example (D-05).
+docker-compose.override.yml

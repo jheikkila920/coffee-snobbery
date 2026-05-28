@@ -40,3 +40,6 @@ Thumbs.db
 # Coverage artifacts
 htmlcov/
 .coverage
+
+# Dev compose override — never bake into the image even if present on disk
+docker-compose.override.yml
