@@ -73,7 +73,7 @@
     {# Persistent nav frame — auth-gated (D-01 / Plan 11-03). Hidden on /login and
        /setup because request.state.user is None for those routes.
        Top nav (>=768px): logo + wordmark + search + account dropdown.
-       Bottom tab nav (<768px): Home / Log / Config / Admin tabs. #}
+       Bottom tab nav (<768px): Home / Log / AI / Config tabs. #}
     {% if request.state.user %}
     {# ── Top horizontal nav (>=768px) ── #}
     <header class="hidden md:flex h-14 px-6 items-center justify-between bg-cream-100 dark:bg-espresso-900 border-b border-espresso-200 dark:border-espresso-700">
@@ -91,6 +91,7 @@
         <nav class="flex items-center gap-5">
           <a href="/" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Home</a>
           <a href="/brew" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Log</a>
+          <a href="/ai" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">AI</a>
           <a href="/config" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Config</a>
           {% if request.state.user.is_admin %}
           <a href="/admin" class="text-sm font-semibold text-espresso-600 dark:text-espresso-300 hover:text-espresso-900 dark:hover:text-cream-100">Admin</a>
@@ -266,6 +267,15 @@
           </svg>
           <span class="text-xs">Log</span>
         </a>
+        {# AI tab — always visible to authed users (D-03, IA-02). Heroicons sparkles outline. #}
+        <a href="/ai"
+           class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
+           :class="activeTab === 'ai' ? 'text-espresso-700 dark:text-cream-100' : 'text-espresso-400 dark:text-espresso-400'">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+          </svg>
+          <span class="text-xs">AI</span>
+        </a>
         {# Config tab #}
         <a href="/config"
            class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
@@ -276,17 +286,6 @@
           </svg>
           <span class="text-xs">Config</span>
         </a>
-        {# Admin tab — hidden for non-admins (MOB-02) #}
-        {% if request.state.user.is_admin %}
-        <a href="/admin"
-           class="flex flex-col items-center justify-center gap-1 flex-1 min-h-[44px] min-w-[44px]"
-           :class="activeTab === 'admin' ? 'text-espresso-700 dark:text-cream-100' : 'text-espresso-400 dark:text-espresso-400'">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-          </svg>
-          <span class="text-xs">Admin</span>
-        </a>
-        {% endif %}
       </div>
     </nav>
     {% endif %}

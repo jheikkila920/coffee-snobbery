@@ -23,10 +23,10 @@ document.addEventListener('alpine:init', () => {
       const p = window.location.pathname;
       if (p === '/' || p.startsWith('/home')) return 'home';
       if (p.startsWith('/brew')) return 'brew';
+      if (p.startsWith('/ai')) return 'ai';
       if (p.startsWith('/config') || p.startsWith('/coffees') ||
           p.startsWith('/equipment') || p.startsWith('/recipes') ||
           p.startsWith('/roasters') || p.startsWith('/flavor-notes')) return 'config';
-      if (p.startsWith('/admin')) return 'admin';
       return '';
     },
   }));
