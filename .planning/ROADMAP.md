@@ -183,7 +183,7 @@ Plans:
 - [x] 19-02-PLAN.md — AIX-11/13: _verify_buy_url 404/410 + archived-retry + recipe-prompt + no_match test rewrite + latency comments
 
 **Wave 3** *(blocked on Wave 2)*
-- [ ] 19-03-PLAN.md — AIX-01/02/03/04/05/07/13: ai_quota + ai_research cache/prediction/two-phase-SSE generator
+- [x] 19-03-PLAN.md — AIX-01/02/03/04/05/07/13: ai_quota + ai_research cache/prediction/two-phase-SSE generator
 - [ ] 19-04-PLAN.md — AIX-09/12/13: brew-improve SSE + preference-prose flow + scheduler rec_type loop
 
 **Wave 4** *(blocked on Wave 3)*
@@ -259,7 +259,7 @@ Plans:
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
-| 19. AI Page & Research/Predict | v1.2 | 2/7 | In Progress|  |
+| 19. AI Page & Research/Predict | v1.2 | 3/7 | In Progress|  |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |

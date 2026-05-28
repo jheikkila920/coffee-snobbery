@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
 stopped_at: Phase 19 Plan 02 complete
-last_updated: "2026-05-28T20:24:23.020Z"
+last_updated: "2026-05-28T20:40:07.277Z"
 last_activity: 2026-05-28
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 31
-  completed_plans: 26
-  percent: 84
+  completed_plans: 27
+  percent: 87
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 ## Current Position
 
 Phase: 19 (ai-page-research-predict) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-05-28
 
-Progress: [████████░░] 84%
+Progress: [█████████░] 87%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [████████░░] 84%
 **Recent Trend:** No v1.2 history yet
 | Phase 19-ai-page-research-predict P01 | 35m | 3 tasks | 11 files |
 | Phase 19-ai-page-research-predict P02 | 35 | 2 tasks | 3 files |
+| Phase 19-ai-page-research-predict P03 | 60 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,7 @@ Progress: [████████░░] 84%
 - v1.2 open: AI prediction storage (`ai_recommendations` reuse vs. new `ai_coffee_predictions` table) — resolve at plan-phase 19
 - [Phase ?]: D-11 applied in plan 19-01: RecipeSuggestionSchema.no_match removed; ratio/temp_c/grind_hint required
 - [Phase ?]: D-14/D-15 applied in plan 19-02: 404/410 rejection + archived retry + latency comments
+- [Phase ?]: D-07/AIX-02 prediction upsert uses ON CONFLICT on uq_ai_rating_pred_user_cache_key -- single row per user+cache_key
 
 ### Pending Todos
 
@@ -98,7 +100,7 @@ Progress: [████████░░] 84%
 
 ## Session Continuity
 
-Last session: 2026-05-28T20:24:22.999Z
+Last session: 2026-05-28T20:40:07.255Z
 Stopped at: Phase 19 Plan 02 complete
-Resume file: .planning/phases/19-ai-page-research-predict/19-02-SUMMARY.md
+Resume file: None
 Next: `/gsd-plan-phase 16 --gaps` (re-plan to fix origin-country) — or fix inline and re-verify

@@ -69,11 +69,11 @@ The differentiator. A dedicated AI page hosting the consolidated recommendations
 
 - [x] **AIX-01**: User can type a coffee name and get an AI-researched profile (origin, roaster, tasting notes) grounded in web search with cited sources
 - [x] **AIX-02**: The AI predicts how the user would rate that coffee as a range with a confidence level and visible reasoning, never a single point estimate
-- [ ] **AIX-03**: AI research/predict is gated by the existing cold-start threshold (>=3 sessions and >=5 distinct flavor notes)
+- [x] **AIX-03**: AI research/predict is gated by the existing cold-start threshold (>=3 sessions and >=5 distinct flavor notes)
 - [x] **AIX-04**: Repeat lookups of the same coffee are served from a cache (TTL) to avoid redundant web-search cost
-- [ ] **AIX-05**: AI research/predict is rate-limited per user per day, with remaining quota visible to the user
+- [x] **AIX-05**: AI research/predict is rate-limited per user per day, with remaining quota visible to the user
 - [ ] **AIX-06**: User can add a researched coffee to the wishlist directly from the result
-- [ ] **AIX-07**: AI responses on the AI page stream to the user (SSE) instead of polling
+- [x] **AIX-07**: AI responses on the AI page stream to the user (SSE) instead of polling
 - [x] **AIX-08**: When a user meets the cold-start threshold but no AI API key is configured, the AI page shows a prominent button/banner linking to the Admin page to add a key (distinct from the not-enough-data empty state)
 - [x] **AIX-09**: The preference profile contains an in-depth AI-generated prose summary that cross-cuts flavor descriptors against process (e.g., "fruity in washed but nutty in natural"), origin, varietal, and rating -- no descriptor count cap; flavor descriptors are not shown as a standalone "top descriptors" widget (item #11)
 - [ ] **AIX-10**: Every user-triggered AI action shows visible progress feedback while it runs -- AI Refresh, Force Refresh, and Refresh Recommendation buttons disable + display a spinner/state until the request completes or errors (items #12 + #15)
@@ -177,11 +177,11 @@ Every v1.2 requirement maps to exactly one phase.
 | CAFE-06 | Phase 16 | Pending |
 | AIX-01 | Phase 19 | Complete |
 | AIX-02 | Phase 19 | Complete |
-| AIX-03 | Phase 19 | Pending |
+| AIX-03 | Phase 19 | Complete |
 | AIX-04 | Phase 19 | Complete |
-| AIX-05 | Phase 19 | Pending |
+| AIX-05 | Phase 19 | Complete |
 | AIX-06 | Phase 19 | Pending |
-| AIX-07 | Phase 19 | Pending |
+| AIX-07 | Phase 19 | Complete |
 | AIX-08 | Phase 17 | Complete |
 | AIX-09 | Phase 19 | Complete |
 | AIX-10 | Phase 19 | Pending |
