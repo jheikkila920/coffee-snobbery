@@ -228,7 +228,7 @@ Plans:
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
-| 17. IA Restructure | v1.2 | 5/5 | Complete   | 2026-05-28 |
+| 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |

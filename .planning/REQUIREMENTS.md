@@ -39,18 +39,18 @@ Make Snobbery cleanly runnable by other households on their own VPS.
 - [ ] **DIST-04**: The deploy doc includes step-by-step Nginx Proxy Manager setup (proxy host to `coffee-snobbery:8000`, `TRUSTED_PROXY_IPS`, shared docker network)
 - [ ] **DIST-05**: A fresh install boots cleanly: migrations auto-run on first start and the operator lands on `/setup` to create the first admin
 - [ ] **DIST-06**: `.env.example` documents every required env var with generation hints for secrets (`APP_SECRET_KEY`, `APP_ENCRYPTION_KEY`)
-- [ ] **DIST-07**: The first-run flow guides the new admin to configure AI API keys after `/setup` (an inline key-entry step or a clear pointer to the Admin page, since admin no longer lives on the bottom nav)
+- [x] **DIST-07**: The first-run flow guides the new admin to configure AI API keys after `/setup` (an inline key-entry step or a clear pointer to the Admin page, since admin no longer lives on the bottom nav)
 
 ### Information Architecture (IA)
 
 Restructure navigation so AI gets a home and admin gets out of the way. Exact placement of the "what to buy next" recommendation (home vs AI page) is resolved during UI design.
 
-- [ ] **IA-01**: Admin is reachable from a button on the config page (under Flavor Notes), not the bottom nav
-- [ ] **IA-02**: A new AI destination is present in the bottom nav (replacing the admin slot)
-- [ ] **IA-03**: AI surfaces (coffee recommendation, equipment callout, sweet-spots prose) are consolidated onto the AI page and removed from other pages
-- [ ] **IA-04**: The home page is simplified to primary action affordances (e.g. rate a coffee, log a session, top coffees, wishlist)
-- [ ] **IA-05**: Nav and asset changes reach installed PWAs without a manual cache clear (cache-bust verified after deploy)
-- [ ] **IA-06**: The home page's "top coffees" lists the top 5 rated coffees with no minimum-star or minimum-session-count floor (item #9)
+- [x] **IA-01**: Admin is reachable from a button on the config page (under Flavor Notes), not the bottom nav
+- [x] **IA-02**: A new AI destination is present in the bottom nav (replacing the admin slot)
+- [x] **IA-03**: AI surfaces (coffee recommendation, equipment callout, sweet-spots prose) are consolidated onto the AI page and removed from other pages
+- [x] **IA-04**: The home page is simplified to primary action affordances (e.g. rate a coffee, log a session, top coffees, wishlist)
+- [x] **IA-05**: Nav and asset changes reach installed PWAs without a manual cache clear (cache-bust verified after deploy)
+- [x] **IA-06**: The home page's "top coffees" lists the top 5 rated coffees with no minimum-star or minimum-session-count floor (item #9)
 
 ### Cafe Quick-Rate (CAFE)
 
@@ -74,7 +74,7 @@ The differentiator. A dedicated AI page hosting the consolidated recommendations
 - [ ] **AIX-05**: AI research/predict is rate-limited per user per day, with remaining quota visible to the user
 - [ ] **AIX-06**: User can add a researched coffee to the wishlist directly from the result
 - [ ] **AIX-07**: AI responses on the AI page stream to the user (SSE) instead of polling
-- [ ] **AIX-08**: When a user meets the cold-start threshold but no AI API key is configured, the AI page shows a prominent button/banner linking to the Admin page to add a key (distinct from the not-enough-data empty state)
+- [x] **AIX-08**: When a user meets the cold-start threshold but no AI API key is configured, the AI page shows a prominent button/banner linking to the Admin page to add a key (distinct from the not-enough-data empty state)
 - [ ] **AIX-09**: The preference profile contains an in-depth AI-generated prose summary that cross-cuts flavor descriptors against process (e.g., "fruity in washed but nutty in natural"), origin, varietal, and rating -- no descriptor count cap; flavor descriptors are not shown as a standalone "top descriptors" widget (item #11)
 - [ ] **AIX-10**: Every user-triggered AI action shows visible progress feedback while it runs -- AI Refresh, Force Refresh, and Refresh Recommendation buttons disable + display a spinner/state until the request completes or errors (items #12 + #15)
 - [ ] **AIX-11**: The "what to buy next" recommendation always returns a concrete brew recipe (either an existing recipe or a generated one) plus actionable brew suggestions (ratio, temperature, grind hint) -- "no matching recipe found" is treated as a bug (item #13)
@@ -162,13 +162,13 @@ Every v1.2 requirement maps to exactly one phase.
 | DIST-04 | Phase 18 | Pending |
 | DIST-05 | Phase 18 | Pending |
 | DIST-06 | Phase 18 | Pending |
-| DIST-07 | Phase 17 | Pending |
-| IA-01 | Phase 17 | Pending |
-| IA-02 | Phase 17 | Pending |
-| IA-03 | Phase 17 | Pending |
-| IA-04 | Phase 17 | Pending |
-| IA-05 | Phase 17 | Pending |
-| IA-06 | Phase 17 | Pending |
+| DIST-07 | Phase 17 | Complete |
+| IA-01 | Phase 17 | Complete |
+| IA-02 | Phase 17 | Complete |
+| IA-03 | Phase 17 | Complete |
+| IA-04 | Phase 17 | Complete |
+| IA-05 | Phase 17 | Complete |
+| IA-06 | Phase 17 | Complete |
 | CAFE-01 | Phase 16 | Pending |
 | CAFE-02 | Phase 16 | Pending |
 | CAFE-03 | Phase 16 | Pending |
@@ -182,7 +182,7 @@ Every v1.2 requirement maps to exactly one phase.
 | AIX-05 | Phase 19 | Pending |
 | AIX-06 | Phase 19 | Pending |
 | AIX-07 | Phase 19 | Pending |
-| AIX-08 | Phase 17 | Pending |
+| AIX-08 | Phase 17 | Complete |
 | AIX-09 | Phase 19 | Pending |
 | AIX-10 | Phase 19 | Pending |
 | AIX-11 | Phase 19 | Pending |
