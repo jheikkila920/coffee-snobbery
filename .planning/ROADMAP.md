@@ -173,7 +173,27 @@ Plans:
   6. User can add a researched coffee directly to the wishlist from the result card
   7. AI responses stream to the user via SSE — no polling spinner
   8. Brew and preference trends are visible as charts (rating over time, flavor distribution) using a CSP-compatible chart library
-**Plans**: TBD
+**Plans**: 7 plans
+Plans:
+
+**Wave 1**
+- [ ] 19-01-PLAN.md — AIX-01/02/04/09/11/12: sse-starlette + 5 schemas (drop no_match) + 2 tables + migration + quota settings + Wave 0 tests
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 19-02-PLAN.md — AIX-11/13: _verify_buy_url 404/410 + archived-retry + recipe-prompt + no_match test rewrite + latency comments
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 19-03-PLAN.md — AIX-01/02/03/04/05/07/13: ai_quota + ai_research cache/prediction/two-phase-SSE generator
+- [ ] 19-04-PLAN.md — AIX-09/12/13: brew-improve SSE + preference-prose flow + scheduler rec_type loop
+
+**Wave 4** *(blocked on Wave 3)*
+- [ ] 19-05-PLAN.md — AIX-01/03/05/07/12/13/VIZ-01: research SSE route + quota fragment + coach picker + improve-brew route + charts + latency query
+
+**Wave 5** *(blocked on Wave 4)*
+- [ ] 19-06-PLAN.md — AIX-06/09/10/12/VIZ-01: /ai restructure + research/prefs/trends/coach fragments + Chart.js CDN + indicator CSS + improve-brew UI (human-verify)
+
+**Wave 6** *(blocked on Wave 5)*
+- [ ] 19-07-PLAN.md — AIX-05/13: latency investigation + NPM proxy_buffering off doc + admin quota verification + phase-close gate (human-verify)
 **UI hint**: yes
 
 ### Phase 20: Guided Brew Polish
