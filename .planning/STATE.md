@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
-status: gaps_pending
-stopped_at: Phase 16 executed; verifier=gaps_found (CAFE-02 origin-country autocomplete bug); awaiting --gaps cycle
-last_updated: "2026-05-27T20:45:00.000Z"
+status: verifying
+stopped_at: Phase 17 context gathered
+last_updated: "2026-05-28T01:33:42.743Z"
 last_activity: 2026-05-27 -- Phase 16 execution complete; verifier gaps_found
 progress:
   total_phases: 9
@@ -87,7 +87,7 @@ Progress: [██████████] 100% plans / verification incomplete
 
 ## Session Continuity
 
-Last session: 2026-05-27T17:36:49.678Z
-Stopped at: Phase 16 executed; verifier=gaps_found (CAFE-02 origin-country autocomplete bug)
-Resume file: .planning/phases/16-cafe-quick-rate/16-VERIFICATION-AUTO.md
+Last session: 2026-05-28T01:33:42.722Z
+Stopped at: Phase 17 context gathered
+Resume file: .planning/phases/17-ia-restructure/17-CONTEXT.md
 Next: `/gsd-plan-phase 16 --gaps` (re-plan to fix origin-country) — or fix inline and re-verify
