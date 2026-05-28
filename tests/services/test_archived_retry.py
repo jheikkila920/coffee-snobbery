@@ -1,12 +1,13 @@
 """Tests for D-14: _verify_buy_url 404/410 rejection and archived-coffee retry logic."""
+
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 import respx
-import httpx
 
 
 @pytest.mark.asyncio
@@ -15,9 +16,7 @@ async def test_verify_url_rejects_404() -> None:
     """_verify_buy_url returns False when the server responds with HTTP 404."""
     from app.services.ai_service import _verify_buy_url
 
-    respx.get("https://example.com/coffee/some-lot").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get("https://example.com/coffee/some-lot").mock(return_value=httpx.Response(404))
     with patch("app.services.ai_service._assert_public_host", return_value=True):
         result = await _verify_buy_url(
             "https://example.com/coffee/some-lot",
@@ -33,9 +32,7 @@ async def test_verify_url_rejects_410() -> None:
     """_verify_buy_url returns False when the server responds with HTTP 410 (Gone)."""
     from app.services.ai_service import _verify_buy_url
 
-    respx.get("https://example.com/coffee/archived-lot").mock(
-        return_value=httpx.Response(410)
-    )
+    respx.get("https://example.com/coffee/archived-lot").mock(return_value=httpx.Response(410))
     with patch("app.services.ai_service._assert_public_host", return_value=True):
         result = await _verify_buy_url(
             "https://example.com/coffee/archived-lot",
@@ -67,7 +64,6 @@ async def test_verify_url_accepts_200_with_name() -> None:
 async def test_archived_retry_logic() -> None:
     """When first buy_url fails verification, _generate_coffee_rec fires a second LLM call
     with broadened-search instruction before returning the no-recommendation path."""
-    import json
 
     from app.services.ai_service import _generate_coffee_rec
 
@@ -131,7 +127,9 @@ async def test_archived_retry_logic() -> None:
     mock_cred.key = "test-key"
 
     with (
-        patch("app.services.ai_service.credentials_service.get_provider_credential") as mock_get_cred,
+        patch(
+            "app.services.ai_service.credentials_service.get_provider_credential"
+        ) as mock_get_cred,
         patch("app.services.ai_service.analytics_service.get_preference_profile", return_value={}),
         patch("app.services.ai_service.analytics_service.get_sweet_spots", return_value=[]),
         patch("app.services.ai_service.settings_service.get_int", return_value=3),
@@ -142,7 +140,9 @@ async def test_archived_retry_logic() -> None:
         patch("app.services.ai_service.alt_brewer_callout", return_value=None),
         patch("app.services.ai_service._write_recommendation_row") as mock_write,
     ):
-        mock_get_cred.side_effect = lambda db, provider: mock_cred if provider == "anthropic" else None
+        mock_get_cred.side_effect = lambda db, provider: (
+            mock_cred if provider == "anthropic" else None
+        )
 
         mock_client = MagicMock()
         mock_client.messages.create.side_effect = mock_messages_create
@@ -174,15 +174,14 @@ async def test_archived_retry_logic() -> None:
     second_call_kwargs = mock_client.messages.create.call_args_list[1][1]
     messages_content = second_call_kwargs.get("messages", [{}])[0].get("content", "")
     assert "broaden" in messages_content.lower() or any(
-        "broaden" in str(arg).lower()
-        for arg in mock_client.messages.create.call_args_list[1]
+        "broaden" in str(arg).lower() for arg in mock_client.messages.create.call_args_list[1]
     ), "Second LLM call should contain the broadened-search instruction"
 
 
 def test_for_sale_only_clause_in_prompts() -> None:
     """The coffee rec prompt includes the for-sale-only clause (D-14)."""
-    import re
     import pathlib
+    import re
 
     src = pathlib.Path("app/services/ai_service.py").read_text(encoding="utf-8")
     # Check for the D-14 for-sale-only instruction in the prompt builders

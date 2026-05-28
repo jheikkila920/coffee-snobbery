@@ -517,13 +517,17 @@ def test_suggest_recipe_picks_highest_rated() -> None:
     assert isinstance(result, RecipeSuggestionSchema)
     assert result.recipe_id == 10
     assert result.recipe_name == "V60 Classic"
-    assert result.no_match is False
+    # D-11: no_match removed; ratio/temp_c/grind_hint are required fields
+    assert result.ratio  # non-empty string
+    assert isinstance(result.temp_c, int)
+    assert result.grind_hint  # non-empty string
     # recipe_id must be one of the seeded IDs (not fabricated)
     assert result.recipe_id in (10,)
 
 
-def test_suggest_recipe_no_match() -> None:
-    """suggest_recipe returns no_match=True when no rated session used a recipe for the style."""
+def test_suggest_recipe_no_catalog_match() -> None:
+    """suggest_recipe returns recipe_id=None with populated ratio/temp_c/grind_hint
+    when no catalog recipe matches the style (D-11 — no_match removed)."""
     from unittest.mock import MagicMock
 
     from app.services.ai_schemas import RecipeSuggestionSchema
@@ -542,7 +546,61 @@ def test_suggest_recipe_no_match() -> None:
     assert isinstance(result, RecipeSuggestionSchema)
     assert result.recipe_id is None
     assert result.recipe_name is None
-    assert result.no_match is True
+    # D-11: even when no catalog match, required fields must be populated
+    assert result.ratio  # non-empty string
+    assert isinstance(result.temp_c, int)
+    assert result.grind_hint  # non-empty string
+
+
+def test_recipe_schema_no_match_rejected() -> None:
+    """Constructing RecipeSuggestionSchema(no_match=True) raises ValidationError.
+
+    D-11: no_match was removed from the schema; extra=forbid means passing it
+    as a keyword argument raises ValidationError.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    from app.services.ai_schemas import RecipeSuggestionSchema
+
+    with pytest.raises(ValidationError):
+        RecipeSuggestionSchema(
+            no_match=True,  # type: ignore[call-arg]
+            recipe_id=None,
+            recipe_name=None,
+            summary="No recipe.",
+            ratio="1:15",
+            temp_c=94,
+            grind_hint="medium-fine",
+        )
+
+
+def test_recipe_schema_required_fields() -> None:
+    """RecipeSuggestionSchema requires ratio, temp_c, and grind_hint (D-11)."""
+    from pydantic import ValidationError
+
+    from app.services.ai_schemas import RecipeSuggestionSchema
+
+    # Missing ratio, temp_c, grind_hint should raise ValidationError
+    with pytest.raises(ValidationError):
+        RecipeSuggestionSchema(
+            recipe_id=None,
+            recipe_name=None,
+            summary="No recipe.",
+        )  # type: ignore[call-arg]
+
+    # Valid construction with all required fields should succeed
+    schema = RecipeSuggestionSchema(
+        recipe_id=None,
+        recipe_name=None,
+        summary="Generated recipe.",
+        ratio="1:16",
+        temp_c=93,
+        grind_hint="fine",
+    )
+    assert schema.ratio == "1:16"
+    assert schema.temp_c == 93
+    assert schema.grind_hint == "fine"
 
 
 def test_alt_brewer_fires_at_half_point_delta() -> None:

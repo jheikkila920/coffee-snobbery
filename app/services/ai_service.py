@@ -678,6 +678,8 @@ async def _generate_sweet_spots_prose(
 ) -> AIRecommendation | None:
     """Generate and persist sweet-spots prose for the user.
 
+    D-15 / AIX-13: p95 latency target ≤ 30s (single structured call, no web search).
+
     Reads analytics.get_sweet_spots; returns None when empty (no data to
     summarise). Otherwise makes one small LLM call (no web_search) returning
     SweetSpotsProseSchema, then writes a SEPARATE row with
@@ -855,6 +857,8 @@ async def _generate_coffee_rec(
     signature: str,
 ) -> tuple[str, AIRecommendation | None]:
     """Drive the three-tier coffee-rec flow with Anthropic→OpenAI provider fallback.
+
+    D-15 / AIX-13: p95 latency target ≤ 60s (web-search-tool dominates; see 19-CONTEXT.md).
 
     Returns (status, row) where status is one of:
     "generated" | "try_again" | "not_configured"
@@ -1036,11 +1040,7 @@ async def _generate_coffee_rec(
 
         # D-14: archived-coffee detection — verify buy_url; retry once with broadened
         # instruction if the first candidate appears archived/gone.
-        if (
-            rec_schema.buy_url
-            and not _archived_retry_attempted
-            and tier_name == "primary"
-        ):
+        if rec_schema.buy_url and not _archived_retry_attempted and tier_name == "primary":
             url_ok = await _verify_buy_url(
                 rec_schema.buy_url,
                 roaster_name=rec_schema.roaster_name or "",
@@ -1420,6 +1420,8 @@ async def generate_equipment_rec(
 ) -> tuple[str, AIRecommendation | None]:
     """Generate an on-demand equipment recommendation for *user_id*.
 
+    D-15 / AIX-13: p95 latency target ≤ 20s (single structured call, no web search).
+
     Profile-only: reads the user's active equipment list + preference profile
     and makes ONE LLM call with NO web_search server tool (D-05 / AI-08).
     The LLM may return weakest_link=None when the setup is well-matched —
@@ -1713,6 +1715,8 @@ async def rank_pasted_coffees(
     raw_input: str,
 ) -> tuple[str, PasteRankSchema | None]:
     """Rank pasted coffee descriptions or URLs by predicted enjoyment (AI-09, D-07/D-08).
+
+    D-15 / AIX-13: p95 latency target ≤ 45s (URL fetches + single structured call).
 
     Accepts freeform text AND/OR https:// URLs in *raw_input*. URLs are
     fetched via the SSRF-hardened ranged-GET machinery (_fetch_page_text)
