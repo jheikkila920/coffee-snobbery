@@ -4,7 +4,7 @@
 
 [project]
 name = "coffee-snobbery"
-version = "0.1.0"
+version = "1.2.0"
 description = "Self-hosted household coffee log for pour-over enthusiasts."
 requires-python = ">=3.12,<3.13"
 license = { text = "Proprietary" }

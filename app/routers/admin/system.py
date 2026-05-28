@@ -33,6 +33,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app import events
+from app.config import get_app_version
 from app.dependencies.auth import require_admin
 from app.dependencies.db import get_session
 from app.models.ai_recommendation import AIRecommendation
@@ -129,19 +130,21 @@ def admin_system(
     page cannot crash after a backup/AI run pops the cache key (Pitfall 2).
     """
     # --- System Info (ADMIN-05) ---
-    try:
-        app_version = pkg_version("coffee-snobbery")
-    except PackageNotFoundError:
-        # Fallback when the package is not installed (e.g., running tests
-        # directly against the source tree without pip install). Resolve
-        # pyproject.toml from the repo root relative to this file so it works
-        # both in the container (/app) and on CI (checkout dir), not just /app.
-        _pyproject = Path(__file__).resolve().parents[3] / "pyproject.toml"
-        if _pyproject.exists():
-            with _pyproject.open("rb") as _f:
-                app_version = tomllib.load(_f).get("project", {}).get("version", "unknown")
-        else:
-            app_version = "unknown"
+    # D-12: APP_VERSION env var (stamped by the Dockerfile from the git tag)
+    # is the source of truth on baked images. Fall through to
+    # importlib.metadata (installed package) then pyproject.toml so the
+    # display still works on CI source trees and dev runs.
+    app_version = get_app_version()
+    if not app_version:
+        try:
+            app_version = pkg_version("coffee-snobbery")
+        except PackageNotFoundError:
+            _pyproject = Path(__file__).resolve().parents[3] / "pyproject.toml"
+            if _pyproject.exists():
+                with _pyproject.open("rb") as _f:
+                    app_version = tomllib.load(_f).get("project", {}).get("version", "unknown")
+            else:
+                app_version = "unknown"
 
     db_version: str = db.execute(text("SELECT version()")).scalar() or "unknown"
 

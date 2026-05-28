@@ -82,3 +82,14 @@ def subprocess_env(**overrides: str) -> dict[str, str]:
     (``tests/test_no_direct_env.py``).
     """
     return {**os.environ, **overrides}
+
+
+def get_app_version() -> str | None:
+    """Return the ``APP_VERSION`` env var stamped by the Dockerfile ARG (D-12).
+
+    Returns ``None`` when the var is absent (dev/CI without a baked image) so
+    callers can fall through to ``importlib.metadata`` or ``pyproject.toml``.
+    Kept here rather than in ``app/routers/admin/system.py`` to satisfy
+    FOUND-10: ``os.environ`` may only be referenced in ``app/config.py``.
+    """
+    return os.environ.get("APP_VERSION") or None
