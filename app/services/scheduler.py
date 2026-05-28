@@ -313,6 +313,29 @@ def run_nightly_ai_refresh() -> None:
                 summary["users_processed"] += 1
                 continue
 
+        # preference_profile_prose: signature-driven nightly regen (AIX-09/D-10).
+        # brew_improvement is on-demand only — NOT regenerated here (RESEARCH Pitfall 6).
+        # research cache + predictions are NOT regenerated nightly (cache TTL-driven).
+        with SessionLocal() as db:
+            try:
+                prose_status, _ = asyncio.run(
+                    ai_service.generate_preference_profile_prose(db, user_id=uid)
+                )
+                log.info(
+                    "nightly_ai_refresh.preference_prose",
+                    user_id=uid,
+                    status=prose_status,
+                )
+            except Exception as exc:
+                log.warning(
+                    SCHEDULER_JOB_ERROR,
+                    job_id="nightly_ai_refresh",
+                    user_id=uid,
+                    rec_type="preference_profile_prose",
+                    error_class=type(exc).__name__,
+                    error_msg=str(exc),
+                )
+
         summary["users_processed"] += 1
         if status == "generated":
             summary["regenerations"] += 1
