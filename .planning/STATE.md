@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-05-28T02:33:39.448Z"
-last_activity: 2026-05-28 -- Phase 17 planning complete
+last_updated: "2026-05-28T02:38:44.363Z"
+last_activity: 2026-05-28 -- Phase 17 execution started
 progress:
   total_phases: 9
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** A returning user can log a brew in <30s and trust that the home page's recommendation is grounded in their actual log, not generic taste advice.
-**Current focus:** Phase 16 — Café Quick-Rate
+**Current focus:** Phase 17 — IA Restructure
 
 ## Current Position
 
-Phase: 16 (Café Quick-Rate) — gaps_pending
-Plan: 6 of 6 (all executed)
-Status: Ready to execute
-Last activity: 2026-05-28 -- Phase 17 planning complete
+Phase: 17 (IA Restructure) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 17
+Last activity: 2026-05-28 -- Phase 17 execution started
 
 Progress: [██████████] 100% plans / verification incomplete
 

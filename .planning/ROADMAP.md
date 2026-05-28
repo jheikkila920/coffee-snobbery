@@ -125,8 +125,8 @@ Plans:
 **Plans**: 5 plans
 Plans:
 **Wave 1**
-- [ ] 17-01-PLAN.md — IA-01/IA-02 nav reshape: drop bottom Admin tab, add AI tab, add Config Admin entry (D-01/D-02/D-04/D-05/D-17/D-18)
-- [ ] 17-02-PLAN.md — IA-03/IA-04/IA-06 home composition: greeting, eager Top Coffees no-floor, drop AI surfaces + cold-start meter (D-06..D-11)
+- [x] 17-01-PLAN.md — IA-01/IA-02 nav reshape: drop bottom Admin tab, add AI tab, add Config Admin entry (D-01/D-02/D-04/D-05/D-17/D-18)
+- [x] 17-02-PLAN.md — IA-03/IA-04/IA-06 home composition: greeting, eager Top Coffees no-floor, drop AI surfaces + cold-start meter (D-06..D-11)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 17-03-PLAN.md — DIST-07 admin AI-key setup banner: sessionStorage dismiss, admin+no-key gate, /admin/credentials button (D-19/D-21)
@@ -228,7 +228,7 @@ Plans:
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
-| 17. IA Restructure | v1.2 | 0/TBD | Not started | - |
+| 17. IA Restructure | v1.2 | 2/5 | In Progress|  |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
