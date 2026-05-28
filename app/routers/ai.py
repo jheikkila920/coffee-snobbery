@@ -35,7 +35,8 @@ from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
 from app.events import AI_THROTTLE_BLOCK, AI_URL_VERIFY
 from app.models.user import User
-from app.services import ai_service
+from app.services import ai_service, analytics
+from app.services import credentials as credentials_service
 from app.services import wishlist as wishlist_service
 from app.templates_setup import templates
 
@@ -45,6 +46,44 @@ log = structlog.get_logger(__name__)
 _THROTTLE_WINDOW_SECS = 300
 
 router = APIRouter(prefix="/ai")
+
+# ---------------------------------------------------------------------------
+# GET /ai — page shell (Phase 17, IA-02 / IA-03 / AIX-08 / D-13..D-16 + D-20)
+# ---------------------------------------------------------------------------
+
+
+@router.get("", response_class=HTMLResponse)
+def get_ai_page(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Render the /ai page shell — three-branch composition keyed on the
+    cold-start gate state and resolvable AI-key presence.
+
+    - Below gate                → cold-start meter (D-14).
+    - Above gate, no key, admin → AIX-08 admin callout with Go to Admin (D-15).
+    - Above gate, no key, !admin → D-16 social-action callout (no admin link).
+    - Above gate, key present   → consolidated AI surface (hero + cards + tools
+                                  + Phase 19 research stub, D-13).
+
+    The DIST-07 banner from plan 17-03 is included at the top of the page;
+    it self-gates on ``is_admin AND not ai_key_present`` (D-20 coexistence).
+    """
+    gate = analytics.get_cold_start_counts(db, user.id)
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    ai_key_present = anthropic_cred is not None or openai_cred is not None
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/ai.html",
+        context={
+            "gate": gate,
+            "ai_key_present": ai_key_present,
+            "user": user,
+        },
+    )
+
 
 # ---------------------------------------------------------------------------
 # GET /ai/paste-rank — dedicated "Rank these for me" page (07-07, D-07/D-08)
