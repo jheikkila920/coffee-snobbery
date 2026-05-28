@@ -589,3 +589,217 @@ def test_wishlist_page_lists_user_entries(
     )
     assert "User Coffee" in resp.text, "Own entry must appear on wishlist page"
     assert "Admin Coffee" not in resp.text, "Other user's entry must NOT appear (IDOR)"
+
+
+# --------------------------------------------------------------------------- #
+# Plan 17-04: GET /ai page shell (IA-02 / IA-03 / AIX-08 / D-13..D-16 / D-20) #
+# --------------------------------------------------------------------------- #
+
+
+def _patch_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Monkeypatch the ai router's credentials helper to return None for every
+    provider — simulates the "no AI key configured" state. Same strategy as
+    plan 17-03's tests/test_dist07_banner.py."""
+    from app.routers import ai as ai_router
+
+    monkeypatch.setattr(
+        ai_router.credentials_service,
+        "get_provider_credential",
+        lambda _db, _provider: None,
+    )
+
+
+def _patch_with_key(monkeypatch: pytest.MonkeyPatch, *, provider: str = "anthropic") -> None:
+    """Monkeypatch the ai router's credentials helper to return a sentinel
+    object for ``provider`` and None otherwise — simulates the "has key" state."""
+    from app.routers import ai as ai_router
+
+    sentinel = object()
+
+    def fake(_db: Any, p: str) -> Any:
+        return sentinel if p == provider else None
+
+    monkeypatch.setattr(ai_router.credentials_service, "get_provider_credential", fake)
+
+
+def _patch_gate_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Monkeypatch the ai router's cold-start gate to report open (above gate).
+    Sidesteps having to seed real brew_sessions + flavor notes in the test DB —
+    this test module focuses on /ai branch composition, not analytics logic."""
+    from app.routers import ai as ai_router
+
+    monkeypatch.setattr(
+        ai_router.analytics,
+        "get_cold_start_counts",
+        lambda _db, _uid: {
+            "sessions": 5,
+            "distinct_notes": 7,
+            "sessions_needed": 0,
+            "notes_needed": 0,
+            "gate_open": True,
+        },
+    )
+
+
+def _patch_gate_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Monkeypatch the ai router's cold-start gate to report closed (below gate)."""
+    from app.routers import ai as ai_router
+
+    monkeypatch.setattr(
+        ai_router.analytics,
+        "get_cold_start_counts",
+        lambda _db, _uid: {
+            "sessions": 0,
+            "distinct_notes": 0,
+            "sessions_needed": 3,
+            "notes_needed": 5,
+            "gate_open": False,
+        },
+    )
+
+
+@pytest.mark.parametrize("user_role", ["admin", "regular"])
+def test_get_ai_page_returns_200(
+    client,
+    seeded_admin_user,
+    seeded_regular_user,
+    monkeypatch,
+    user_role,
+) -> None:
+    """GET /ai returns 200 for any authenticated user (IA-02, D-03)."""
+    _require_ai_router()
+    _patch_no_key(monkeypatch)
+    _patch_gate_closed(monkeypatch)
+    fixture = seeded_admin_user if user_role == "admin" else seeded_regular_user
+    cookie = fixture["signed_cookie"]
+
+    r = client.get("/ai", cookies={"session_id": cookie})
+
+    assert r.status_code == 200, (
+        f"GET /ai must return 200 for {user_role}; got {r.status_code}: {r.text[:300]}"
+    )
+
+
+def test_get_ai_page_returns_401_for_anonymous(client) -> None:
+    """GET /ai returns 401 for an unauthenticated request (require_user gate)."""
+    _require_ai_router()
+    r = client.get("/ai")
+    assert r.status_code == 401, (
+        f"GET /ai must return 401 for anonymous; got {r.status_code}"
+    )
+
+
+def test_ai_page_below_gate_shows_cold_start_not_no_key(
+    client,
+    seeded_admin_user,
+    monkeypatch,
+) -> None:
+    """Below-gate users on /ai see the cold-start meter, NOT the no-key callout.
+
+    Confirms the branch ordering in pages/ai.html: gate check fires BEFORE the
+    key check, so an above-gate-only state ("AI keys needed") never appears for
+    a below-gate user even if their key state would otherwise trigger it.
+    """
+    _require_ai_router()
+    _patch_no_key(monkeypatch)
+    _patch_gate_closed(monkeypatch)
+    cookie = seeded_admin_user["signed_cookie"]
+
+    r = client.get("/ai", cookies={"session_id": cookie})
+
+    assert r.status_code == 200
+    assert "AI personalization activates after 3 sessions and 5 distinct flavor notes." in r.text, (
+        "D-14 cold-start explainer copy missing"
+    )
+    assert "AI keys needed" not in r.text, (
+        "AIX-08 admin headline must NOT appear below the cold-start gate"
+    )
+    assert "AI is not set up" not in r.text, (
+        "AIX-08 non-admin headline must NOT appear below the cold-start gate"
+    )
+
+
+def test_ai_page_shows_admin_callout_above_gate_no_key(
+    client,
+    seeded_admin_user,
+    monkeypatch,
+) -> None:
+    """Above-gate + admin + no key → AIX-08 admin callout with /admin/credentials button (D-15)."""
+    _require_ai_router()
+    _patch_no_key(monkeypatch)
+    _patch_gate_open(monkeypatch)
+    cookie = seeded_admin_user["signed_cookie"]
+
+    r = client.get("/ai", cookies={"session_id": cookie})
+
+    assert r.status_code == 200
+    assert "AI keys needed" in r.text, "D-15 admin callout headline missing"
+    assert 'href="/admin/credentials"' in r.text, (
+        "D-15 admin callout must link to /admin/credentials"
+    )
+    assert "AI personalization activates after" not in r.text, (
+        "Cold-start explainer must NOT appear above the gate"
+    )
+
+
+def test_ai_page_shows_non_admin_callout_above_gate_no_key(
+    client,
+    seeded_regular_user,
+    monkeypatch,
+) -> None:
+    """Above-gate + non-admin + no key → D-16 social-action callout, no admin link."""
+    _require_ai_router()
+    _patch_no_key(monkeypatch)
+    _patch_gate_open(monkeypatch)
+    cookie = seeded_regular_user["signed_cookie"]
+
+    r = client.get("/ai", cookies={"session_id": cookie})
+
+    assert r.status_code == 200
+    assert "Ask the household admin" in r.text, "D-16 social-action copy missing"
+    # No /admin link anywhere for non-admins (top-nav admin link is admin-gated).
+    assert 'href="/admin/credentials"' not in r.text, (
+        "D-16 forbids /admin/credentials link for non-admins"
+    )
+    assert 'href="/admin"' not in r.text, (
+        "D-16 forbids any admin link for non-admins"
+    )
+
+
+def test_ai_page_above_gate_with_key_shows_hero(
+    client,
+    seeded_admin_user,
+    monkeypatch,
+) -> None:
+    """Above-gate + key present → AI hero + four /home/cards/* mounts + research stub (D-13)."""
+    _require_ai_router()
+    _patch_with_key(monkeypatch, provider="anthropic")
+    _patch_gate_open(monkeypatch)
+    cookie = seeded_admin_user["signed_cookie"]
+
+    r = client.get("/ai", cookies={"session_id": cookie})
+
+    assert r.status_code == 200
+    assert 'hx-get="/home/cards/ai-recommendation"' in r.text, "AI hero mount missing"
+    assert 'hx-get="/home/cards/preference-profile"' in r.text, "Preference Profile mount missing"
+    assert 'hx-get="/home/cards/flavor-descriptors"' in r.text, "Flavor Descriptors mount missing"
+    assert 'hx-get="/home/cards/sweet-spots"' in r.text, "Sweet Spots mount missing"
+    assert "Coming in Phase 19" in r.text, "Research stub (D-13) missing"
+
+
+def test_ai_page_shows_dist07_banner_for_admin_with_no_key(
+    client,
+    seeded_admin_user,
+    monkeypatch,
+) -> None:
+    """DIST-07 banner coexists on /ai for admins-with-no-key (D-20)."""
+    _require_ai_router()
+    _patch_no_key(monkeypatch)
+    _patch_gate_open(monkeypatch)
+    cookie = seeded_admin_user["signed_cookie"]
+
+    r = client.get("/ai", cookies={"session_id": cookie})
+
+    assert r.status_code == 200
+    assert "bannerDismiss" in r.text, "DIST-07 banner missing on /ai for admin+no-key"
+    assert "Welcome — add your AI API key in Admin" in r.text, "Banner copy missing"
