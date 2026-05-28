@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
 stopped_at: Phase 18 context gathered
-last_updated: "2026-05-28T15:33:42.355Z"
-last_activity: 2026-05-28 -- Phase 18 execution started
+last_updated: "2026-05-28T16:15:00.000Z"
+last_activity: 2026-05-28 -- Completed quick task 260528-fjf: fix CI admin_system version-fallback drift
 progress:
   total_phases: 9
   completed_phases: 4
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 Phase: 18 (self-host-packaging) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 18
-Last activity: 2026-05-28 -- Phase 18 execution started
+Last activity: 2026-05-28 -- Completed quick task 260528-fjf: fix CI admin_system version-fallback drift
 
 Progress: [██████████] 100% plans / verification incomplete
 
@@ -75,6 +75,12 @@ Progress: [██████████] 100% plans / verification incomplete
 - Phase 15 safe-area on-device verification (commit `982c0e6`) is a gate for Phase 20 and Phase 21 — do not skip
 - T-INFRA-1 test isolation (catalog TRUNCATE teardown + settings cache clear) must close in Phase 15 before test expansion in later phases
 - On-demand AI research (Phase 19) removes the nightly cadence gate — cache table + per-user daily rate limit are non-negotiable blocking deliverables, not follow-ups
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260528-fjf | fix CI admin_system version-fallback drift | 2026-05-28 | 4b4a73d | [260528-fjf-fix-ci-admin-system-version-fallback-dri](./quick/260528-fjf-fix-ci-admin-system-version-fallback-dri/) |
 
 ## Deferred Items
 
