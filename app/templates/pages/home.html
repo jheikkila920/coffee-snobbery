@@ -8,9 +8,7 @@
      meter moved with them per D-11 — home is now invariant across gate
      states. All values autoescaped. CSP-clean. #}
   <main class="mx-auto max-w-6xl px-6 py-12">
-    {# DIST-07 banner include — plan 17-03 will replace this comment with
-       {% include "fragments/ai_key_setup_banner.html" %} once that fragment
-       exists. Placeholder keeps the merge surface minimal. #}
+    {% include "fragments/ai_key_setup_banner.html" %}
     <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
       <h1 class="text-2xl font-semibold">{{ greeting }}</h1>
       {# D-06 action row: Guided Brew + Log session + Quick rate.

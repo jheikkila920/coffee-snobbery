@@ -90,6 +90,13 @@ def home_shell(
     top_coffees = analytics.get_top_coffees(db, user.id, min_sessions=0)
     top_coffees_all_unrated = not top_coffees and not _has_rated_sessions(db, user.id)
     greeting = derive_greeting(user.username)
+    # DIST-07 (Plan 17-03): ai_key_present drives the admin AI-key-setup
+    # banner gate. None from get_provider_credential covers every failure mode
+    # (no row, is_enabled=False, missing ciphertext, decrypt fails) — single
+    # source of truth, matches card_ai_recommendation.
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    ai_key_present = anthropic_cred is not None or openai_cred is not None
     return templates.TemplateResponse(
         request=request,
         name="pages/home.html",
@@ -100,6 +107,7 @@ def home_shell(
             "top_coffees": top_coffees,
             "top_coffees_all_unrated": top_coffees_all_unrated,
             "greeting": greeting,
+            "ai_key_present": ai_key_present,
         },
     )
 
