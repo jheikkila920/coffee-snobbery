@@ -104,7 +104,7 @@ A screen-by-screen audit and rework on the working v1.1 base so the whole app fe
 
 ### Data Visualization (VIZ)
 
-- [ ] **VIZ-01**: Brew/preference trends are presented with charts (e.g. rating over time, flavor distribution) using a CSP-compatible chart library (Chart.js via CDN)
+- [x] **VIZ-01**: Brew/preference trends are presented with charts (e.g. rating over time, flavor distribution) using a CSP-compatible chart library (Chart.js via CDN)
 
 ## Future / Deferred Requirements
 
@@ -199,7 +199,7 @@ Every v1.2 requirement maps to exactly one phase.
 | MOBILE-03 | Phase 21 | Pending |
 | MOBILE-04 | Phase 21 | Pending |
 | MOBILE-05 | Phase 21 | Pending |
-| VIZ-01 | Phase 19 | Pending |
+| VIZ-01 | Phase 19 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 56 total (DEBT 5, CATALOG 7, DIST 7, IA 6, CAFE 6, AIX 13, GBREW 6, MOBILE 5, VIZ 1)
