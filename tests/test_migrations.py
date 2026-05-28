@@ -498,3 +498,128 @@ def test_brew_session_create_brew_time_seconds_validation() -> None:
     # Rejection: over 24h
     with pytest.raises(ValidationError):
         BrewSessionCreate(**base, brew_time_seconds=86401)
+
+
+# --------------------------------------------------------------------------- #
+# Phase 19 schema introspection (Plan 19-01)                                  #
+# --------------------------------------------------------------------------- #
+#
+# Two new tests for Plan 19-01's p19_ai_research_predict migration.
+# Covers D-06 (ai_coffee_research_cache table + expires_at index),
+# D-07 (ai_rating_predictions table + UNIQUE constraint), and
+# D-08 (quota app_settings rows).
+
+
+def test_ai_coffee_research_cache_table_exists(pg_session: Connection) -> None:
+    """D-06: ai_coffee_research_cache table is created with the correct columns."""
+    rows = pg_session.execute(
+        text(
+            "SELECT column_name, data_type, is_nullable "
+            "FROM information_schema.columns "
+            "WHERE table_schema='public' AND table_name='ai_coffee_research_cache' "
+            "ORDER BY ordinal_position"
+        )
+    ).all()
+    cols = {row[0]: (row[1], row[2]) for row in rows}
+
+    assert cols, "ai_coffee_research_cache table must exist"
+
+    expected = {
+        "cache_key": ("text", "NO"),
+        "response_json": ("jsonb", "NO"),
+        "cited_sources": ("jsonb", "NO"),
+        "created_at": ("timestamp with time zone", "NO"),
+        "expires_at": ("timestamp with time zone", "NO"),
+    }
+    missing = set(expected) - set(cols)
+    assert not missing, f"ai_coffee_research_cache missing columns: {missing}"
+
+    for col, (dtype, nullable) in expected.items():
+        actual_dtype, actual_nullable = cols[col]
+        assert actual_dtype == dtype, (
+            f"ai_coffee_research_cache.{col}: expected {dtype}, got {actual_dtype}"
+        )
+        assert actual_nullable == nullable, (
+            f"ai_coffee_research_cache.{col}: expected nullable={nullable}, got {actual_nullable}"
+        )
+
+    # expires_at index must exist (D-06)
+    idx_row = pg_session.execute(
+        text(
+            "SELECT indexname FROM pg_indexes "
+            "WHERE schemaname='public' "
+            "  AND tablename='ai_coffee_research_cache' "
+            "  AND indexname='ix_ai_research_cache_expires_at'"
+        )
+    ).one_or_none()
+    assert idx_row is not None, (
+        "ix_ai_research_cache_expires_at index must exist on ai_coffee_research_cache"
+    )
+
+
+def test_ai_rating_predictions_table_and_constraints(pg_session: Connection) -> None:
+    """D-07: ai_rating_predictions table + UNIQUE(user_id, research_cache_key) enforced."""
+    rows = pg_session.execute(
+        text(
+            "SELECT column_name, data_type, is_nullable "
+            "FROM information_schema.columns "
+            "WHERE table_schema='public' AND table_name='ai_rating_predictions' "
+            "ORDER BY ordinal_position"
+        )
+    ).all()
+    cols = {row[0]: (row[1], row[2]) for row in rows}
+
+    assert cols, "ai_rating_predictions table must exist"
+
+    expected = {
+        "id": ("bigint", "NO"),
+        "user_id": ("bigint", "NO"),
+        "research_cache_key": ("text", "NO"),
+        "predicted_low": ("numeric", "NO"),
+        "predicted_high": ("numeric", "NO"),
+        "confidence": ("text", "NO"),
+        "reasoning": ("text", "NO"),
+        "input_signature": ("text", "NO"),
+        "created_at": ("timestamp with time zone", "NO"),
+        "expires_at": ("timestamp with time zone", "NO"),
+    }
+    missing = set(expected) - set(cols)
+    assert not missing, f"ai_rating_predictions missing columns: {missing}"
+
+    # UNIQUE constraint must exist (D-07, T-19-02)
+    constraint_row = pg_session.execute(
+        text(
+            "SELECT constraint_name FROM information_schema.table_constraints "
+            "WHERE table_schema='public' "
+            "  AND table_name='ai_rating_predictions' "
+            "  AND constraint_type='UNIQUE' "
+            "  AND constraint_name='uq_ai_rating_pred_user_cache_key'"
+        )
+    ).one_or_none()
+    assert constraint_row is not None, (
+        "UNIQUE constraint uq_ai_rating_pred_user_cache_key must exist on ai_rating_predictions"
+    )
+
+
+def test_p19_quota_settings_seeded(pg_session: Connection) -> None:
+    """D-08: migration INSERTs quota app_settings rows with value '20' and value_type 'int'."""
+    rows = pg_session.execute(
+        text(
+            "SELECT key, value, value_type FROM app_settings "
+            "WHERE key IN ('ai.research_daily_quota', 'ai.improve_brew_daily_quota') "
+            "ORDER BY key"
+        )
+    ).all()
+    found = {row[0]: (row[1], row[2]) for row in rows}
+
+    assert "ai.improve_brew_daily_quota" in found, (
+        "ai.improve_brew_daily_quota must be seeded by p19_ai_research_predict migration"
+    )
+    assert "ai.research_daily_quota" in found, (
+        "ai.research_daily_quota must be seeded by p19_ai_research_predict migration"
+    )
+
+    for key in ("ai.research_daily_quota", "ai.improve_brew_daily_quota"):
+        value, value_type = found[key]
+        assert value == "20", f"{key}: expected value '20', got {value!r}"
+        assert value_type == "int", f"{key}: expected value_type 'int', got {value_type!r}"
