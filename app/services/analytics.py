@@ -45,11 +45,18 @@ _EMPTY_SIGNATURE: str = hashlib.sha256(b"[]").hexdigest()
 # --------------------------------------------------------------------------- #
 
 
-def get_top_coffees(db: Session, user_id: int) -> list[Row]:
-    """Return <=5 coffees ranked by the user's avg rating, min 2 rated sessions.
+def get_top_coffees(db: Session, user_id: int, *, min_sessions: int = 2) -> list[Row]:
+    """Return <=5 coffees ranked by the user's avg rating.
 
     Excludes NULL ratings (Pitfall 1). Tie-broken avg_rating DESC, then
     session_count DESC (Claude's Discretion).
+
+    :param min_sessions: minimum rated-session count per coffee (default 2,
+        preserving the historical floor used by the /home/cards/top-coffees
+        fragment endpoint). Phase 17 IA-06 / D-09 introduced this parameter:
+        the home shell's eager Top Coffees render calls with ``min_sessions=0``
+        so single-session coffees surface. When ``min_sessions <= 0`` the
+        HAVING clause is omitted entirely.
     """
     # CAFE-04 not applicable: cafe coffees have no row in coffees table by design (D-14).
     # Do not UNION cafe data into this query — a future "Top cafe tastings" widget
@@ -67,10 +74,12 @@ def get_top_coffees(db: Session, user_id: int) -> list[Row]:
             BrewSession.rating.is_not(None),
         )
         .group_by(Coffee.id, Coffee.name)
-        .having(func.count(BrewSession.id) >= 2)
-        .order_by(func.avg(BrewSession.rating).desc(), func.count(BrewSession.id).desc())
-        .limit(5)
     )
+    if min_sessions > 0:
+        stmt = stmt.having(func.count(BrewSession.id) >= min_sessions)
+    stmt = stmt.order_by(
+        func.avg(BrewSession.rating).desc(), func.count(BrewSession.id).desc()
+    ).limit(5)
     return db.execute(stmt).all()
 
 
