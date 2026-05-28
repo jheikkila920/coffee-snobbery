@@ -72,6 +72,7 @@ async def test_archived_retry_logic() -> None:
     from app.services.ai_service import _generate_coffee_rec
 
     # Minimal CoffeeRecSchema-compatible dict for the second (retry) LLM call
+    # Note: price_usd and tasting_notes are NOT CoffeeRecSchema fields (extra=forbid)
     retry_rec_raw: dict[str, Any] = {
         "coffee_name": "Ethiopia Yirgacheffe",
         "roaster_name": "Blue Bottle Coffee",
@@ -80,8 +81,6 @@ async def test_archived_retry_logic() -> None:
         "roast_level": "light",
         "buy_url": "https://bluebottle.com/ethiopia-yirgacheffe",
         "search_tier": "broadened",
-        "price_usd": 18.0,
-        "tasting_notes": ["floral", "citrus"],
         "summary_prose": "A bright, floral Ethiopian.",
     }
 
@@ -114,8 +113,6 @@ async def test_archived_retry_logic() -> None:
                 "roast_level": "medium",
                 "buy_url": "https://oldroaster.com/archived-lot",
                 "search_tier": "primary",
-                "price_usd": 20.0,
-                "tasting_notes": ["berry"],
                 "summary_prose": "Archived coffee.",
             }
             return make_mock_anthropic_response(first_rec)

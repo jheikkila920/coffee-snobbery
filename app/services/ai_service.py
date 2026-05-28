@@ -199,10 +199,16 @@ async def _verify_buy_url(url: str, roaster_name: str, coffee_name: str) -> bool
                 },
             )
 
+        # D-14: archived/gone lots — treat as failure explicitly before general gate
+        if r.status_code in (404, 410):
+            return False
         if r.status_code not in (200, 206):
             return False
 
         body = r.text.lower()
+        # D-14: sold-out text scan (cheap first-64KB check)
+        if "sold out" in body:
+            return False
         return roaster_name.lower() in body or coffee_name.lower() in body
 
     except (httpx.TimeoutException, httpx.RequestError):
@@ -807,6 +813,12 @@ def _build_coffee_rec_prompt(
     else:
         grounding = ""
 
+    # D-14: for-sale-only clause — append to every tier
+    for_sale_clause = (
+        " Only recommend coffees that are currently for sale at the roaster's website. "
+        "Avoid archived, sold-out, or discontinued lots."
+    )
+
     if tier == "primary":
         style = f"{top_roast} {top_process} {top_origin}".strip()
         return (
@@ -814,6 +826,7 @@ def _build_coffee_rec_prompt(
             f"Their preferred style: {style}. {grounding} "
             f"Find a currently available, purchasable bag from a reputable specialty roaster. "
             f"Provide the buy URL for the specific product page."
+            f"{for_sale_clause}"
         )
     elif tier == "broadened":
         return (
@@ -821,6 +834,7 @@ def _build_coffee_rec_prompt(
             f"Preferred origin: {top_origin}. {grounding} "
             f"Broaden to any process or roast level from this origin. "
             f"Find a currently available, purchasable bag. Provide the buy URL."
+            f"{for_sale_clause}"
         )
     else:  # characteristics_only
         style = f"{top_roast} roast, {top_origin} origin".strip(", ")
@@ -829,6 +843,7 @@ def _build_coffee_rec_prompt(
             f"{grounding} "
             f"No web search needed — use your knowledge of well-regarded specialty roasters. "
             f"Set buy_url to null and search_tier to 'characteristics_only'."
+            f"{for_sale_clause}"
         )
 
 
@@ -882,6 +897,7 @@ async def _generate_coffee_rec(
 
     start_ts = time.monotonic()
     last_error: Exception | None = None
+    _archived_retry_attempted = False  # D-14: one-shot retry guard
 
     for tier_name, max_uses in tiers:
         prompt = _build_coffee_rec_prompt(
@@ -1017,6 +1033,93 @@ async def _generate_coffee_rec(
         # Set the tier on the validated schema
         # (force-set since the LLM may not have set it correctly for broadened/tier3)
         rec_schema = rec_schema.model_copy(update={"search_tier": tier_name})
+
+        # D-14: archived-coffee detection — verify buy_url; retry once with broadened
+        # instruction if the first candidate appears archived/gone.
+        if (
+            rec_schema.buy_url
+            and not _archived_retry_attempted
+            and tier_name == "primary"
+        ):
+            url_ok = await _verify_buy_url(
+                rec_schema.buy_url,
+                roaster_name=rec_schema.roaster_name or "",
+                coffee_name=rec_schema.coffee_name,
+            )
+            if not url_ok:
+                _archived_retry_attempted = True
+                log.warning(
+                    AI_URL_VERIFY,
+                    user_id=user_id,
+                    url=rec_schema.buy_url,
+                    result="archived_retry",
+                )
+                retry_prompt = (
+                    "Try again with a broader search; the first candidate appears archived. "
+                    + _build_coffee_rec_prompt(
+                        profile,
+                        sweet_spots,
+                        tier="broadened",
+                    )
+                )
+                retry_raw: dict[str, Any] | None = None
+                if anthropic_cred is not None:
+                    anthropic_client_retry = _build_anthropic_client(anthropic_cred)
+                    try:
+                        retry_resp = anthropic_client_retry.messages.create(
+                            model=anthropic_cred.model_name,
+                            max_tokens=2048,
+                            system=SYSTEM_PROMPT_VOICE,
+                            messages=[{"role": "user", "content": retry_prompt}],
+                            tools=[  # type: ignore[arg-type]
+                                {
+                                    "type": tool_version_anthropic,
+                                    "name": "web_search",
+                                    "max_uses": broadened_max,
+                                    "user_location": {
+                                        "type": "approximate",
+                                        "country": region,
+                                    },
+                                },
+                                {
+                                    "name": "structure_output",
+                                    "description": "Return the structured coffee recommendation",
+                                    "input_schema": CoffeeRecSchema.model_json_schema(),
+                                },
+                            ],
+                        )
+                        retry_raw = _project_tool_use_input(retry_resp.content, "structure_output")
+                        usage = retry_resp.usage
+                        web_search_count = getattr(
+                            getattr(retry_resp.usage, "server_tool_use", None),
+                            "web_search_requests",
+                            0,
+                        )
+                        used_cred = anthropic_cred
+                    except Exception:
+                        retry_raw = None
+                if retry_raw is None and openai_cred is not None:
+                    openai_client_retry = _build_openai_client(openai_cred)
+                    try:
+                        retry_raw, usage, web_search_count = _openai_coffee_call(
+                            openai_client_retry,
+                            model=openai_cred.model_name,
+                            prompt=retry_prompt,
+                        )
+                        used_cred = openai_cred
+                        used_tool_version = tool_version_openai
+                    except Exception:
+                        retry_raw = None
+                if retry_raw is not None:
+                    try:
+                        rec_schema = CoffeeRecSchema.model_validate(retry_raw)
+                        rec_schema = rec_schema.model_copy(update={"search_tier": "broadened"})
+                    except PydanticValidationError:
+                        # Retry schema invalid — fall through to next tier
+                        continue
+                else:
+                    # Retry got no raw output — fall through to next tier
+                    continue
 
         # Attach recipe_suggestion and alt_brewer (SQL sub-flows — no LLM)
         recipe_sug = suggest_recipe(
