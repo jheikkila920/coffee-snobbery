@@ -42,7 +42,7 @@ other households.
 - [x] **Phase 15: v1.1 Debt Cleanup** - Close carried debt so new v1.2 work sits on a clean, verified base (completed 2026-05-26)
 - [x] **Phase 15.1: Catalog & Session Polish** (INSERTED) - Coffee catalog + brew session form cleanup: drop dead fields, fix edit, add multi-origin (completed 2026-05-27)
 - [x] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration (completed 2026-05-27)
-- [ ] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page
+- [x] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page (completed 2026-05-28)
 - [ ] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation
 - [ ] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts
 - [ ] **Phase 20: Guided Brew Polish** - Purpose-built mobile brewing coach with phase timer and water profiles
@@ -135,7 +135,7 @@ Plans:
 - [x] 17-04-PLAN.md — IA-02/IA-03/AIX-08 /ai page shell: three-branch state machine, AIX-08 admin + non-admin callouts, research-coming-soon stub (D-03/D-12/D-13/D-14/D-15/D-16/D-20)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 17-05-PLAN.md — IA-05 phase close: container rebuild, full suite, ruff gates, on-device PWA cache-freshness verification (manual checkpoint)
+- [x] 17-05-PLAN.md — IA-05 phase close: container rebuild, full suite, ruff gates, on-device PWA cache-freshness verification (manual checkpoint)
 **UI hint**: yes
 
 ### Phase 18: Self-Host Packaging
@@ -228,7 +228,7 @@ Plans:
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
-| 17. IA Restructure | v1.2 | 4/5 | In Progress|  |
+| 17. IA Restructure | v1.2 | 5/5 | Complete   | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
