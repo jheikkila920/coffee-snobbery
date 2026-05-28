@@ -79,7 +79,7 @@ The differentiator. A dedicated AI page hosting the consolidated recommendations
 - [ ] **AIX-10**: Every user-triggered AI action shows visible progress feedback while it runs -- AI Refresh, Force Refresh, and Refresh Recommendation buttons disable + display a spinner/state until the request completes or errors (items #12 + #15)
 - [x] **AIX-11**: The "what to buy next" recommendation always returns a concrete brew recipe (either an existing recipe or a generated one) plus actionable brew suggestions (ratio, temperature, grind hint) -- "no matching recipe found" is treated as a bug (item #13)
 - [x] **AIX-12**: User can request AI improvement suggestions on any logged brew session; the AI is aware of the user's prior sessions for that coffee and proposes changes (grind, ratio, temperature, brewer, recipe) that have not already been tried (item #14)
-- [ ] **AIX-13**: AI page interactions meet documented latency targets; an investigation captures current p50/p95 for each AI flow and either fixes regressions or documents why the current latency is fundamental (item #16)
+- [x] **AIX-13**: AI page interactions meet documented latency targets; an investigation captures current p50/p95 for each AI flow and either fixes regressions or documents why the current latency is fundamental (item #16)
 
 ### Guided Brew & Brew Data (GBREW)
 
@@ -187,7 +187,7 @@ Every v1.2 requirement maps to exactly one phase.
 | AIX-10 | Phase 19 | Pending |
 | AIX-11 | Phase 19 | Complete |
 | AIX-12 | Phase 19 | Complete |
-| AIX-13 | Phase 19 | Pending |
+| AIX-13 | Phase 19 | Complete |
 | GBREW-01 | Phase 20 | Pending |
 | GBREW-02 | Phase 20 | Pending |
 | GBREW-03 | Phase 20 | Pending |
