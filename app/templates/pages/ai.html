@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block page_title %}AI{% endblock %}
+{% block content %}
+  {# Phase 17 /ai page shell (IA-02 / IA-03 / AIX-08, D-13..D-16 + D-20).
+
+     Three-branch composition keyed on (gate_open, ai_key_present, is_admin):
+       - Below gate                           → cold-start meter (D-14).
+       - Above gate, no key, admin            → AIX-08 admin callout (D-15).
+       - Above gate, no key, non-admin        → D-16 social-action callout.
+       - Above gate, key present              → AI hero + Preference Profile
+                                                + Top Flavor Descriptors +
+                                                Sweet Spots + AI tools +
+                                                Research stub (D-13).
+
+     The DIST-07 banner from plan 17-03 is included at the top of <main> and
+     self-gates on is_admin AND not ai_key_present (D-20 coexistence). When
+     visible it sits above the branched content; the hero card slot is still
+     replaced by the AIX-08 admin callout below.
+
+     All values autoescaped. CSP-clean. #}
+  <main class="mx-auto max-w-6xl px-6 py-12">
+    {% include "fragments/ai_key_setup_banner.html" %}
+
+    <header class="mb-6">
+      <h1 class="text-2xl font-semibold">AI</h1>
+    </header>
+
+    <div class="space-y-8">
+      {% if not gate.gate_open %}
+        {% include "fragments/ai/_cold_start.html" %}
+      {% elif not ai_key_present %}
+        {% if request.state.user.is_admin %}
+          {% include "fragments/ai/_no_key_admin_callout.html" %}
+        {% else %}
+          {% include "fragments/ai/_no_key_non_admin_callout.html" %}
+        {% endif %}
+      {% else %}
+        {# === AI hero: lazy mount of /home/cards/ai-recommendation. ===
+           Delay dropped from 600ms (home pre-17-02) to 100ms — hero is now
+           the first card on /ai, no other lazy mounts above it to stagger
+           against. The /home/cards/ai-recommendation URL is RETAINED per
+           RESEARCH Open Question #3 (rename deferred to reduce SW cache
+           churn). #}
+        <section aria-labelledby="ai-rec-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="ai-rec-heading" class="text-xl font-semibold mb-4">What to buy next</h2>
+          <div id="ai-rec-hero"
+               hx-get="/home/cards/ai-recommendation"
+               hx-trigger="load delay:100ms"
+               hx-swap="outerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        {# === Preference Profile: lazy mount, 200ms stagger. === #}
+        <section aria-labelledby="preference-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="preference-heading" class="text-xl font-semibold mb-4">Preference Profile</h2>
+          <div hx-get="/home/cards/preference-profile"
+               hx-trigger="load delay:200ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        {# === Top Flavor Descriptors: lazy mount, 300ms stagger. === #}
+        <section aria-labelledby="flavor-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="flavor-heading" class="text-xl font-semibold mb-4">Top Flavor Descriptors</h2>
+          <div hx-get="/home/cards/flavor-descriptors"
+               hx-trigger="load delay:300ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        {# === Sweet Spots: lazy mount, 500ms stagger. === #}
+        <section aria-labelledby="sweet-spots-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="sweet-spots-heading" class="text-xl font-semibold mb-4">Sweet Spots</h2>
+          <div hx-get="/home/cards/sweet-spots"
+               hx-trigger="load delay:500ms"
+               hx-swap="innerHTML">
+            <div class="animate-pulse space-y-2">
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+            </div>
+          </div>
+        </section>
+
+        {# === AI tools (paste-rank link + wishlist link + equipment form). ===
+           Recovered from snippets/ai-surfaces-pre-17-02.html (canonical source).
+           Wishlist link is a duplicate affordance — Wishlist also has its own
+           card on home per D-06; both surfaces are intentional per CONTEXT.md. #}
+        <section aria-labelledby="ai-tools-heading"
+                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+          <h2 id="ai-tools-heading" class="text-xl font-semibold mb-4">AI tools</h2>
+          <div class="flex flex-wrap gap-3 mb-4">
+            <a href="/ai/paste-rank"
+               class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+              Rank these for me
+            </a>
+            <a href="/ai/wishlist"
+               class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+              Wishlist
+            </a>
+          </div>
+          {# Equipment rec: generate-on-click (D-05). Never auto-loads. #}
+          <div>
+            <form hx-post="/ai/equipment"
+                  hx-target="#equipment-rec-result"
+                  hx-swap="innerHTML">
+              <input type="hidden"
+                     name="X-CSRF-Token"
+                     value="{{ request.cookies.get('csrftoken', '') }}">
+              <button type="submit"
+                      class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800">
+                Analyze my setup
+              </button>
+            </form>
+            <div id="equipment-rec-result" class="mt-3"></div>
+          </div>
+        </section>
+
+        {# === Research a coffee — Phase 19 stub (D-13). === #}
+        {% include "fragments/research_coming_soon.html" %}
+      {% endif %}
+    </div>
+  </main>
+{% endblock %}
