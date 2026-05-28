@@ -67,18 +67,18 @@ Log coffees tasted away from home (cafes, travel) without a recipe. Cafe ratings
 
 The differentiator. A dedicated AI page hosting the consolidated recommendations plus a new on-demand "research a coffee and predict my rating" flow, with cost controls that are non-negotiable.
 
-- [ ] **AIX-01**: User can type a coffee name and get an AI-researched profile (origin, roaster, tasting notes) grounded in web search with cited sources
-- [ ] **AIX-02**: The AI predicts how the user would rate that coffee as a range with a confidence level and visible reasoning, never a single point estimate
+- [x] **AIX-01**: User can type a coffee name and get an AI-researched profile (origin, roaster, tasting notes) grounded in web search with cited sources
+- [x] **AIX-02**: The AI predicts how the user would rate that coffee as a range with a confidence level and visible reasoning, never a single point estimate
 - [ ] **AIX-03**: AI research/predict is gated by the existing cold-start threshold (>=3 sessions and >=5 distinct flavor notes)
-- [ ] **AIX-04**: Repeat lookups of the same coffee are served from a cache (TTL) to avoid redundant web-search cost
+- [x] **AIX-04**: Repeat lookups of the same coffee are served from a cache (TTL) to avoid redundant web-search cost
 - [ ] **AIX-05**: AI research/predict is rate-limited per user per day, with remaining quota visible to the user
 - [ ] **AIX-06**: User can add a researched coffee to the wishlist directly from the result
 - [ ] **AIX-07**: AI responses on the AI page stream to the user (SSE) instead of polling
 - [x] **AIX-08**: When a user meets the cold-start threshold but no AI API key is configured, the AI page shows a prominent button/banner linking to the Admin page to add a key (distinct from the not-enough-data empty state)
-- [ ] **AIX-09**: The preference profile contains an in-depth AI-generated prose summary that cross-cuts flavor descriptors against process (e.g., "fruity in washed but nutty in natural"), origin, varietal, and rating -- no descriptor count cap; flavor descriptors are not shown as a standalone "top descriptors" widget (item #11)
+- [x] **AIX-09**: The preference profile contains an in-depth AI-generated prose summary that cross-cuts flavor descriptors against process (e.g., "fruity in washed but nutty in natural"), origin, varietal, and rating -- no descriptor count cap; flavor descriptors are not shown as a standalone "top descriptors" widget (item #11)
 - [ ] **AIX-10**: Every user-triggered AI action shows visible progress feedback while it runs -- AI Refresh, Force Refresh, and Refresh Recommendation buttons disable + display a spinner/state until the request completes or errors (items #12 + #15)
-- [ ] **AIX-11**: The "what to buy next" recommendation always returns a concrete brew recipe (either an existing recipe or a generated one) plus actionable brew suggestions (ratio, temperature, grind hint) -- "no matching recipe found" is treated as a bug (item #13)
-- [ ] **AIX-12**: User can request AI improvement suggestions on any logged brew session; the AI is aware of the user's prior sessions for that coffee and proposes changes (grind, ratio, temperature, brewer, recipe) that have not already been tried (item #14)
+- [x] **AIX-11**: The "what to buy next" recommendation always returns a concrete brew recipe (either an existing recipe or a generated one) plus actionable brew suggestions (ratio, temperature, grind hint) -- "no matching recipe found" is treated as a bug (item #13)
+- [x] **AIX-12**: User can request AI improvement suggestions on any logged brew session; the AI is aware of the user's prior sessions for that coffee and proposes changes (grind, ratio, temperature, brewer, recipe) that have not already been tried (item #14)
 - [ ] **AIX-13**: AI page interactions meet documented latency targets; an investigation captures current p50/p95 for each AI flow and either fixes regressions or documents why the current latency is fundamental (item #16)
 
 ### Guided Brew & Brew Data (GBREW)
@@ -175,18 +175,18 @@ Every v1.2 requirement maps to exactly one phase.
 | CAFE-04 | Phase 16 | Pending |
 | CAFE-05 | Phase 16 | Pending |
 | CAFE-06 | Phase 16 | Pending |
-| AIX-01 | Phase 19 | Pending |
-| AIX-02 | Phase 19 | Pending |
+| AIX-01 | Phase 19 | Complete |
+| AIX-02 | Phase 19 | Complete |
 | AIX-03 | Phase 19 | Pending |
-| AIX-04 | Phase 19 | Pending |
+| AIX-04 | Phase 19 | Complete |
 | AIX-05 | Phase 19 | Pending |
 | AIX-06 | Phase 19 | Pending |
 | AIX-07 | Phase 19 | Pending |
 | AIX-08 | Phase 17 | Complete |
-| AIX-09 | Phase 19 | Pending |
+| AIX-09 | Phase 19 | Complete |
 | AIX-10 | Phase 19 | Pending |
-| AIX-11 | Phase 19 | Pending |
-| AIX-12 | Phase 19 | Pending |
+| AIX-11 | Phase 19 | Complete |
+| AIX-12 | Phase 19 | Complete |
 | AIX-13 | Phase 19 | Pending |
 | GBREW-01 | Phase 20 | Pending |
 | GBREW-02 | Phase 20 | Pending |

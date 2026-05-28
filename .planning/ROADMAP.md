@@ -177,7 +177,7 @@ Plans:
 Plans:
 
 **Wave 1**
-- [ ] 19-01-PLAN.md — AIX-01/02/04/09/11/12: sse-starlette + 5 schemas (drop no_match) + 2 tables + migration + quota settings + Wave 0 tests
+- [x] 19-01-PLAN.md — AIX-01/02/04/09/11/12: sse-starlette + 5 schemas (drop no_match) + 2 tables + migration + quota settings + Wave 0 tests
 
 **Wave 2** *(blocked on Wave 1)*
 - [ ] 19-02-PLAN.md — AIX-11/13: _verify_buy_url 404/410 + archived-retry + recipe-prompt + no_match test rewrite + latency comments
@@ -259,7 +259,7 @@ Plans:
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
-| 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
+| 19. AI Page & Research/Predict | v1.2 | 1/7 | In Progress|  |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
