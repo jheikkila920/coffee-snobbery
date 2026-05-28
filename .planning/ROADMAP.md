@@ -43,7 +43,7 @@ other households.
 - [x] **Phase 15.1: Catalog & Session Polish** (INSERTED) - Coffee catalog + brew session form cleanup: drop dead fields, fix edit, add multi-origin (completed 2026-05-27)
 - [x] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration (completed 2026-05-27)
 - [x] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page (completed 2026-05-28)
-- [ ] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation
+- [x] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation (completed 2026-05-28)
 - [ ] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts
 - [ ] **Phase 20: Guided Brew Polish** - Purpose-built mobile brewing coach with phase timer and water profiles
 - [ ] **Phase 21: Mobile-First Full Rework** - Screen-by-screen audit and polish at 375px to major-company bar
@@ -157,8 +157,8 @@ Plans:
 - [x] 18-03-PLAN.md — DIST-06 .env.example audit + NPM TRUSTED_PROXY_IPS prose (D-17)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 18-04-PLAN.md — DIST-02 release.yml: tag-triggered test -> multi-arch GHCR push, latest=auto, APP_VERSION build-arg (D-09/D-10/D-11/D-12/D-13)
-- [ ] 18-05-PLAN.md — DIST-03/04/05 README operator-first rewrite + CONTRIBUTING.md carve-out + CLAUDE.md pointers + DIST-05 smoke procedure (D-07/D-14/D-15/D-16/D-18/D-19/D-20)
+- [x] 18-04-PLAN.md — DIST-02 release.yml: tag-triggered test -> multi-arch GHCR push, latest=auto, APP_VERSION build-arg (D-09/D-10/D-11/D-12/D-13)
+- [x] 18-05-PLAN.md — DIST-03/04/05 README operator-first rewrite + CONTRIBUTING.md carve-out + CLAUDE.md pointers + DIST-05 smoke procedure (D-07/D-14/D-15/D-16/D-18/D-19/D-20)
 
 ### Phase 19: AI Page & Research/Predict
 **Goal**: The AI page is fully wired with consolidated recommendations, on-demand coffee research, predicted personal rating, and trend charts — with cost controls that are non-negotiable
@@ -238,7 +238,7 @@ Plans:
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
-| 18. Self-Host Packaging | v1.2 | 3/5 | In Progress|  |
+| 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
