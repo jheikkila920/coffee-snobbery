@@ -172,40 +172,25 @@ def test_prior_sessions_loaded_for_improve_brew() -> None:
 
     mock_stream.text_stream = _mock_text_stream()
 
+    # Build a properly-typed tool_use block that _project_tool_use_input can parse
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "structure_output"
+    tool_block.input = improve_result.model_dump()
+
     mock_final_msg = MagicMock()
-    mock_final_msg.content = [
-        MagicMock(
-            type="tool_use",
-            name="structure_output",
-            input=improve_result.model_dump(),
-        )
-    ]
+    mock_final_msg.content = [tool_block]
     mock_final_msg.usage = MagicMock(input_tokens=400, output_tokens=150)
     mock_stream.get_final_message = AsyncMock(return_value=mock_final_msg)
 
     mock_anth_instance = MagicMock()
-    mock_anth_instance.messages.stream = MagicMock(return_value=mock_stream)
+    mock_anth_instance.messages.stream.return_value = mock_stream
     mock_anthropic_cls = MagicMock(return_value=mock_anth_instance)
 
     mock_cred = MagicMock()
     mock_cred.provider = "anthropic"
     mock_cred.key = "sk-ant-test"
     mock_cred.model_name = "claude-3-5-haiku-latest"
-
-    # Captured prompt text so we can assert prior sessions appear in it
-    captured_prompt: list[str] = []
-
-    original_create = mock_anth_instance.messages.stream
-
-    def capturing_stream(**kwargs):
-        # Capture the messages content to check prompt
-        messages = kwargs.get("messages", [])
-        for msg in messages:
-            if isinstance(msg.get("content"), str):
-                captured_prompt.append(msg["content"])
-        return original_create(**kwargs)
-
-    mock_anth_instance.messages.stream = capturing_stream
 
     with (
         patch(
@@ -229,7 +214,7 @@ def test_prior_sessions_loaded_for_improve_brew() -> None:
             return_value=MagicMock(),
         ),
         patch(
-            "anthropic.AsyncAnthropic",
+            "app.services.ai_service.anthropic.AsyncAnthropic",
             mock_anthropic_cls,
         ),
     ):

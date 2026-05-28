@@ -26,6 +26,7 @@ import ipaddress
 import json  # noqa: F401 — used in Task 2 OpenAI fallback flow
 import socket
 import time  # noqa: F401 — used in Task 2/3 for duration_ms calculation
+from collections.abc import AsyncGenerator
 from typing import Any
 from urllib.parse import urlparse
 
@@ -33,7 +34,19 @@ import anthropic
 import httpx
 import openai
 import structlog
-from pydantic import ValidationError  # noqa: F401 — used in Task 2 projection/validation
+from pydantic import ValidationError
+
+try:
+    from sse_starlette.sse import ServerSentEvent
+except ImportError:  # pragma: no cover
+    # Fallback for environments where sse-starlette is not installed
+
+    class ServerSentEvent:  # type: ignore[no-redef]
+        def __init__(self, data: str, event: str | None = None) -> None:
+            self.data = data
+            self.event = event
+
+
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -58,9 +71,11 @@ from app.services import credentials as credentials_service
 from app.services import settings as settings_service  # noqa: F401 — used in Task 2
 from app.services.ai_schemas import (
     AltBrewerSchema,
+    BrewImproveSchema,
     CoffeeRecSchema,  # noqa: F401 — used in Task 2
     EquipmentRecSchema,
     PasteRankSchema,
+    PreferenceProfileProseSchema,
     RecipeSuggestionSchema,
     SweetSpotsProseSchema,  # noqa: F401 — used in Task 2
 )
@@ -1898,3 +1913,515 @@ async def rank_pasted_coffees(
         duration_ms=duration_ms,
     )
     return "generated", PasteRankSchema.model_validate(raw)
+
+
+# ---------------------------------------------------------------------------
+# Improve-brew SSE flow (AIX-12 / D-12 / D-16)
+# ---------------------------------------------------------------------------
+
+_REC_TYPE_BREW_IMPROVEMENT = "brew_improvement"
+
+
+# p95 target: <= 20s
+async def generate_brew_improvement(
+    db: Session,
+    *,
+    user_id: int,
+    session_id: int,
+) -> AsyncGenerator[ServerSentEvent, None]:
+    """Two-phase SSE generator for the 'coach this brew' flow (AIX-12 / D-16).
+
+    Gate ordering:
+      1. Credential check
+      2. Session load with user_id scope (IDOR: T-19-12)
+      3. Quota check against improve_brew bucket (T-19-14)
+      4. Advisory lock (T-19-10 reconnect guard)
+      5. Phase 1: stream prose text deltas as event:message
+      6. Phase 2: get_final_message() -> _project_tool_use_input -> BrewImproveSchema
+      7. On ValidationError -> event:error; return
+      8. Write telemetry row (rec_type='brew_improvement', duration_ms)
+      9. Emit event:complete with validated result
+
+    Prior sessions: ALL of the user's brew sessions for the session's coffee_id are
+    serialized into the prompt (D-12) so the LLM proposes parameters NOT already tried.
+    The user-scoped list_brew_sessions call is the IDOR boundary (T-19-12).
+
+    Quota: counted against improve_brew bucket, separate from research (T-19-14 / D-08).
+    OpenAI fallback uses a non-streaming structured call (RESEARCH Open Q#1).
+    Error events emit a short user-facing string only (T-19-09 reused).
+    """
+    from app.services import ai_quota
+    from app.services import brew_sessions as brew_sessions_service
+
+    # (1) Credential check
+    cred = credentials_service.get_provider_credential(
+        db, "anthropic"
+    ) or credentials_service.get_provider_credential(db, "openai")
+    if cred is None:
+        yield ServerSentEvent(data="AI provider not configured.", event="error")
+        return
+
+    # (2) Session load — user-scoped (IDOR: T-19-12)
+    session = brew_sessions_service.get_brew_session(db, session_id=session_id, by_user_id=user_id)
+    if session is None:
+        yield ServerSentEvent(data="Brew session not found.", event="error")
+        return
+
+    coffee_id: int = session.coffee_id
+
+    # (3) Quota check against improve_brew bucket (T-19-14 / D-08)
+    remaining = ai_quota.remaining(db, user_id, _REC_TYPE_BREW_IMPROVEMENT)
+    if remaining <= 0:
+        reset_time = ai_quota.get_quota_reset_time(db, user_id, _REC_TYPE_BREW_IMPROVEMENT)
+        msg = "Daily brew-improvement limit reached."
+        if reset_time:
+            delta = reset_time - __import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc
+            )
+            hours = int(delta.total_seconds() // 3600)
+            mins = int((delta.total_seconds() % 3600) // 60)
+            msg += f" Resets in {hours}h {mins}m."
+        yield ServerSentEvent(data=msg, event="error")
+        return
+
+    # Load ALL prior sessions for this user + coffee (D-12 — prior-session-aware)
+    prior_sessions = brew_sessions_service.list_brew_sessions(
+        db, by_user_id=user_id, coffee_id=coffee_id
+    )
+
+    # (4) Advisory lock (T-19-10 reconnect guard)
+    lock = _get_lock(user_id, _REC_TYPE_BREW_IMPROVEMENT)
+    if lock.locked():
+        yield ServerSentEvent(
+            data="A brew-improvement request is already in progress.", event="error"
+        )
+        return
+
+    async with lock:
+        if not _try_advisory_lock(db, user_id, _REC_TYPE_BREW_IMPROVEMENT):
+            yield ServerSentEvent(
+                data="A brew-improvement request is already in progress.", event="error"
+            )
+            return
+
+        prompt = _build_brew_improve_prompt(session, prior_sessions)
+        tool_version: str | None = None
+        start_ts = time.monotonic()
+        usage_obj: Any = None
+        result_schema: BrewImproveSchema | None = None
+
+        if cred.provider == "anthropic":
+            # Phase 1 + 2: two-phase streaming (D-16 Pattern 1 — mirrored from ai_research)
+            async_client = anthropic.AsyncAnthropic(api_key=cred.key, max_retries=1)
+            tool_version = "custom"
+
+            tools: list[dict[str, Any]] = [
+                {
+                    "name": "structure_output",
+                    "description": "Return the structured brew improvement coaching result",
+                    "input_schema": BrewImproveSchema.model_json_schema(),
+                }
+            ]
+
+            try:
+                async with async_client.messages.stream(
+                    model=cred.model_name,
+                    max_tokens=1500,
+                    system=SYSTEM_PROMPT_VOICE,
+                    messages=[{"role": "user", "content": prompt}],
+                    tools=tools,  # type: ignore[arg-type]
+                ) as stream:
+                    # Phase 1: emit prose deltas as event:message
+                    async for text in stream.text_stream:
+                        yield ServerSentEvent(data=text, event="message")
+
+                    # Phase 2: extract structured output from final message
+                    final_msg = await stream.get_final_message()
+                    usage_obj = final_msg.usage
+
+                try:
+                    raw = _project_tool_use_input(final_msg.content, "structure_output")
+                    result_schema = BrewImproveSchema.model_validate(raw)
+                except (ValueError, ValidationError) as exc:
+                    log.warning(
+                        "ai_service.brew_improve.validation_failed",
+                        user_id=user_id,
+                        session_id=session_id,
+                        error=type(exc).__name__,
+                    )
+                    yield ServerSentEvent(
+                        data="Could not parse brew improvement result. Please try again.",
+                        event="error",
+                    )
+                    duration_ms = int((time.monotonic() - start_ts) * 1000)
+                    _write_recommendation_row(
+                        db,
+                        user_id=user_id,
+                        rec_type=_REC_TYPE_BREW_IMPROVEMENT,
+                        input_signature=str(session_id),
+                        response_json={},
+                        cred=cred,
+                        tool_version=tool_version,
+                        usage=usage_obj,
+                        web_search_count=0,
+                        duration_ms=duration_ms,
+                        generated_by="user_request",
+                        error_status="pydantic_error",
+                    )
+                    return
+
+            except anthropic.APIError as exc:
+                log.error(
+                    "ai_service.brew_improve.anthropic_error",
+                    user_id=user_id,
+                    session_id=session_id,
+                    error=type(exc).__name__,
+                )
+                yield ServerSentEvent(
+                    data="AI provider error. Please try again later.",
+                    event="error",
+                )
+                return
+
+        else:
+            # OpenAI fallback: non-streaming structured call (RESEARCH Open Q#1)
+            import json as _json
+
+            tool_version = "openai_structured"
+            try:
+                oai_client = _build_openai_client(cred)
+                schema_hint = _json.dumps(
+                    BrewImproveSchema.model_json_schema(), separators=(",", ":")
+                )
+                full_prompt = (
+                    f"{prompt}\n\nRespond with a JSON object matching this schema exactly:"
+                    f"\n{schema_hint}"
+                )
+                oai_response = oai_client.responses.create(
+                    model=cred.model_name,
+                    input=[{"role": "user", "content": full_prompt}],
+                )
+                text_out = ""
+                for item in oai_response.output:
+                    if item.type == "message":
+                        for c in item.content:
+                            if c.type == "output_text":
+                                text_out = c.text
+                                break
+                raw = _json.loads(text_out)
+                result_schema = BrewImproveSchema.model_validate(raw)
+                usage_obj = oai_response.usage
+                yield ServerSentEvent(data=result_schema.summary_prose, event="message")
+
+            except Exception as exc:
+                log.error(
+                    "ai_service.brew_improve.openai_error",
+                    user_id=user_id,
+                    session_id=session_id,
+                    error=type(exc).__name__,
+                )
+                yield ServerSentEvent(
+                    data="AI provider error. Please try again later.",
+                    event="error",
+                )
+                return
+
+        duration_ms = int((time.monotonic() - start_ts) * 1000)
+
+        # (8) Write telemetry row (AIX-13 / D-15)
+        _write_recommendation_row(
+            db,
+            user_id=user_id,
+            rec_type=_REC_TYPE_BREW_IMPROVEMENT,
+            input_signature=str(session_id),
+            response_json=result_schema.model_dump(),
+            cred=cred,
+            tool_version=tool_version,
+            usage=usage_obj,
+            web_search_count=0,
+            duration_ms=duration_ms,
+            generated_by="user_request",
+        )
+
+        log.info(
+            AI_GENERATION_SUCCESS,
+            user_id=user_id,
+            rec_type=_REC_TYPE_BREW_IMPROVEMENT,
+            session_id=session_id,
+            provider=cred.provider,
+            model=cred.model_name,
+            duration_ms=duration_ms,
+        )
+
+        # (9) Emit event:complete with validated result JSON
+        import json as _json
+
+        yield ServerSentEvent(
+            data=_json.dumps(result_schema.model_dump()),
+            event="complete",
+        )
+
+
+def _build_brew_improve_prompt(session: Any, prior_sessions: list[Any]) -> str:
+    """Build the prompt for the brew improvement flow.
+
+    Serializes the target session's dial settings and ALL prior sessions for
+    the same coffee so the LLM can propose parameters NOT already tried (D-12).
+    prior_sessions includes the target session — the LLM sees the full history.
+    """
+
+    # Serialize each session's dial fields
+    def _session_to_dict(s: Any) -> dict[str, Any]:
+        return {
+            "session_id": s.id,
+            "grind": str(s.grind_setting_actual or ""),
+            "ratio": (
+                f"1:{float(s.water_grams_actual) / float(s.dose_grams_actual):.1f}"
+                if s.dose_grams_actual and float(s.dose_grams_actual) > 0
+                else ""
+            ),
+            "temp_c": str(s.water_temp_c_actual or ""),
+            "brewer_id": s.brewer_id,
+            "recipe_id": s.recipe_id,
+            "rating": str(s.rating or "unrated"),
+        }
+
+    target_dict = _session_to_dict(session)
+    prior_dicts = [_session_to_dict(s) for s in prior_sessions]
+
+    import json as _json
+
+    return (
+        f"Analyze this brew session and coach the user on what to adjust next time.\n\n"
+        f"Target session:\n{_json.dumps(target_dict, indent=2)}\n\n"
+        f"All prior sessions for this coffee (including the target):\n"
+        f"{_json.dumps(prior_dicts, indent=2)}\n\n"
+        "Propose specific parameter changes the user has NOT already tried "
+        "(compare with unchanged_parameters you identify from prior sessions). "
+        "Focus on the most impactful dial. Keep coaching concrete and actionable."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Preference-profile prose flow (AIX-09 / D-10 / D-15)
+# ---------------------------------------------------------------------------
+
+_REC_TYPE_PREFERENCE_PROSE = "preference_profile_prose"
+
+
+# p95 target: <= 30s
+async def generate_preference_profile_prose(
+    db: Session,
+    *,
+    user_id: int,
+) -> tuple[str, AIRecommendation | None]:
+    """Generate in-depth preference profile prose for *user_id* (AIX-09 / D-10).
+
+    Non-SSE: signature-driven card refresh (D-16 limits SSE to three flows;
+    preference_profile_prose is not one of them). Uses structured output via
+    one synchronous LLM call.
+
+    Prompt inputs (D-10):
+    - get_preference_profile: origin / process / roaster / roast_level dimensions
+    - get_flavor_descriptors: top-10 flavor notes (4.0+ rated sessions, min 2)
+    - brew/cafe rating distribution: from compute_input_signature + flavor data
+    - varietal preferences: highest-rated coffees from the preference profile
+
+    Writes ai_recommendations with rec_type='preference_profile_prose' (signature-keyed,
+    one row per user+signature). duration_ms telemetry (AIX-13 / D-15).
+
+    Returns:
+        ("generated", row) — new prose written
+        ("skipped", row)   — signature unchanged, existing row returned
+        ("try_again", None) — all provider paths failed validation
+        ("not_configured", None) — no provider credential enabled
+    """
+    from pydantic import ValidationError as PydanticValidationError
+
+    anthropic_cred = credentials_service.get_provider_credential(db, "anthropic")
+    openai_cred = credentials_service.get_provider_credential(db, "openai")
+    if anthropic_cred is None and openai_cred is None:
+        return "not_configured", None
+
+    cred = anthropic_cred or openai_cred
+
+    # Sync reads before any awaited call (Pitfall 5 — pre-read/post-write bracketing)
+    current_sig = analytics_service.compute_input_signature(db, user_id)
+
+    # Signature check — skip if prose is already fresh for this signature
+    existing_row = get_latest_recommendation(
+        db, user_id=user_id, rec_type=_REC_TYPE_PREFERENCE_PROSE
+    )
+    if existing_row is not None and existing_row.input_signature == current_sig:
+        return "skipped", existing_row
+
+    # Build prompt inputs from analytics helpers (D-10)
+    profile = analytics_service.get_preference_profile(db, user_id)
+    flavor_descriptors = analytics_service.get_flavor_descriptors(db, user_id)
+
+    prompt = _build_preference_prose_prompt(profile, flavor_descriptors)
+    start_ts = time.monotonic()
+    usage_obj: Any = None
+    tool_version: str | None = None
+
+    if anthropic_cred is not None:
+        tool_version = "custom"
+        client = anthropic.Anthropic(api_key=anthropic_cred.key, max_retries=1)
+        try:
+            resp = client.messages.create(
+                model=anthropic_cred.model_name,
+                max_tokens=1000,
+                system=SYSTEM_PROMPT_VOICE,
+                messages=[{"role": "user", "content": prompt}],
+                tools=[  # type: ignore[arg-type]
+                    {
+                        "name": "structure_output",
+                        "description": "Return the structured preference profile prose",
+                        "input_schema": PreferenceProfileProseSchema.model_json_schema(),
+                    }
+                ],
+            )
+            usage_obj = resp.usage
+            raw = _project_tool_use_input(resp.content, "structure_output")
+            prose_schema = PreferenceProfileProseSchema.model_validate(raw)
+        except (ValueError, PydanticValidationError, anthropic.APIError) as exc:
+            log.error(
+                AI_GENERATION_ERROR,
+                user_id=user_id,
+                rec_type=_REC_TYPE_PREFERENCE_PROSE,
+                error_class=type(exc).__name__,
+                error_status="pydantic_error",
+            )
+            _write_recommendation_row(
+                db,
+                user_id=user_id,
+                rec_type=_REC_TYPE_PREFERENCE_PROSE,
+                input_signature=current_sig,
+                response_json={},
+                cred=cred,  # type: ignore[arg-type]
+                tool_version=tool_version,
+                usage=usage_obj,
+                web_search_count=0,
+                duration_ms=int((time.monotonic() - start_ts) * 1000),
+                generated_by="scheduler",
+                error_status="pydantic_error",
+            )
+            return "try_again", None
+    else:
+        # OpenAI fallback: non-streaming structured call (RESEARCH Open Q#1)
+        import json as _json
+
+        tool_version = "openai_structured"
+        try:
+            oai_client = _build_openai_client(openai_cred)  # type: ignore[arg-type]
+            schema_hint = _json.dumps(
+                PreferenceProfileProseSchema.model_json_schema(), separators=(",", ":")
+            )
+            full_prompt = (
+                f"{prompt}\n\nRespond with a JSON object matching this schema exactly:"
+                f"\n{schema_hint}"
+            )
+            oai_resp = oai_client.responses.create(
+                model=openai_cred.model_name,  # type: ignore[union-attr]
+                input=[{"role": "user", "content": full_prompt}],
+            )
+            text_out = ""
+            for item in oai_resp.output:
+                if item.type == "message":
+                    for c in item.content:
+                        if c.type == "output_text":
+                            text_out = c.text
+                            break
+            pred_raw = _json.loads(text_out)
+            prose_schema = PreferenceProfileProseSchema.model_validate(pred_raw)
+            usage_obj = oai_resp.usage
+        except Exception as exc:
+            log.error(
+                AI_GENERATION_ERROR,
+                user_id=user_id,
+                rec_type=_REC_TYPE_PREFERENCE_PROSE,
+                error_class=type(exc).__name__,
+                error_status="pydantic_error",
+            )
+            _write_recommendation_row(
+                db,
+                user_id=user_id,
+                rec_type=_REC_TYPE_PREFERENCE_PROSE,
+                input_signature=current_sig,
+                response_json={},
+                cred=cred,  # type: ignore[arg-type]
+                tool_version=tool_version,
+                usage=usage_obj,
+                web_search_count=0,
+                duration_ms=int((time.monotonic() - start_ts) * 1000),
+                generated_by="scheduler",
+                error_status="pydantic_error",
+            )
+            return "try_again", None
+
+    duration_ms = int((time.monotonic() - start_ts) * 1000)
+    rec_row = _write_recommendation_row(
+        db,
+        user_id=user_id,
+        rec_type=_REC_TYPE_PREFERENCE_PROSE,
+        input_signature=current_sig,
+        response_json=prose_schema.model_dump(),
+        cred=cred,  # type: ignore[arg-type]
+        tool_version=tool_version,
+        usage=usage_obj,
+        web_search_count=0,
+        duration_ms=duration_ms,
+        generated_by="scheduler",
+    )
+
+    log.info(
+        AI_GENERATION_SUCCESS,
+        user_id=user_id,
+        rec_type=_REC_TYPE_PREFERENCE_PROSE,
+        provider=cred.provider,  # type: ignore[union-attr]
+        model=cred.model_name,  # type: ignore[union-attr]
+        duration_ms=duration_ms,
+    )
+
+    return "generated", rec_row
+
+
+def _build_preference_prose_prompt(
+    profile: dict[str, list[Any]],
+    flavor_descriptors: list[Any],
+) -> str:
+    """Build the preference profile prose prompt from analytics helper outputs.
+
+    Serializes get_preference_profile dimensions and get_flavor_descriptors to JSON
+    so the LLM has structured input to reason over (D-10).
+    """
+    import json as _json
+
+    profile_data = {
+        dim: [
+            {
+                "label": row.label,
+                "avg_rating": float(row.avg_rating),
+                "session_count": row.session_count,
+            }
+            for row in rows
+        ]
+        for dim, rows in profile.items()
+    }
+    flavor_data = [
+        {
+            "name": row.name,
+            "session_count": row.session_count,
+        }
+        for row in flavor_descriptors
+    ]
+
+    return (
+        "Write an in-depth preference profile for this coffee drinker. "
+        "Cross-cut flavor, process, origin, varietal, and rating data. "
+        "Be specific — cite actual labels, numbers, and patterns from the data. "
+        "Do not pad with generic advice.\n\n"
+        f"Preference dimensions:\n{_json.dumps(profile_data, indent=2)}\n\n"
+        f"Top flavor descriptors (from 4.0+ rated sessions):\n"
+        f"{_json.dumps(flavor_data, indent=2)}"
+    )
