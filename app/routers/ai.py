@@ -1,6 +1,6 @@
-"""AI router — state-changing AI routes + wishlist CRUD (Phase 7).
+"""AI router — state-changing AI routes + wishlist CRUD + Phase 19 flows.
 
-Routes:
+Routes (Phase 7):
   GET  /ai/paste-rank                — dedicated paste-and-rank page (07-07)
   GET  /ai/wishlist                  — minimal wishlist view (07-07)
   POST /ai/refresh                   — manual AI refresh (throttle + in-flight 429)
@@ -9,6 +9,14 @@ Routes:
   POST /ai/wishlist/add              — add wishlist entry (user-scoped)
   POST /ai/wishlist/{entry_id}/purchase — mark purchased (IDOR: 404 cross-user)
   POST /ai/wishlist/{entry_id}/remove   — remove entry (IDOR: 404 cross-user)
+
+Routes (Phase 19 — research/improve/charts):
+  POST /ai/research                  — SSE coffee research stream (AIX-01/07)
+  GET  /ai/research/quota            — quota counter fragment (AIX-05/D-09)
+  POST /ai/improve-brew/{session_id} — SSE improve-brew stream (AIX-12/D-12)
+  GET  /ai/coach                     — session-picker fragment (D-12)
+  GET  /ai/charts/rating-over-time   — per-user rating trend JSON (VIZ-01)
+  GET  /ai/charts/flavor-distribution — per-user flavor counts JSON (VIZ-01)
 
 Security invariants:
   - All routes gated by ``Depends(require_user)``; ``user_id`` read ONLY from
@@ -20,6 +28,12 @@ Security invariants:
     and the in-memory lock guard (429, AI-13).
   - Background task ``_verify_and_persist_url`` verifies buy_url after a coffee
     row is generated (AI-05), using the SSRF-hardened ``_verify_buy_url``.
+  - POST /ai/research: cold-start gate + per-user quota check BEFORE SSE stream
+    starts (T-19-16); 429 + HX-Retarget on exhaustion (D-09).
+  - POST /ai/improve-brew/{session_id}: session loaded by_user_id → 404 on
+    cross-user (T-19-17 IDOR, not 403 — existence non-leak).
+  - GET /ai/charts/*: both query helpers are per-user scoped (T-19-18).
+  - SSE responses carry X-Accel-Buffering: no for NPM buffering defense (T-19-20).
 """
 
 from __future__ import annotations
@@ -28,17 +42,23 @@ import time
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
 from app.events import AI_THROTTLE_BLOCK, AI_URL_VERIFY
 from app.models.user import User
-from app.services import ai_service, analytics
+from app.services import ai_quota, ai_research, ai_service, analytics, charts
+from app.services import brew_sessions as brew_sessions_service
 from app.services import credentials as credentials_service
 from app.services import wishlist as wishlist_service
 from app.templates_setup import templates
+
+try:
+    from sse_starlette.sse import EventSourceResponse
+except ImportError:  # pragma: no cover
+    EventSourceResponse = None  # type: ignore[assignment,misc]
 
 log = structlog.get_logger(__name__)
 
@@ -471,6 +491,302 @@ def post_wishlist_remove(
         status_code=204,
         headers={"HX-Trigger": "wishlistUpdated"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 19 research routes (AIX-01/03/05/07/D-09/D-16)
+# ---------------------------------------------------------------------------
+
+# HTML fragment for quota-exhausted inline error (D-09)
+_RESEARCH_QUOTA_EXHAUSTED_HTML = (
+    '<div id="research-card" class="text-center py-4 text-amber-600">'
+    "Daily research limit reached. Try again when your quota resets."
+    "</div>"
+)
+
+
+@router.post("/research", response_class=HTMLResponse)
+async def post_ai_research(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Stream a coffee research result via SSE (AIX-01/03/05/07/D-16).
+
+    Gate ordering (all checked BEFORE starting EventSourceResponse):
+      1. Cold-start gate closed → 403 (AIX-03)
+      2. Quota exhausted → 429 + HX-Retarget="#research-card" (AIX-05/D-09)
+
+    Cache hit → instant EventSourceResponse with event:complete (no quota decrement, AIX-04).
+    Cache miss → EventSourceResponse wrapping generate_coffee_research generator.
+    BackgroundTask: _verify_and_persist_url for the buy_url SSRF check (T-19-11).
+
+    user_id ONLY from request.state.user.id (T-19-16 — never from form/query params).
+    CSRF flows through CSRFMiddleware (T-07-11).
+    X-Accel-Buffering: no for NPM defense-in-depth (T-19-20).
+    """
+    if EventSourceResponse is None:
+        return Response(
+            content="SSE not available — sse-starlette not installed.",
+            status_code=503,
+            media_type="text/plain",
+        )
+
+    user_id = user.id
+    form = await request.form()
+    coffee_name = str(form.get("coffee_name") or "").strip()
+    roaster_name = str(form.get("roaster_name") or "").strip() or None
+
+    if not coffee_name:
+        raise HTTPException(status_code=422, detail="coffee_name is required")
+
+    # (1) Cold-start gate (AIX-03)
+    gate = analytics.get_cold_start_counts(db, user_id)
+    if not gate["gate_open"]:
+        log.info("ai.research.gate_closed", user_id=user_id)
+        return Response(
+            content=(
+                '<div id="research-card" class="text-center py-4 text-gray-500">'
+                "Please log more brews and flavor notes before using research."
+                "</div>"
+            ),
+            status_code=403,
+            media_type="text/html",
+        )
+
+    # (2) Quota check (AIX-05/D-09) — before SSE starts
+    remaining = ai_quota.remaining(db, user_id, "coffee_research")
+    if remaining <= 0:
+        reset_time = ai_quota.get_quota_reset_time(db, user_id, "coffee_research")
+        if reset_time:
+            from datetime import UTC, datetime
+
+            delta = reset_time - datetime.now(UTC)
+            hours = int(delta.total_seconds() // 3600)
+            mins = int((delta.total_seconds() % 3600) // 60)
+            content = (
+                f'<div id="research-card" class="text-center py-4 text-amber-600">'
+                f"Daily research limit reached. Resets in {hours}h {mins}m."
+                f"</div>"
+            )
+        else:
+            content = _RESEARCH_QUOTA_EXHAUSTED_HTML
+        log.info("ai.research.quota_exhausted", user_id=user_id)
+        return Response(
+            content=content,
+            status_code=429,
+            media_type="text/html",
+            headers={
+                "HX-Retarget": "#research-card",
+                "HX-Reswap": "outerHTML",
+            },
+        )
+
+    # (3) Get the user's current input signature for prediction versioning
+    current_signature = analytics.compute_input_signature(db, user_id)
+
+    # Schedule buy_url background verification after stream (T-19-11)
+    background_tasks.add_task(_verify_and_persist_url, user_id)
+
+    # Return EventSourceResponse wrapping the generator (cache hit or miss handled inside)
+    generator = ai_research.generate_coffee_research(
+        db,
+        user_id=user_id,
+        coffee_name=coffee_name,
+        roaster_name=roaster_name,
+        current_signature=current_signature,
+    )
+    return EventSourceResponse(
+        generator,
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/research/quota", response_class=HTMLResponse)
+def get_research_quota(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Return the research quota counter fragment (D-09).
+
+    Renders either:
+    - ``"{remaining}/{cap} research calls remaining today"`` when quota > 0
+    - ``"Resets in Hh Mm"`` when quota is exhausted
+    """
+    from datetime import UTC, datetime
+
+    user_id = user.id
+    remaining = ai_quota.remaining(db, user_id, "coffee_research")
+    cap = ai_quota.get_quota_cap("coffee_research")
+
+    if remaining > 0:
+        content = (
+            f'<span id="research-quota" class="text-sm text-gray-500">'
+            f"{remaining}/{cap} research calls remaining today"
+            f"</span>"
+        )
+    else:
+        reset_time = ai_quota.get_quota_reset_time(db, user_id, "coffee_research")
+        if reset_time:
+            delta = reset_time - datetime.now(UTC)
+            hours = int(delta.total_seconds() // 3600)
+            mins = int((delta.total_seconds() % 3600) // 60)
+            content = (
+                f'<span id="research-quota" class="text-sm text-amber-600">'
+                f"Resets in {hours}h {mins}m"
+                f"</span>"
+            )
+        else:
+            content = (
+                '<span id="research-quota" class="text-sm text-gray-500">'
+                "0/20 research calls remaining today"
+                "</span>"
+            )
+    return Response(content=content, status_code=200, media_type="text/html")
+
+
+# ---------------------------------------------------------------------------
+# Phase 19 improve-brew routes (AIX-12/D-12/D-16)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/improve-brew/{session_id}", response_class=HTMLResponse)
+async def post_ai_improve_brew(
+    session_id: int,
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Stream an improve-brew coaching result via SSE (AIX-12/D-12/D-16).
+
+    Gate ordering:
+      1. Session load by_user_id → 404 on cross-user IDOR (T-19-17)
+      2. Quota check (improve_brew bucket) → 429 on exhaustion
+      3. EventSourceResponse(generate_brew_improvement(...))
+
+    user_id ONLY from request.state.user.id (T-19-16).
+    CSRF flows through CSRFMiddleware (T-07-11).
+    X-Accel-Buffering: no for NPM buffering defense (T-19-20).
+    """
+    if EventSourceResponse is None:
+        return Response(
+            content="SSE not available — sse-starlette not installed.",
+            status_code=503,
+            media_type="text/plain",
+        )
+
+    user_id = user.id
+
+    # (1) Session load — user-scoped (IDOR: T-19-17; 404 non-leak like edit_brew_form)
+    session = brew_sessions_service.get_brew_session(db, session_id=session_id, by_user_id=user_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # (2) Quota check (improve_brew bucket — separate from research, D-08)
+    remaining = ai_quota.remaining(db, user_id, "brew_improvement")
+    if remaining <= 0:
+        reset_time = ai_quota.get_quota_reset_time(db, user_id, "brew_improvement")
+        if reset_time:
+            from datetime import UTC, datetime
+
+            delta = reset_time - datetime.now(UTC)
+            hours = int(delta.total_seconds() // 3600)
+            mins = int((delta.total_seconds() % 3600) // 60)
+            content = (
+                f'<div id="improve-result" class="text-center py-4 text-amber-600">'
+                f"Daily brew-improvement limit reached. Resets in {hours}h {mins}m."
+                f"</div>"
+            )
+        else:
+            content = (
+                '<div id="improve-result" class="text-center py-4 text-amber-600">'
+                "Daily brew-improvement limit reached. Try again tomorrow."
+                "</div>"
+            )
+        log.info("ai.improve_brew.quota_exhausted", user_id=user_id, session_id=session_id)
+        return Response(
+            content=content,
+            status_code=429,
+            media_type="text/html",
+            headers={
+                "HX-Retarget": "#improve-result",
+                "HX-Reswap": "outerHTML",
+            },
+        )
+
+    # (3) SSE stream — improve_brew bucket; user_id scoped
+    generator = ai_service.generate_brew_improvement(
+        db,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    return EventSourceResponse(
+        generator,
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/coach", response_class=HTMLResponse)
+def get_ai_coach(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    """Return the session-picker fragment for the 'Coach a brew' link (D-12).
+
+    Lists the user's last ~20 brew sessions. Each entry links to the brew edit
+    page where the improve-brew result card auto-triggers on load.
+    Only the requesting user's sessions are returned (T-19-17 IDOR).
+    """
+    user_id = user.id
+    sessions = brew_sessions_service.list_brew_sessions(db, by_user_id=user_id)[:20]
+
+    # Load coffee names for the picker display
+    # Sessions already ordered newest-first from list_brew_sessions
+    return templates.TemplateResponse(
+        request=request,
+        name="fragments/ai/coach_brew_picker.html",
+        context={"sessions": sessions},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 19 chart JSON routes (VIZ-01/D-17)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/charts/rating-over-time")
+def get_chart_rating_over_time(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> JSONResponse:
+    """Return per-user rating-over-time JSON for Chart.js (VIZ-01/D-17).
+
+    Response: [{date: "YYYY-MM-DD", rating: float}, ...] ordered by date.
+    UNION of brew_sessions + cafe_logs, last 90 days.
+    Per-user scoped on user_id (T-19-18).
+    """
+    data = charts.rating_over_time(db, user.id)
+    return JSONResponse(content=data)
+
+
+@router.get("/charts/flavor-distribution")
+def get_chart_flavor_distribution(
+    request: Request,
+    user: User = Depends(require_user),  # noqa: B008
+    db: Session = Depends(get_session),  # noqa: B008
+) -> JSONResponse:
+    """Return per-user flavor distribution JSON for Chart.js (VIZ-01/D-17).
+
+    Response: [{descriptor: str, count: int}, ...] top-15 by count.
+    UNION of brew + cafe flavor note ids, NO rating floor.
+    Per-user scoped on user_id (T-19-18).
+    """
+    data = charts.flavor_distribution(db, user.id)
+    return JSONResponse(content=data)
 
 
 __all__ = ["router"]

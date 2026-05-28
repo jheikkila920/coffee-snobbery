@@ -12,10 +12,9 @@ Covers the behavior cases from the plan's AIX-12/D-12 requirements:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # --------------------------------------------------------------------------- #
 # Skip gates                                                                  #
@@ -25,6 +24,7 @@ import pytest
 def _require_improve_route() -> None:
     try:
         from app.routers.ai import router  # noqa: F401
+
         route_paths = [r.path for r in router.routes]
         if not any("improve" in p for p in route_paths):
             pytest.skip("plan 19-05 dependency: /ai/improve-brew route not yet added to ai router")
@@ -35,6 +35,7 @@ def _require_improve_route() -> None:
 def _require_coach_route() -> None:
     try:
         from app.routers.ai import router  # noqa: F401
+
         route_paths = [r.path for r in router.routes]
         if not any("coach" in p for p in route_paths):
             pytest.skip("plan 19-05 dependency: /ai/coach route not yet added to ai router")
@@ -97,6 +98,7 @@ def test_improve_brew_cross_user_404(
     # generate_brew_improvement returns event:error with "not found" when session is None
     async def _idor_gen(*args, **kwargs):
         from sse_starlette.sse import ServerSentEvent
+
         # The service emits event:error when session not found, but the ROUTE
         # should return 404 before even calling the generator
         yield ServerSentEvent(data="Brew session not found.", event="error")
@@ -104,7 +106,7 @@ def test_improve_brew_cross_user_404(
     with (
         patch("app.routers.ai.brew_sessions_service") as mock_sessions,
         patch("app.routers.ai.ai_quota") as mock_quota,
-        patch("app.routers.ai.ai_service") as mock_ai_service,
+        patch("app.routers.ai.ai_service"),
     ):
         # Session not found for this user — simulates cross-user IDOR
         mock_sessions.get_brew_session.return_value = None
@@ -162,8 +164,9 @@ def test_improve_brew_sse_on_success(
     fake_session.id = 1
     fake_session.coffee_id = 1
 
-    async def _improve_gen(*args, **kwargs):
+    async def _improve_gen():
         from sse_starlette.sse import ServerSentEvent
+
         yield ServerSentEvent(data="Brew analysis complete.", event="complete")
 
     with (
@@ -174,6 +177,7 @@ def test_improve_brew_sse_on_success(
         mock_sessions.get_brew_session.return_value = fake_session
         mock_quota.remaining.return_value = 10
         mock_quota.get_quota_cap.return_value = 20
+        # generate_brew_improvement is an async generator function
         mock_ai_service.generate_brew_improvement.return_value = _improve_gen()
 
         client = _authed_client(app, seeded_regular_user["signed_cookie"])
@@ -209,7 +213,7 @@ def test_coach_picker_lists_own_sessions(
         s.rating = 4.0
         # Attach a fake coffee
         s.coffee = MagicMock()
-        s.coffee.name = f"Coffee {i+1}"
+        s.coffee.name = f"Coffee {i + 1}"
         fake_sessions.append(s)
 
     with patch("app.routers.ai.brew_sessions_service") as mock_sessions:

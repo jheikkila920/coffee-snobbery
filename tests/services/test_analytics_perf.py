@@ -347,9 +347,7 @@ def _require_ai_recommendations_table() -> None:
         pytest.skip("app.db not importable")
     try:
         with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT to_regclass('public.ai_recommendations')")
-            ).scalar()
+            row = conn.execute(text("SELECT to_regclass('public.ai_recommendations')")).scalar()
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
     if row is None:

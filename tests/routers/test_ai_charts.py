@@ -3,17 +3,17 @@
 Covers:
 
 * ``test_rating_chart_json`` — GET /ai/charts/rating-over-time returns valid JSON (per-user)
-* ``test_flavor_chart_json`` — GET /ai/charts/flavor-distribution returns ≤15 entries, no rating floor
+* ``test_flavor_chart_json`` — GET /ai/charts/flavor-distribution returns ≤15 entries,
+  no rating floor
 * ``test_charts_require_auth`` — unauthenticated → 401/redirect
 """
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # --------------------------------------------------------------------------- #
 # Skip gates                                                                  #
@@ -23,6 +23,7 @@ import pytest
 def _require_charts_routes() -> None:
     try:
         from app.routers.ai import router  # noqa: F401
+
         route_paths = [r.path for r in router.routes]
         if not any("charts" in p for p in route_paths):
             pytest.skip("plan 19-05 dependency: /ai/charts routes not yet added to ai router")
@@ -79,8 +80,6 @@ def test_rating_chart_json(app: Any, seeded_regular_user: dict[str, Any]) -> Non
     """
     _require_charts_routes()
     _require_postgres()
-
-    import json
 
     # Mock charts service to return well-shaped data
     fake_data = [
