@@ -1,0 +1,23 @@
+{# D-16 / AIX-08: non-admin no-key callout. Deliberately omits any admin link
+   or notification affordance — names the social action honestly via the
+   visible copy. Renders on /ai when gate_open AND not ai_key_present AND not
+   is_admin. Neutral cream/espresso palette (different from D-15's amber) —
+   the non-admin state is informational, not actionable. min-h-[14rem]
+   matches cold-start + admin callout for layout parity. #}
+<section aria-labelledby="no-key-non-admin-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800 min-h-[14rem]">
+  <div class="flex items-start gap-3">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-espresso-700 dark:text-cream-100 shrink-0"
+         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+         aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M15 7a2 2 0 11-4 0 2 2 0 014 0zm6 1a8 8 0 11-16 0 8 8 0 0116 0z" />
+    </svg>
+    <div class="flex-1">
+      <h2 id="no-key-non-admin-heading" class="text-xl font-semibold mb-2">AI is not set up</h2>
+      <p class="text-base text-espresso-700 dark:text-cream-200">
+        Ask the household admin to configure an API key.
+      </p>
+    </div>
+  </div>
+</section>
