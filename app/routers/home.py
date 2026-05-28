@@ -21,11 +21,15 @@ responses — no per-route header configuration needed.
 
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.dependencies.auth import require_user
 from app.dependencies.db import get_session
 from app.models.brew_session import BrewSession
@@ -37,24 +41,55 @@ from app.templates_setup import templates
 router = APIRouter()
 
 
+def derive_greeting(username: str | None, *, now: datetime | None = None) -> str:
+    """Return a personalized greeting for the home page H1 (Phase 17 D-10).
+
+    Buckets (in the app's configured timezone): ``[5, 12)`` morning,
+    ``[12, 17)`` afternoon, otherwise evening. ``now`` is injectable so the
+    bucket tests can freeze time without monkeypatching ``datetime.now``.
+
+    Returns ``"Home"`` when ``username`` is missing/empty (defensive fallback;
+    ``require_user`` normally guarantees a user, this is belt-and-suspenders).
+
+    The username is passed straight through — Jinja's autoescape handles
+    HTML-escaping at render time per the project's autoescape invariant. The
+    helper does NOT pre-escape.
+    """
+    if not username:
+        return "Home"
+    h = (now or datetime.now(ZoneInfo(settings.APP_TIMEZONE))).hour
+    if 5 <= h < 12:
+        part = "morning"
+    elif 12 <= h < 17:
+        part = "afternoon"
+    else:
+        part = "evening"
+    return f"Good {part}, {username}"
+
+
 @router.get("/", response_class=HTMLResponse)
 def home_shell(
     request: Request,
     user: User = Depends(require_user),  # noqa: B008
     db: Session = Depends(get_session),  # noqa: B008
 ) -> Response:
-    """Render the analytics home shell (Phase 6).
+    """Render the analytics home shell.
 
-    Calls all three eager analytics functions (cold-start gate, recent brews,
-    unrated coffees) before rendering.  The ``gate`` dict drives the cold-start
-    branch in the template; recent brews + unrated coffees always render (D-01).
-
-    The five aggregate-card sections are lazy-loaded via HTMX in the template
-    (staggered 100–500ms, HOME-09); their fragment endpoints live in Plan 06-03.
+    Phase 17 (IA restructure) reduced the home composition to: personalized
+    greeting + action row + Recent brews + Not tried yet + Top Coffees
+    (eager, no-floor per D-09) + "See AI recommendations →" link + Wishlist.
+    The five AI-aggregate cards moved to ``/ai`` (plan 17-04); the cold-start
+    meter moved with them (D-11). ``gate`` is still computed and passed into
+    the view context because plan 17-03 (DIST-07 banner) and plan 17-04 (/ai
+    page) may consume it from this same shape; the home template no longer
+    branches on it.
     """
     gate = analytics.get_cold_start_counts(db, user.id)
     recent_brews = analytics.get_recent_brews(db, user.id)
     unrated_coffees = analytics.get_unrated_coffees(db, user.id)
+    top_coffees = analytics.get_top_coffees(db, user.id, min_sessions=0)
+    top_coffees_all_unrated = not top_coffees and not _has_rated_sessions(db, user.id)
+    greeting = derive_greeting(user.username)
     return templates.TemplateResponse(
         request=request,
         name="pages/home.html",
@@ -62,6 +97,9 @@ def home_shell(
             "gate": gate,
             "recent_brews": recent_brews,
             "unrated_coffees": unrated_coffees,
+            "top_coffees": top_coffees,
+            "top_coffees_all_unrated": top_coffees_all_unrated,
+            "greeting": greeting,
         },
     )
 
