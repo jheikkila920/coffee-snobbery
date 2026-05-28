@@ -1,0 +1,26 @@
+{# D-15 / AIX-08: admin no-key callout. Renders on /ai when gate_open AND not
+   ai_key_present AND is_admin. Distinct amber palette + key/lock icon + "AI
+   keys needed" headline + Go to Admin primary button. min-h-[14rem] matches
+   the cold-start fragment so the layout doesn't jump across state transitions
+   (Pitfall F). #}
+<section aria-labelledby="no-key-admin-heading"
+         class="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:bg-amber-900/20 dark:border-amber-700 min-h-[14rem]">
+  <div class="flex items-start gap-3">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-amber-700 shrink-0"
+         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+         aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M15 7a2 2 0 11-4 0 2 2 0 014 0zm6 1a8 8 0 11-16 0 8 8 0 0116 0z" />
+    </svg>
+    <div class="flex-1">
+      <h2 id="no-key-admin-heading" class="text-xl font-semibold mb-2">AI keys needed</h2>
+      <p class="text-base mb-4">
+        Add an API key in Admin to unlock AI recommendations for the household.
+      </p>
+      <a href="/admin/credentials"
+         class="inline-flex items-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 min-h-[44px]">
+        Go to Admin
+      </a>
+    </div>
+  </div>
+</section>
