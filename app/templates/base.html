@@ -46,6 +46,11 @@
     <script defer src="/static/js/alpine-components/nav-bar.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/account-dropdown.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/ios-banner.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 17 DIST-07 banner-dismiss component (plan 17-03) — registers
+       Alpine.data('bannerDismiss') before the @alpinejs/csp core boots; uses
+       snobbery:dist07-dismissed sessionStorage key (session-scoped, NOT
+       persistent across tab close). #}
+    <script defer src="/static/js/alpine-components/banner-dismiss.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Phase 13 dark-mode toggle component (plan 13-05 C4) — registers Alpine.data('darkToggle')
        before the @alpinejs/csp core boots; uses snobbery:theme localStorage key. #}
     <script defer src="/static/js/alpine-components/dark-toggle.js" nonce="{{ csp_nonce(request) }}"></script>
