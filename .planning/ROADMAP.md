@@ -122,7 +122,20 @@ Plans:
   4. After `/setup`, a new admin sees a clear in-page prompt to configure AI API keys (since Admin is no longer on the nav)
   5. When a user meets the cold-start threshold but no AI key is configured, the AI page shows a prominent link to the Admin config page — distinct from the not-enough-data empty state
   6. After a rebuild and deploy, installed PWAs pick up the updated nav without a manual cache clear
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+**Wave 1**
+- [ ] 17-01-PLAN.md — IA-01/IA-02 nav reshape: drop bottom Admin tab, add AI tab, add Config Admin entry (D-01/D-02/D-04/D-05/D-17/D-18)
+- [ ] 17-02-PLAN.md — IA-03/IA-04/IA-06 home composition: greeting, eager Top Coffees no-floor, drop AI surfaces + cold-start meter (D-06..D-11)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 17-03-PLAN.md — DIST-07 admin AI-key setup banner: sessionStorage dismiss, admin+no-key gate, /admin/credentials button (D-19/D-21)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 17-04-PLAN.md — IA-02/IA-03/AIX-08 /ai page shell: three-branch state machine, AIX-08 admin + non-admin callouts, research-coming-soon stub (D-03/D-12/D-13/D-14/D-15/D-16/D-20)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 17-05-PLAN.md — IA-05 phase close: container rebuild, full suite, ruff gates, on-device PWA cache-freshness verification (manual checkpoint)
 **UI hint**: yes
 
 ### Phase 18: Self-Host Packaging

@@ -1,0 +1,120 @@
+{# Recovered AI surfaces from app/templates/pages/home.html PRE-Phase-17-02 (commit 6b856de and earlier).
+
+   Purpose: Plan 17-04 Task 6 (creating pages/ai.html) mounts these blocks at the new /ai location.
+   Plan 17-02 Task 4 deletes these blocks from home.html as part of the IA-03 reduction.
+
+   This snippet is a WORKING FILE staged during plan 17-02 Task 4 to give plan 17-04 a stable
+   recovery source — replaces the brittle `git show <commit-sha>:app/templates/pages/home.html`
+   instruction (commit SHAs drift between branches and rebases).
+
+   Variable contract: depends on `gate` (cold-start dict) being passed in view context.
+   The `{% if not gate.gate_open %}` outer wrap is INCLUDED here for completeness — plan 17-04
+   uses the gate_open branch only (`{% else %}` content); the below-gate branch on /ai uses
+   the moved fragments/ai/_cold_start.html include instead.
+
+   DO NOT commit this file as production code. It exists only in .planning/ for executor reference. #}
+
+{# === Block A: AI hero (lazy mount, /home/cards/ai-recommendation) === #}
+{# On /ai the hx-trigger delay drops from 600ms to 100ms — hero is now the first card. #}
+<section aria-labelledby="ai-rec-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="ai-rec-heading" class="text-xl font-semibold mb-4">What to buy next</h2>
+  <div id="ai-rec-hero"
+       hx-get="/home/cards/ai-recommendation"
+       hx-trigger="load delay:600ms"
+       hx-swap="outerHTML">
+    <div class="animate-pulse space-y-2">
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+    </div>
+  </div>
+</section>
+
+{# === Block B: AI tools (paste-rank link + wishlist link + equipment form, generate-on-click) === #}
+<section aria-labelledby="ai-tools-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="ai-tools-heading" class="text-xl font-semibold mb-4">AI tools</h2>
+  <div class="flex flex-wrap gap-3 mb-4">
+    <a href="/ai/paste-rank"
+       class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+      Rank these for me
+    </a>
+    <a href="/ai/wishlist"
+       class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
+      Wishlist
+    </a>
+  </div>
+  {# Equipment rec: generate-on-click (D-05). Never auto-loads. #}
+  <div>
+    <form hx-post="/ai/equipment"
+          hx-target="#equipment-rec-result"
+          hx-swap="innerHTML">
+      <input type="hidden"
+             name="X-CSRF-Token"
+             value="{{ request.cookies.get('csrftoken', '') }}">
+      <button type="submit"
+              class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800">
+        Analyze my setup
+      </button>
+    </form>
+    <div id="equipment-rec-result" class="mt-3"></div>
+  </div>
+</section>
+
+{# === Block C: Top Coffees lazy mount (/home/cards/top-coffees) === #}
+{# NOTE: On /ai we do NOT remount Top Coffees — it lives eagerly on home.html per D-08.
+   Included here for completeness; plan 17-04 should NOT include this section. #}
+<section aria-labelledby="top-coffees-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="top-coffees-heading" class="text-xl font-semibold mb-4">Top Coffees</h2>
+  <div hx-get="/home/cards/top-coffees"
+       hx-trigger="load delay:100ms"
+       hx-swap="innerHTML">
+    <div class="animate-pulse space-y-2">
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+    </div>
+  </div>
+</section>
+
+{# === Block D: Preference Profile (lazy mount, /home/cards/preference-profile) === #}
+<section aria-labelledby="preference-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="preference-heading" class="text-xl font-semibold mb-4">Preference Profile</h2>
+  <div hx-get="/home/cards/preference-profile"
+       hx-trigger="load delay:200ms"
+       hx-swap="innerHTML">
+    <div class="animate-pulse space-y-2">
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+    </div>
+  </div>
+</section>
+
+{# === Block E: Top Flavor Descriptors (lazy mount, /home/cards/flavor-descriptors) === #}
+<section aria-labelledby="flavor-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="flavor-heading" class="text-xl font-semibold mb-4">Top Flavor Descriptors</h2>
+  <div hx-get="/home/cards/flavor-descriptors"
+       hx-trigger="load delay:300ms"
+       hx-swap="innerHTML">
+    <div class="animate-pulse space-y-2">
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+    </div>
+  </div>
+</section>
+
+{# === Block F: Sweet Spots (lazy mount, /home/cards/sweet-spots) === #}
+<section aria-labelledby="sweet-spots-heading"
+         class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+  <h2 id="sweet-spots-heading" class="text-xl font-semibold mb-4">Sweet Spots</h2>
+  <div hx-get="/home/cards/sweet-spots"
+       hx-trigger="load delay:500ms"
+       hx-swap="innerHTML">
+    <div class="animate-pulse space-y-2">
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+      <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+    </div>
+  </div>
+</section>
