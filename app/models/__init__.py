@@ -12,6 +12,8 @@ reuses an existing one.
 
 from __future__ import annotations
 
+from app.models.ai_coffee_research_cache import AICoffeeResearchCache
+from app.models.ai_rating_prediction import AIRatingPrediction
 from app.models.ai_recommendation import AIRecommendation
 from app.models.api_credential import ApiCredential
 from app.models.app_setting import AppSetting
@@ -32,6 +34,8 @@ from app.models.varietal import Varietal, coffee_varietals  # noqa: F401
 from app.models.wishlist_entry import WishlistEntry
 
 __all__ = [
+    "AICoffeeResearchCache",
+    "AIRatingPrediction",
     "AIRecommendation",
     "ApiCredential",
     "AppSetting",
