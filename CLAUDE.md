@@ -152,6 +152,9 @@ tar -xzf /app/data/backups/photos_YYYY-MM-DD.tar.gz -C /app/data/photos
 | `entrypoint.sh` | Runs migrations on container start |
 | `.env.example` | Required env vars with generation hints |
 | `docker-compose.yml` | Two-service stack, container names, volumes, network |
+| `CONTRIBUTING.md` | Dev-facing guide: local loop, fast iteration, tests, lint, release ritual, GHCR public-visibility flip. Carved from README in Phase 18. |
+| `docker-compose.override.yml.example` | Dev override template — `cp` to `docker-compose.override.yml` (gitignored) to enable the local `build:` block + the `coffee-snobbery-test` service. |
+| `.github/workflows/release.yml` | Tag-triggered (`v*`) two-job release CI: test gate → multi-arch GHCR push (added Phase 18). |
 
 ## Adding a new env var
 
