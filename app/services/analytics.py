@@ -544,3 +544,19 @@ def compute_input_signature(db: Session, user_id: int) -> str:
     ]
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+# --------------------------------------------------------------------------- #
+# Research quota delegation (AIX-05 / D-08)                                   #
+# --------------------------------------------------------------------------- #
+
+
+def count_research_calls_in_last_24h(db: Session, user_id: int) -> int:
+    """Count successful coffee_research calls in the rolling 24h window.
+
+    Thin delegation to ai_quota.count_calls_last_24h so callers that already
+    import analytics do not need to import ai_quota separately.
+    """
+    from app.services.ai_quota import count_calls_last_24h  # local import avoids circular dep
+
+    return count_calls_last_24h(db, user_id, "coffee_research")
