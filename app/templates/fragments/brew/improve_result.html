@@ -1,0 +1,61 @@
+{# Improve-brew coaching result card (AIX-12 / D-12).
+   Rendered as event:complete data by POST /ai/improve-brew/{session_id} SSE stream.
+   Displayed inline below the brew edit form.
+
+   Context (from BrewImproveSchema):
+     result                  — BrewImproveSchema: summary_prose, unchanged_parameters[],
+                               next_try[BrewParameterChangeSchema]
+     session_id              — int: the brew session ID
+
+   BrewParameterChangeSchema fields per item in next_try:
+     parameter       — str: 'grind' | 'ratio' | 'temp_c' | 'brewer' | 'recipe'
+     suggested_value — str: e.g. '2 clicks coarser', '1:16', '93 C'
+     rationale       — str: 1-2 sentence explanation
+
+   CSP-clean. All values autoescaped. Never use the safe filter (T-19-21).
+#}
+<div id="improve-brew-result"
+     class="mt-4 rounded-lg border border-espresso-200 bg-cream-50 p-4 dark:bg-espresso-950 dark:border-espresso-700 space-y-4">
+
+  <h3 class="text-base font-semibold text-espresso-900 dark:text-cream-100">Improvement suggestions</h3>
+
+  {# Summary prose — plain text lines, never the safe filter #}
+  {% if result.summary_prose %}
+    <div class="text-sm text-espresso-700 dark:text-cream-300 space-y-1">
+      {% for line in result.summary_prose.split('\n') %}
+        {% if line.strip() %}<p>{{ line }}</p>{% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# Unchanged parameters — sanity check that the LLM saw the session's dials #}
+  {% if result.unchanged_parameters %}
+    <div>
+      <p class="text-xs font-semibold text-espresso-500 dark:text-cream-400 uppercase tracking-wide mb-1">Looks good — keep these</p>
+      <div class="flex flex-wrap gap-2">
+        {% for param in result.unchanged_parameters %}
+          <span class="px-2 py-0.5 rounded text-sm bg-espresso-100 text-espresso-700 dark:bg-espresso-800 dark:text-cream-300">{{ param }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# next_try — ordered list of parameter changes (highest priority first) #}
+  {% if result.next_try %}
+    <div>
+      <p class="text-xs font-semibold text-espresso-500 dark:text-cream-400 uppercase tracking-wide mb-2">Try next</p>
+      <ul class="space-y-3">
+        {% for change in result.next_try %}
+          <li class="rounded border border-espresso-100 dark:border-espresso-700 p-3">
+            <div class="flex items-baseline gap-2 mb-1">
+              <span class="text-xs font-semibold text-espresso-500 dark:text-cream-400 uppercase tracking-wide">{{ change.parameter }}</span>
+              <span class="text-sm font-semibold text-espresso-900 dark:text-cream-100">{{ change.suggested_value }}</span>
+            </div>
+            <p class="text-sm text-espresso-600 dark:text-cream-300">{{ change.rationale }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+</div>

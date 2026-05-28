@@ -325,6 +325,45 @@
             </button>
             </div>{# end flex items-center gap-3 #}
           </div>
+
+          {# AIX-12 / D-12: Suggest improvements button (edit mode only).
+             Placed below the sticky save bar, outside the fixed overlay, so it
+             scrolls with the form. The SSE result card (#improve-brew-result)
+             renders directly below. Button uses hx-ext="sse" on its parent div
+             so HTMX SSE extension handles the POST /ai/improve-brew/{id} stream.
+
+             coach=1 auto-trigger: when arriving from /ai/coach the edit page
+             URL carries ?coach=1; hx-trigger="load[window.location.search.includes('coach=1')]"
+             fires once on page load. hx-indicator + hx-disabled-elt for AIX-10. #}
+          {% if is_edit %}
+          <div id="improve-brew-section"
+               hx-ext="sse"
+               sse-connect=""
+               sse-swap="complete"
+               sse-close="complete error"
+               class="mt-4">
+            <form id="improve-brew-form"
+                  hx-post="/ai/improve-brew/{{ session_id }}"
+                  hx-target="#improve-brew-result-mount"
+                  hx-swap="innerHTML"
+                  hx-indicator="#improve-spinner"
+                  hx-disabled-elt="find button[type=submit]">
+              <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+              <button type="submit"
+                      class="inline-flex items-center gap-2 rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800 min-h-[44px]">
+                Suggest improvements
+                <span id="improve-spinner" class="htmx-indicator" aria-hidden="true">
+                  <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                </span>
+              </button>
+            </form>
+            {# SSE result mount — receives improve_result.html fragment on event:complete #}
+            <div id="improve-brew-result-mount" class="mt-2"></div>
+          </div>
+          {% endif %}
         </form>
       </div>
     </div>
