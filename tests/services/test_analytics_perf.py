@@ -331,3 +331,69 @@ def test_analytics_query_latency(clean_analytics_perf: None) -> None:
             f"Analytics queries exceeded the {BUDGET_MS}ms budget:\n"
             + "\n".join(f"  - {f}" for f in failures)
         )
+
+
+# --------------------------------------------------------------------------- #
+# AIX-13: latency percentile query (plan 19-05, D-15)                        #
+# --------------------------------------------------------------------------- #
+
+
+def _require_ai_recommendations_table() -> None:
+    try:
+        from sqlalchemy import text
+
+        from app.db import engine
+    except ImportError:
+        pytest.skip("app.db not importable")
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT to_regclass('public.ai_recommendations')")
+            ).scalar()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
+    if row is None:
+        pytest.skip("ai_recommendations table not present — migration not applied")
+
+
+def test_latency_percentile_query() -> None:
+    """p50/p95 PERCENTILE_CONT query over ai_recommendations.duration_ms executes (AIX-13/D-15).
+
+    The query runs against the live table (which may be empty — that's fine: an
+    empty result set is still a successful execution). Grouped by recommendation_type.
+    Uses PERCENTILE_CONT(0.50) and PERCENTILE_CONT(0.95) within-group expressions.
+    """
+    _require_postgres()
+    _require_ai_recommendations_table()
+
+    from sqlalchemy import text
+
+    from app.db import SessionLocal
+
+    stmt = text(
+        """
+        SELECT
+            recommendation_type,
+            PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY duration_ms) AS p50_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
+            COUNT(*) AS sample_count
+        FROM ai_recommendations
+        WHERE
+            duration_ms IS NOT NULL
+            AND generated_at >= NOW() - INTERVAL '30 days'
+        GROUP BY recommendation_type
+        ORDER BY recommendation_type
+        """
+    )
+
+    with SessionLocal() as db:
+        rows = db.execute(stmt).all()
+
+    # Query must execute without error; rows may be empty on a fresh DB
+    assert isinstance(rows, list), "Expected a list of rows from the percentile query"
+    # Each row must have the expected columns when non-empty
+    for row in rows:
+        assert hasattr(row, "recommendation_type"), "Row missing recommendation_type"
+        assert hasattr(row, "p50_ms"), "Row missing p50_ms"
+        assert hasattr(row, "p95_ms"), "Row missing p95_ms"
+        assert hasattr(row, "sample_count"), "Row missing sample_count"
