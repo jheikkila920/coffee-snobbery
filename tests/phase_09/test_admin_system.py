@@ -226,7 +226,12 @@ class TestSystemInfo:
 
             app_version = pkg_version("coffee-snobbery")
         except Exception:
-            app_version = "0.1.0"  # pyproject.toml fallback value
+            import tomllib
+            from pathlib import Path
+
+            _pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+            with _pyproject.open("rb") as _f:
+                app_version = tomllib.load(_f)["project"]["version"]
         assert app_version in body, f"App version '{app_version}' not found in /admin body"
 
         # DB version — postgres version string contains "PostgreSQL"
