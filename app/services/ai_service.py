@@ -443,11 +443,16 @@ def suggest_recipe(
     row = db.execute(stmt).first()
 
     if row is None:
+        # D-11: no_match removed; required fields carry sensible defaults when
+        # no matching recipe exists in the catalog.  Plan 19-02 wires the LLM
+        # to populate these from the structured-output tool call.
         return RecipeSuggestionSchema(
             recipe_id=None,
             recipe_name=None,
             summary="No matching recipe yet — try the recipe builder.",
-            no_match=True,
+            ratio="1:15",
+            temp_c=94,
+            grind_hint="medium-fine",
         )
     return RecipeSuggestionSchema(
         recipe_id=row.recipe_id,
@@ -456,7 +461,9 @@ def suggest_recipe(
             f"Based on your rated sessions, {row.recipe_name!r} averaged "
             f"{float(row.avg_rating):.2f}/5 on this bean style."
         ),
-        no_match=False,
+        ratio="1:15",
+        temp_c=94,
+        grind_hint="medium-fine",
     )
 
 

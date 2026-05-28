@@ -30,3 +30,5 @@ Pillow>=12.2,<13
 APScheduler>=3.11,<4
 anthropic>=0.102,<1.0
 openai>=2.37,<3.0
+# Phase 19: SSE streaming for research, improve-brew, what-to-buy-next flows (D-16)
+sse-starlette>=3.4,<4

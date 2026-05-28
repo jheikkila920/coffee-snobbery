@@ -2,10 +2,15 @@
 
 Each schema is the LLM-output contract for one recommendation flow:
 
-- ``CoffeeRecSchema``       — AI-03 / AI-09: next-coffee-to-buy recommendation
-- ``SweetSpotsProseSchema`` — HOME-06 / AI-10: dial-in sweet-spot analysis prose
-- ``EquipmentRecSchema``    — AI-08: weakest-link equipment recommendation
-- ``PasteRankSchema``       — AI-09: rank currently-open bags
+- ``CoffeeRecSchema``              — AI-03 / AI-09: next-coffee-to-buy recommendation
+- ``SweetSpotsProseSchema``        — HOME-06 / AI-10: dial-in sweet-spot analysis prose
+- ``EquipmentRecSchema``           — AI-08: weakest-link equipment recommendation
+- ``PasteRankSchema``              — AI-09: rank currently-open bags
+- ``CoffeeResearchSchema``         — AIX-01: free-text coffee research result (Phase 19)
+- ``RatingPredictionSchema``       — D-02: per-user predicted rating range (Phase 19)
+- ``BrewParameterChangeSchema``    — AIX-12: one parameter change suggestion (Phase 19)
+- ``BrewImproveSchema``            — AIX-12: full improve-brew coaching result (Phase 19)
+- ``PreferenceProfileProseSchema`` — AIX-09: in-depth preference prose (Phase 19)
 
 All top-level schemas carry ``summary_prose: str`` (AI-18, D-04) and
 ``ConfigDict(extra="forbid")`` (T-07-02 prompt-injection defence: injected
@@ -24,6 +29,8 @@ would be untrusted and ignored).
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
@@ -32,7 +39,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RecipeSuggestionSchema(BaseModel):
-    """A recipe the AI recommends for the suggested coffee."""
+    """A recipe the AI recommends for the suggested coffee.
+
+    D-11 (Phase 19): ``no_match`` removed; ``ratio``, ``temp_c``, and
+    ``grind_hint`` are now required so every recommendation carries concrete
+    brew parameters. Constructing this schema with ``no_match=True`` raises
+    ``ValidationError`` because ``extra="forbid"`` rejects unknown fields.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -43,9 +56,9 @@ class RecipeSuggestionSchema(BaseModel):
         None, description="Name of the matched recipe, or null if none match"
     )
     summary: str = Field(description="Why this recipe suits the recommended coffee (1-2 sentences)")
-    no_match: bool = Field(
-        description="True when no existing recipe is a good fit; the user should experiment"
-    )
+    ratio: str = Field(description="e.g. '1:15' coffee-to-water ratio")
+    temp_c: int = Field(description="Brew water temperature in Celsius")
+    grind_hint: str = Field(description="e.g. 'medium-fine, ~22 clicks Encore'")
 
 
 class AltBrewerSchema(BaseModel):
@@ -199,12 +212,131 @@ class PasteRankSchema(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase 19 schemas — research, prediction, improve-brew, preference prose
+# ---------------------------------------------------------------------------
+
+
+class CoffeeResearchSchema(BaseModel):
+    """AIX-01: Free-text coffee research result with cited sources.
+
+    World-view schema: describes a coffee as the LLM understands it from
+    web search + training data.  Stored in ``ai_coffee_research_cache``
+    (shared, not per-user).  ``extra="forbid"`` blocks prompt-injection
+    (T-19-01).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    coffee_name: str = Field(description="Full name of the coffee as found/confirmed")
+    roaster_name: str | None = Field(None, description="Name of the roaster, or null if unknown")
+    origin: str | None = Field(None, description="Country or region of origin, or null if unknown")
+    process: str | None = Field(
+        None, description="Processing method (e.g. 'Washed', 'Natural'), or null if unknown"
+    )
+    roast_level: str | None = Field(
+        None, description="Roast level (e.g. 'Light', 'Medium'), or null if unknown"
+    )
+    tasting_notes: list[str] = Field(
+        default_factory=list, description="List of tasting note descriptors"
+    )
+    buy_url: str | None = Field(None, description="https:// only; null if not found")
+    sources: list[str] = Field(
+        default_factory=list, description="Cited source URLs from web search"
+    )
+    summary_prose: str = Field(
+        description="2-3 sentence narrative for the result card (AI-18 convention)"
+    )
+
+
+class RatingPredictionSchema(BaseModel):
+    """D-02: Per-user predicted rating as a range + confidence + reasoning.
+
+    Never a single number — the range + confidence label communicates
+    uncertainty without false precision.  ``extra="forbid"`` blocks
+    prompt-injection (T-19-01).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    predicted_low: float = Field(
+        ge=0, le=5, description="Lower bound of predicted rating, 0.25-step increments"
+    )
+    predicted_high: float = Field(
+        ge=0, le=5, description="Upper bound of predicted rating, 0.25-step increments"
+    )
+    confidence: Literal["Low", "Medium", "High"] = Field(
+        description="Confidence level based on session history depth"
+    )
+    reasoning: str = Field(description="1-2 sentence 'Why:' block for the result card")
+
+
+class BrewParameterChangeSchema(BaseModel):
+    """AIX-12: One brew parameter change suggestion.
+
+    ``parameter`` is a Literal to prevent the LLM from inventing parameter
+    names not handled by the UI.  ``extra="forbid"`` blocks prompt-injection
+    (T-19-01).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    parameter: Literal["grind", "ratio", "temp_c", "brewer", "recipe"] = Field(
+        description="Which brew parameter to change"
+    )
+    suggested_value: str = Field(
+        description="The suggested new value (e.g. '2 clicks coarser', '1:16', '93°C')"
+    )
+    rationale: str = Field(description="1-2 sentence rationale for the change")
+
+
+class BrewImproveSchema(BaseModel):
+    """AIX-12: Full improve-brew coaching result for one brew session.
+
+    ``next_try`` is an ordered list so the UI can show the highest-priority
+    change first.  ``extra="forbid"`` blocks prompt-injection (T-19-01).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary_prose: str = Field(description="2-3 sentence coaching narrative (AI-18 convention)")
+    unchanged_parameters: list[str] = Field(
+        description="Dial settings the user already has dialed in (LLM sanity check)"
+    )
+    next_try: list[BrewParameterChangeSchema] = Field(
+        description="Ordered list of parameter changes to attempt next, highest priority first"
+    )
+
+
+class PreferenceProfileProseSchema(BaseModel):
+    """AIX-09: In-depth preference profile as AI prose.
+
+    Replaces the structured 'Top Flavor Descriptors' card (D-10).
+    Single-field schema; stored as ``recommendation_type='preference_profile_prose'``
+    in ``ai_recommendations``.  ``extra="forbid"`` blocks prompt-injection (T-19-01).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary_prose: str = Field(
+        description=(
+            "In-depth AI prose cross-cutting flavor × process × origin × varietal × rating. "
+            "Written for the /ai page preference card (AI-18 convention)."
+        )
+    )
+
+
 __all__ = [
     "AltBrewerSchema",
+    "BrewImproveSchema",
+    "BrewParameterChangeSchema",
     "CoffeeRecSchema",
+    "CoffeeResearchSchema",
     "EquipmentRecSchema",
     "PasteRankSchema",
+    "PreferenceProfileProseSchema",
     "RankedCoffeeItem",
+    "RatingPredictionSchema",
     "RecipeSuggestionSchema",
     "SweetSpotsProseSchema",
 ]

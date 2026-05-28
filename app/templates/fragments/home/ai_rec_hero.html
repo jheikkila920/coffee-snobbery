@@ -56,7 +56,7 @@
     {% set rs = prose.recipe_suggestion %}
     <div class="rounded border border-espresso-100 dark:border-espresso-700 p-3 text-sm">
       <p class="font-medium text-espresso-800 dark:text-cream-100 mb-1">Suggested recipe</p>
-      {% if rs.no_match %}
+      {% if rs.recipe_id is none %}
         <p class="text-espresso-600 dark:text-cream-300">
           No matching recipe found.
           <a href="/recipes" class="underline hover:text-espresso-800">Browse recipes</a>
