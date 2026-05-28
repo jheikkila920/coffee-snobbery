@@ -304,24 +304,14 @@ def test_happy_path_full_chain(client) -> None:
         f"home shell must always render the 'Recent brews' section; got: {r_home.text[:500]}"
     )
 
-    # The cold-start gate check: we just logged 1 session (< 3 needed).
-    # The home page renders either the cold-start meter OR the full analytics
-    # cards. Assert one of the two stable markers is present.
-    cold_start_active = "Build your taste profile." in r_home.text
-    analytics_active = "Top Coffees" in r_home.text or "What to buy next" in r_home.text
-
-    assert cold_start_active or analytics_active, (
-        "home shell must render either the cold-start meter "
-        "('Build your taste profile.') or analytics cards "
-        "('Top Coffees' / 'What to buy next'); "
-        f"got: {r_home.text[:600]}"
-    )
-
-    # With only 1 brew session the cold-start gate should still be closed.
-    # Confirm the progress meter is present (the `role="progressbar"` attribute
-    # lives in the _cold_start.html include).
-    assert 'role="progressbar"' in r_home.text, (
-        "home shell must include the cold-start progress meter after 1 brew session "
-        "(gate requires 3 sessions); missing progressbar role attribute. "
-        f"Body: {r_home.text[:500]}"
+    # Phase 17 (D-11): home no longer renders the cold-start meter — that
+    # surface moved to /ai (plan 17-04). Home is now invariant across gate
+    # states. After Phase 17, the home shell ALWAYS renders the Top Coffees
+    # section heading (eager, no-floor per D-08/D-09) regardless of whether
+    # the user has any rated sessions yet. Confirm that stable marker is
+    # present after 1 brew session.
+    assert "Top Coffees" in r_home.text, (
+        "home shell must render the eager 'Top Coffees' section after 1 "
+        "brew session (Phase 17 D-08 — gate no longer hides this on home); "
+        f"got: {r_home.text[:500]}"
     )

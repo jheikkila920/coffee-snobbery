@@ -1,28 +1,22 @@
 {% extends "base.html" %}
 {% block page_title %}Home{% endblock %}
 {% block content %}
-  {# Analytics home page (Phase 6). Eager render: recent brews (D-01, HOME-07) +
-     cold-start gate check. Above-gate users see five staggered lazy-load aggregate
-     cards (HOME-09). The Phase 7 AI-card slot is a Jinja comment — not a live trigger.
-     All values autoescaped. CSP-clean. #}
+  {# Phase 17 home composition (IA-03 / IA-04 / IA-06 + D-06..D-11):
+     greeting H1 + three-button action row + Recent brews (eager) + Not tried
+     yet (lazy) + Top Coffees (eager, no-floor) + "See AI recommendations →"
+     link + Wishlist card. AI surfaces moved to /ai (plan 17-04). Cold-start
+     meter moved with them per D-11 — home is now invariant across gate
+     states. All values autoescaped. CSP-clean. #}
   <main class="mx-auto max-w-6xl px-6 py-12">
+    {# DIST-07 banner include — plan 17-03 will replace this comment with
+       {% include "fragments/ai_key_setup_banner.html" %} once that fragment
+       exists. Placeholder keeps the merge surface minimal. #}
     <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
-      <h1 class="text-2xl font-semibold">Home</h1>
-      {# NEW-10: equal-width, equal-height action buttons. Each is flex-1 in a
-         flex row with identical padding + min-height so all three (Admin, Guided
-         Brew, Log Session) render at the same size at 375px and up. Admin is
-         conditionally rendered; the remaining buttons still share equal flex-1
-         width among however many are present. #}
+      <h1 class="text-2xl font-semibold">{{ greeting }}</h1>
+      {# D-06 action row: Guided Brew + Log session + Quick rate.
+         No Admin button on home — admins reach Admin from Config per IA-01.
+         Three equal flex-1 buttons; matches the /brew header from Phase 16. #}
       <div class="flex items-center gap-3">
-        {# D-03: minimal admin entry link — is_admin-gated; full nav is Phase 11 #}
-        {% if request.state.user and request.state.user.is_admin %}
-          <a href="/admin"
-             class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-base font-semibold min-h-[44px] hover:bg-espresso-100 dark:hover:bg-espresso-800">
-            Admin
-          </a>
-        {% endif %}
-        {# C5: Guided Brew entry point — routes to /recipes (recipe list carries
-           the "Start guided brew" control per eafc6e3 fix). #}
         <a href="/recipes"
            class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-base font-semibold min-h-[44px] hover:bg-espresso-100 dark:hover:bg-espresso-800">
           Guided Brew
@@ -31,20 +25,23 @@
            class="flex-1 inline-flex items-center justify-center rounded bg-espresso-700 px-4 py-2 text-base font-semibold min-h-[44px] text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
           Log session
         </a>
+        <a href="/cafe-logs/new"
+           class="flex-1 inline-flex items-center justify-center rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-base font-semibold min-h-[44px] hover:bg-espresso-100 dark:hover:bg-espresso-800">
+          Quick rate
+        </a>
       </div>
     </header>
 
     <div class="space-y-8">
 
-      {# Recent brews — always visible regardless of gate (D-01, HOME-07).
-         Eager inline include: no HTMX request needed for first paint. #}
+      {# Recent brews — eager include, always visible (D-06 item 2). #}
       <section aria-labelledby="recent-brews-heading"
                class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
         <h2 id="recent-brews-heading" class="text-xl font-semibold mb-4">Recent brews</h2>
         {% include "fragments/home/recent_brews.html" %}
       </section>
 
-      {# Unrated coffees — lazy loaded (load delay:150ms) but always visible (D-01, HOME-08). #}
+      {# Not tried yet — lazy loaded (load delay:150ms), always visible (D-06 item 3). #}
       <section aria-labelledby="unrated-heading"
                class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
         <h2 id="unrated-heading" class="text-xl font-semibold mb-4">Not tried yet</h2>
@@ -58,119 +55,39 @@
         </div>
       </section>
 
-      {# Cold-start gate: below-gate users see the progress meter; above-gate users
-         see the AI top-hero card (D-01) + five staggered aggregate cards (HOME-09). #}
-      {% if not gate.gate_open %}
-        {% include "fragments/home/_cold_start.html" %}
-      {% else %}
+      {# Top Coffees — EAGER include of the row fragment (D-08). Uses the
+         no-floor variant (D-09 / IA-06) populated by home_shell. The shared
+         fragments/home/top_coffees.html template expects `rows` and
+         `all_unrated`; we forward them via {% with %} so the fragment
+         renders identically when included eagerly here or fetched via
+         the /home/cards/top-coffees endpoint. The "See AI recommendations →"
+         breadcrumb (D-06 item 5) lives just below this section. #}
+      <section aria-labelledby="top-coffees-heading"
+               class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+        <h2 id="top-coffees-heading" class="text-xl font-semibold mb-4">Top Coffees</h2>
+        {% with rows=top_coffees, all_unrated=top_coffees_all_unrated %}
+          {% include "fragments/home/top_coffees.html" %}
+        {% endwith %}
+        <p class="mt-3 text-sm">
+          <a href="/ai"
+             class="text-espresso-700 dark:text-cream-200 hover:underline">
+            See AI recommendations →
+          </a>
+        </p>
+      </section>
 
-        {# AI "what to buy next" hero — D-01 top position, above aggregate cards.
-           Lazy-loaded with delay:600ms (staggered after the other eager elements).
-           hx-swap="outerHTML" replaces this div with the fragment root (polling stops
-           when the hero card returns no hx-trigger — Pattern 8). #}
-        <section aria-labelledby="ai-rec-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="ai-rec-heading" class="text-xl font-semibold mb-4">What to buy next</h2>
-          <div id="ai-rec-hero"
-               hx-get="/home/cards/ai-recommendation"
-               hx-trigger="load delay:600ms"
-               hx-swap="outerHTML">
-            <div class="animate-pulse space-y-2">
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-            </div>
-          </div>
-        </section>
-
-        {# AI tools: links to paste-rank and wishlist, plus on-demand equipment button (D-05).
-           Equipment result is NOT shown until the user clicks — generate-on-click only. #}
-        <section aria-labelledby="ai-tools-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="ai-tools-heading" class="text-xl font-semibold mb-4">AI tools</h2>
-          <div class="flex flex-wrap gap-3 mb-4">
-            <a href="/ai/paste-rank"
-               class="rounded bg-espresso-700 px-4 py-2 text-sm font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
-              Rank these for me
-            </a>
-            <a href="/ai/wishlist"
-               class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm font-semibold hover:bg-espresso-100 dark:hover:bg-espresso-800">
-              Wishlist
-            </a>
-          </div>
-          {# Equipment rec: generate-on-click (D-05). Never auto-loads. #}
-          <div>
-            <form hx-post="/ai/equipment"
-                  hx-target="#equipment-rec-result"
-                  hx-swap="innerHTML">
-              <input type="hidden"
-                     name="X-CSRF-Token"
-                     value="{{ request.cookies.get('csrftoken', '') }}">
-              <button type="submit"
-                      class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-sm hover:bg-espresso-100 dark:hover:bg-espresso-800">
-                Analyze my setup
-              </button>
-            </form>
-            <div id="equipment-rec-result" class="mt-3"></div>
-          </div>
-        </section>
-
-        {# Five aggregate-card lazy slots — staggered 100/200/300/400/500ms (HOME-09).
-           Plan 06-03 implements the fragment endpoints these reference. #}
-
-        <section aria-labelledby="top-coffees-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="top-coffees-heading" class="text-xl font-semibold mb-4">Top Coffees</h2>
-          <div hx-get="/home/cards/top-coffees"
-               hx-trigger="load delay:100ms"
-               hx-swap="innerHTML">
-            <div class="animate-pulse space-y-2">
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="preference-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="preference-heading" class="text-xl font-semibold mb-4">Preference Profile</h2>
-          <div hx-get="/home/cards/preference-profile"
-               hx-trigger="load delay:200ms"
-               hx-swap="innerHTML">
-            <div class="animate-pulse space-y-2">
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="flavor-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="flavor-heading" class="text-xl font-semibold mb-4">Top Flavor Descriptors</h2>
-          <div hx-get="/home/cards/flavor-descriptors"
-               hx-trigger="load delay:300ms"
-               hx-swap="innerHTML">
-            <div class="animate-pulse space-y-2">
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="sweet-spots-heading"
-                 class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-          <h2 id="sweet-spots-heading" class="text-xl font-semibold mb-4">Sweet Spots</h2>
-          <div hx-get="/home/cards/sweet-spots"
-               hx-trigger="load delay:500ms"
-               hx-swap="innerHTML">
-            <div class="animate-pulse space-y-2">
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-              <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-            </div>
-          </div>
-        </section>
-
-
-      {% endif %}
+      {# Wishlist — D-06 item 6. Wishlist is "data the user added", reachable
+         from home; NOT duplicated on /ai (D-12 reversal). Standard home card
+         shape with a primary action link to /ai/wishlist. #}
+      <section aria-labelledby="wishlist-heading"
+               class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+        <h2 id="wishlist-heading" class="text-xl font-semibold mb-4">Wishlist</h2>
+        <p class="text-base mb-4">Coffees to try next.</p>
+        <a href="/ai/wishlist"
+           class="rounded border border-espresso-300 dark:border-espresso-600 px-4 py-2 text-base font-semibold min-h-[44px] inline-flex items-center hover:bg-espresso-100 dark:hover:bg-espresso-800">
+          Open wishlist
+        </a>
+      </section>
 
     </div>
   </main>

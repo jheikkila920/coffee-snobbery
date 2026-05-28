@@ -345,6 +345,60 @@ def _require_cafe_logs_table() -> None:
     _gate()
 
 
+def _seed_top_coffees_no_floor(db, *, username: str, coffees: list[tuple[str, float]]) -> int:
+    """Seed N coffees, each with exactly one rated brew session, for the no-floor variant.
+
+    Creates one User + one Roaster + len(coffees) Coffees + one rated BrewSession
+    per coffee (with the supplied rating). Returns user_id.
+
+    Used by the IA-06 / D-09 no-floor tests: under the default min_sessions=2 floor
+    NONE of these coffees would surface in get_top_coffees; with min_sessions=0
+    they all do (up to the LIMIT 5 cap).
+    """
+    from app.models.brew_session import BrewSession
+    from app.models.coffee import Coffee
+    from app.models.roaster import Roaster
+    from app.models.user import User
+
+    user = User(
+        username=username,
+        password_hash="x" * 16,
+        is_admin=False,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    uid = user.id
+
+    roaster = Roaster(name=f"analyticstest-Roaster-NoFloor-{username}")
+    db.add(roaster)
+    db.flush()
+
+    brew_ts = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
+    for coffee_name, rating in coffees:
+        coffee = Coffee(
+            name=f"analyticstest-{coffee_name}-{username}",
+            roaster_id=roaster.id,
+        )
+        db.add(coffee)
+        db.flush()
+
+        session = BrewSession(
+            user_id=uid,
+            coffee_id=coffee.id,
+            dose_grams_actual=Decimal("15"),
+            water_grams_actual=Decimal("250"),
+            rating=Decimal(str(rating)),
+            flavor_note_ids_observed=[],
+            brewed_at=brew_ts,
+        )
+        db.add(session)
+        db.flush()
+
+    db.commit()
+    return uid
+
+
 def _seed_cafe_into_scenario(
     db,
     *,
@@ -1355,3 +1409,116 @@ def test_top_coffees_excludes_cafe(clean_analytics: None) -> None:
         "get_top_coffees must return IDENTICAL coffee IDs after inserting a CafeLog "
         "(D-14: cafe coffees have no coffees.id row)"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Phase 17 — IA-06 / D-09: get_top_coffees min_sessions keyword-only parameter #
+# --------------------------------------------------------------------------- #
+
+
+def test_get_top_coffees_no_floor_includes_single_session_coffees(
+    clean_analytics: None,
+) -> None:
+    """IA-06 / D-09: min_sessions=0 surfaces coffees with one rated brew.
+
+    Backward-compat guard: the default call (no kwarg) still enforces the
+    historical >=2 floor and returns 0 rows for a one-session user.
+    """
+    _require_postgres()
+    _require_analytics_tables()
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    with SessionLocal() as db:
+        uid = _seed_top_coffees_no_floor(
+            db,
+            username="analyticstest-nofloor-single",
+            coffees=[("SingleSessionCoffee", 4.5)],
+        )
+
+    with SessionLocal() as db:
+        no_floor_rows = analytics.get_top_coffees(db, uid, min_sessions=0)
+        default_rows = analytics.get_top_coffees(db, uid)
+
+    assert len(no_floor_rows) == 1, (
+        f"min_sessions=0 must surface single-session coffees; got {len(no_floor_rows)}"
+    )
+    assert no_floor_rows[0].session_count == 1
+    assert float(no_floor_rows[0].avg_rating) == 4.5
+    assert len(default_rows) == 0, (
+        "Default get_top_coffees() must still enforce the >=2 floor (D-09 backward-compat)"
+    )
+
+
+def test_get_top_coffees_no_floor_caps_at_5(clean_analytics: None) -> None:
+    """IA-06: even with no minimum floor, get_top_coffees returns at most 5 rows."""
+    _require_postgres()
+    _require_analytics_tables()
+    from app.db import SessionLocal
+    from app.services import analytics
+
+    seven_coffees = [(f"Coffee{i:02d}", 3.0 + (i * 0.25)) for i in range(7)]
+    with SessionLocal() as db:
+        uid = _seed_top_coffees_no_floor(
+            db,
+            username="analyticstest-nofloor-cap",
+            coffees=seven_coffees,
+        )
+
+    with SessionLocal() as db:
+        rows = analytics.get_top_coffees(db, uid, min_sessions=0)
+
+    assert len(rows) == 5, f"min_sessions=0 must still cap at 5 (IA-06 limit); got {len(rows)}"
+    # Highest-rated should appear first
+    ratings = [float(r.avg_rating) for r in rows]
+    assert ratings == sorted(ratings, reverse=True)
+
+
+def test_get_top_coffees_default_still_enforces_min_two(
+    clean_analytics: None,
+) -> None:
+    """Regression guard: get_top_coffees() with no kwarg keeps the >=2 floor.
+
+    The existing /home/cards/top-coffees endpoint calls without the kwarg, and
+    Phase 17 must NOT change that endpoint's behavior (the eager render on home
+    uses min_sessions=0 explicitly; the fragment endpoint remains floored).
+    """
+    _require_postgres()
+    _require_analytics_tables()
+    from app.db import SessionLocal
+    from app.models.brew_session import BrewSession
+    from app.services import analytics
+
+    # Coffee A has one rated session, Coffee B has two — only B should rank by default.
+    with SessionLocal() as db:
+        uid = _seed_top_coffees_no_floor(
+            db,
+            username="analyticstest-nofloor-default",
+            coffees=[("CoffeeA", 4.5), ("CoffeeB", 4.0)],
+        )
+        # Add a SECOND rated session to CoffeeB
+        coffee_b_id = db.execute(
+            __import__("sqlalchemy").text(
+                "SELECT id FROM coffees WHERE name LIKE 'analyticstest-CoffeeB-%' LIMIT 1"
+            )
+        ).scalar()
+        db.add(
+            BrewSession(
+                user_id=uid,
+                coffee_id=coffee_b_id,
+                dose_grams_actual=Decimal("15"),
+                water_grams_actual=Decimal("250"),
+                rating=Decimal("4.0"),
+                flavor_note_ids_observed=[],
+                brewed_at=datetime(2026, 3, 21, 10, 0, 0, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        rows = analytics.get_top_coffees(db, uid)
+
+    assert len(rows) == 1, f"Default >=2 floor must exclude CoffeeA (1 session); got {len(rows)}"
+    assert rows[0].session_count == 2
+    # Returned row should be CoffeeB (the one with 2 sessions)
+    assert "CoffeeB" in rows[0].name
