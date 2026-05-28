@@ -132,7 +132,7 @@ Plans:
 - [x] 17-03-PLAN.md — DIST-07 admin AI-key setup banner: sessionStorage dismiss, admin+no-key gate, /admin/credentials button (D-19/D-21)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 17-04-PLAN.md — IA-02/IA-03/AIX-08 /ai page shell: three-branch state machine, AIX-08 admin + non-admin callouts, research-coming-soon stub (D-03/D-12/D-13/D-14/D-15/D-16/D-20)
+- [x] 17-04-PLAN.md — IA-02/IA-03/AIX-08 /ai page shell: three-branch state machine, AIX-08 admin + non-admin callouts, research-coming-soon stub (D-03/D-12/D-13/D-14/D-15/D-16/D-20)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 17-05-PLAN.md — IA-05 phase close: container rebuild, full suite, ruff gates, on-device PWA cache-freshness verification (manual checkpoint)
@@ -228,7 +228,7 @@ Plans:
 | 15. v1.1 Debt Cleanup | v1.2 | 3/3 | Complete    | 2026-05-26 |
 | 15.1. Catalog & Session Polish (INSERTED) | v1.2 | 5/5 | Complete    | 2026-05-27 |
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
-| 17. IA Restructure | v1.2 | 3/5 | In Progress|  |
+| 17. IA Restructure | v1.2 | 4/5 | In Progress|  |
 | 18. Self-Host Packaging | v1.2 | 0/TBD | Not started | - |
 | 19. AI Page & Research/Predict | v1.2 | 0/TBD | Not started | - |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
