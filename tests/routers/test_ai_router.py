@@ -684,9 +684,7 @@ def test_get_ai_page_returns_401_for_anonymous(client) -> None:
     """GET /ai returns 401 for an unauthenticated request (require_user gate)."""
     _require_ai_router()
     r = client.get("/ai")
-    assert r.status_code == 401, (
-        f"GET /ai must return 401 for anonymous; got {r.status_code}"
-    )
+    assert r.status_code == 401, f"GET /ai must return 401 for anonymous; got {r.status_code}"
 
 
 def test_ai_page_below_gate_shows_cold_start_not_no_key(
@@ -761,9 +759,7 @@ def test_ai_page_shows_non_admin_callout_above_gate_no_key(
     assert 'href="/admin/credentials"' not in r.text, (
         "D-16 forbids /admin/credentials link for non-admins"
     )
-    assert 'href="/admin"' not in r.text, (
-        "D-16 forbids any admin link for non-admins"
-    )
+    assert 'href="/admin"' not in r.text, "D-16 forbids any admin link for non-admins"
 
 
 def test_ai_page_above_gate_with_key_shows_hero(
