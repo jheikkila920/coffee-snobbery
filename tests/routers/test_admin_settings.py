@@ -60,6 +60,32 @@ def _prime_csrf(client: Any, session_cookie: str) -> str:
     return token
 
 
+@pytest.fixture(autouse=True)
+def _restore_quota_settings():
+    """Restore both quota app_settings rows to their seeded value ('20') after
+    each test.
+
+    The update-persists tests below POST new caps (5 / 10) and set_setting()
+    commits them, so without this teardown they pollute the full-suite run of
+    tests/test_migrations.py::test_p19_quota_settings_seeded, which asserts the
+    seeded value. set_setting() commits internally; we re-prewarm so the live
+    cap reader matches the restored DB state.
+    """
+    yield
+    try:
+        from app.db import SessionLocal
+        from app.services.settings import prewarm_cache, set_setting
+    except ImportError:
+        return
+    with SessionLocal() as db:
+        for key in ("ai.research_daily_quota", "ai.improve_brew_daily_quota"):
+            try:
+                set_setting(db, key, 20, by_user_id=None)
+            except Exception:
+                pass
+        prewarm_cache(db)
+
+
 # ---------------------------------------------------------------------------
 # GET /admin/settings — quota rows visible
 # ---------------------------------------------------------------------------

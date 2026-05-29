@@ -767,7 +767,12 @@ def test_ai_page_above_gate_with_key_shows_hero(
     seeded_admin_user,
     monkeypatch,
 ) -> None:
-    """Above-gate + key present → AI hero + four /home/cards/* mounts + research stub (D-13)."""
+    """Above-gate + key present → research card + AI hero + preference/sweet-spots mounts.
+
+    Phase 19 (D-10) restructured /ai: the Top Flavor Descriptors card was deleted
+    and the Phase-17 "Coming in Phase 19" research stub was replaced by the real
+    research form. This test was updated to match (see ADR 0004 / test_ai_page_phase19).
+    """
     _require_ai_router()
     _patch_with_key(monkeypatch, provider="anthropic")
     _patch_gate_open(monkeypatch)
@@ -776,11 +781,16 @@ def test_ai_page_above_gate_with_key_shows_hero(
     r = client.get("/ai", cookies={"session_id": cookie})
 
     assert r.status_code == 200
+    assert 'id="research-card"' in r.text, "Research card (D-10) missing"
     assert 'hx-get="/home/cards/ai-recommendation"' in r.text, "AI hero mount missing"
     assert 'hx-get="/home/cards/preference-profile"' in r.text, "Preference Profile mount missing"
-    assert 'hx-get="/home/cards/flavor-descriptors"' in r.text, "Flavor Descriptors mount missing"
     assert 'hx-get="/home/cards/sweet-spots"' in r.text, "Sweet Spots mount missing"
-    assert "Coming in Phase 19" in r.text, "Research stub (D-13) missing"
+    assert 'hx-get="/home/cards/flavor-descriptors"' not in r.text, (
+        "Top Flavor Descriptors card must be deleted (D-10)"
+    )
+    assert "Coming in Phase 19" not in r.text, (
+        "Phase-17 research stub must be replaced by real form"
+    )
 
 
 def test_ai_page_shows_dist07_banner_for_admin_with_no_key(
