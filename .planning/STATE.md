@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
 stopped_at: Completed 20-03-PLAN.md
-last_updated: "2026-05-29T16:41:58.811Z"
+last_updated: "2026-05-29T16:47:55.195Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 39
-  completed_plans: 36
-  percent: 92
+  completed_plans: 37
+  percent: 95
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 ## Current Position
 
 Phase: 20 (guided-brew-polish) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-05-29
 
-Progress: [█████████░] 92%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [█████████░] 92%
 | Phase 20-guided-brew-polish P01 | 35 | 2 tasks | 5 files |
 | Phase 20-guided-brew-polish P02 | 13 | 3 tasks | 10 files |
 | Phase 20 P03 | 14 | 2 tasks | 5 files |
+| Phase 20 P04 | 15 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Progress: [█████████░] 92%
 - [Phase ?]: D-14/D-15 applied in plan 19-02: 404/410 rejection + archived retry + latency comments
 - [Phase ?]: D-07/AIX-02 prediction upsert uses ON CONFLICT on uq_ai_rating_pred_user_cache_key -- single row per user+cache_key
 - [Phase ?]: water-profile-select.js loaded globally in base.html; timing fieldset in brew_prefill_fields.html included in re-prefill swap; _WRITABLE_FIELDS extended to persist all three new columns
+- [Phase ?]: showNote dict keyed by step index toggles per-step note textarea; setType clears water_grams to null for Wait/Action
 
 ### Pending Todos
 
@@ -110,7 +112,7 @@ Progress: [█████████░] 92%
 
 ## Session Continuity
 
-Last session: 2026-05-29T16:41:58.787Z
+Last session: 2026-05-29T16:47:55.172Z
 Stopped at: Completed 20-03-PLAN.md
 Resume file: None
 Next: `/gsd-plan-phase 16 --gaps` (re-plan to fix origin-country) — or fix inline and re-verify
