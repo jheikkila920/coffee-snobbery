@@ -1022,7 +1022,11 @@ async def _generate_coffee_rec(
                 )
                 used_cred = openai_cred
                 used_tool_version = tool_version_openai
-            except (json.JSONDecodeError, PydanticValidationError, Exception) as e:
+            except (json.JSONDecodeError, PydanticValidationError, openai.APIError) as e:
+                # WR-04: narrow to provider/parse errors only — the former catch-all
+                # `Exception` swallowed programming errors (AttributeError, TypeError)
+                # and routed them to "try next tier", hiding real bugs.  Let unexpected
+                # exceptions propagate to the regenerate() top-level error-row handler.
                 last_error = e
                 log.warning(
                     AI_TIER_FALLBACK,
@@ -1112,7 +1116,9 @@ async def _generate_coffee_rec(
                             0,
                         )
                         used_cred = anthropic_cred
-                    except Exception:
+                    except (json.JSONDecodeError, PydanticValidationError, anthropic.APIError):
+                        # WR-04: catch only Anthropic provider/parse errors on the
+                        # broadened-retry path; programming errors propagate up (WR-04).
                         retry_raw = None
                 if retry_raw is None and openai_cred is not None:
                     openai_client_retry = _build_openai_client(openai_cred)
@@ -1124,7 +1130,9 @@ async def _generate_coffee_rec(
                         )
                         used_cred = openai_cred
                         used_tool_version = tool_version_openai
-                    except Exception:
+                    except (json.JSONDecodeError, PydanticValidationError, openai.APIError):
+                        # WR-04: catch only OpenAI provider/parse errors; programming
+                        # errors propagate to the regenerate() error-row handler (WR-04).
                         retry_raw = None
                 if retry_raw is not None:
                     try:

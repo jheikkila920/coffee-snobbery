@@ -408,6 +408,17 @@ async def generate_coffee_research(
         return
 
     # (2) Quota check (AIX-05 / D-08) — checked before LLM, not inside generator
+    #
+    # TOCTOU caveat (WR-01 — accepted risk): the rolling-24h quota check has a
+    # check-then-write window.  The LLM call sits between remaining() here and
+    # _write_research_telemetry() at the end of the miss path.  Under rapid
+    # sequential requests (each passing the remaining > 0 guard before any prior
+    # telemetry row commits) the 20/day cap is theoretically exceedable by a
+    # small margin.  The per-(user, rec_type) in-memory asyncio.Lock + advisory
+    # lock (acquired below on the miss path) serialise concurrent misses; they
+    # do not fully guard sequential requests.  Accepted at household scale with a
+    # 20/day cap — the blast radius is at most a few extra calls per day (WR-01).
+    # Do NOT implement an advisory-lock-before-quota-read fix here.
     remaining = ai_quota.remaining(db, user_id, _REC_TYPE_RESEARCH)
     if remaining <= 0:
         reset_time = ai_quota.get_quota_reset_time(db, user_id, _REC_TYPE_RESEARCH)
