@@ -96,13 +96,13 @@ from app.routers import csp_report as csp_report_router
 from app.routers import debug as debug_router
 from app.routers import equipment as equipment_router
 from app.routers import flavor_notes as flavor_notes_router
-from app.routers import water_profiles as water_profiles_router
 from app.routers import home as home_router
 from app.routers import photos as photos_router
 from app.routers import pwa as pwa_router
 from app.routers import recipes as recipes_router
 from app.routers import roasters as roasters_router
 from app.routers import search as search_router
+from app.routers import water_profiles as water_profiles_router
 from app.services import credentials
 from app.services import settings as settings_service
 from app.services.encryption import startup_check as encryption_startup_check

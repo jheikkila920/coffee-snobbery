@@ -65,9 +65,7 @@ def list_water_profiles(
     consume. Future plans may add an HTML list fragment variant.
     """
     profiles = water_profiles_service.list_water_profiles(db)
-    return JSONResponse(
-        [{"id": p.id, "name": p.name} for p in profiles]
-    )
+    return JSONResponse([{"id": p.id, "name": p.name} for p in profiles])
 
 
 @router.post("", response_class=HTMLResponse)

@@ -45,9 +45,9 @@ def create_water_profile(
     db.add(profile)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise DuplicateNameError(name)
+        raise DuplicateNameError(name) from exc
     db.refresh(profile)
     log.info(
         "water_profile.created",
