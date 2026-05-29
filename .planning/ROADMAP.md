@@ -44,7 +44,7 @@ other households.
 - [x] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration (completed 2026-05-27)
 - [x] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page (completed 2026-05-28)
 - [x] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation (completed 2026-05-28)
-- [x] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts (REOPENED 2026-05-29 — code review found 2 blockers incl. stored XSS; see 19-REVIEW.md, gap closure pending) (completed 2026-05-29)
+- [x] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts (reopened 2026-05-29 for 2 code-review blockers incl. stored XSS; gap closure 19-08/19-09 routed AI-prose SSE through Jinja autoescape + fixed improve-brew render + cost-control warnings; re-review clean, verification passed — see 19-REVIEW.md / 19-VERIFICATION-AUTO.md) (completed 2026-05-29)
 - [ ] **Phase 20: Guided Brew Polish** - Purpose-built mobile brewing coach with phase timer and water profiles
 - [ ] **Phase 21: Mobile-First Full Rework** - Screen-by-screen audit and polish at 375px to major-company bar
 - [ ] **Phase 22: Verification & Release** - Full suite green, Playwright smoke, tag v1.2.0, push GHCR image
