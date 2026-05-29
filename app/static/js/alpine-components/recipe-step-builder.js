@@ -24,6 +24,7 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('recipeStepBuilder', () => ({
     steps: [],
+    showNote: {},
 
     init() {
       // The form template stamps data-initial-steps onto the wrapping
@@ -39,21 +40,22 @@ document.addEventListener('alpine:init', () => {
         this.steps = [];
       }
       if (this.steps.length === 0) {
-        this.steps = [{ water_grams: 50, time_seconds: 45, label: 'Bloom' }];
+        this.steps = [{ type: 'Bloom', water_grams: 50, time_seconds: 45, label: 'Bloom', note: null, water_temp_c: null }];
       }
     },
 
     addStep() {
       const prev = this.steps[this.steps.length - 1] || {
-        water_grams: 0,
-        time_seconds: 0,
-        label: '',
+        type: 'Pour', water_grams: 0, time_seconds: 0, label: '', note: null, water_temp_c: null,
       };
       // UI-SPEC: insert pre-filled with (prev.water + 50g, prev.time + 45s).
       this.steps.push({
+        type: 'Pour',
         water_grams: (prev.water_grams || 0) + 50,
         time_seconds: (prev.time_seconds || 0) + 45,
         label: '',
+        note: null,
+        water_temp_c: null,
       });
     },
 
@@ -89,6 +91,23 @@ document.addEventListener('alpine:init', () => {
     setTime(i, v) {
       const n = parseInt(v, 10);
       this.steps[i].time_seconds = Number.isFinite(n) ? n : 0;
+    },
+
+    setType(i, v) {
+      this.steps[i].type = v || 'Pour';
+      // When type is Wait or Action, clear water_grams (D-07)
+      if (v === 'Wait' || v === 'Action') {
+        this.steps[i].water_grams = null;
+      }
+    },
+
+    setNote(i, v) {
+      this.steps[i].note = v.trim() || null;
+    },
+
+    setWaterTemp(i, v) {
+      const n = parseInt(v, 10);
+      this.steps[i].water_temp_c = Number.isFinite(n) ? n : null;
     },
 
     deltaWater(i) {
@@ -151,7 +170,7 @@ document.addEventListener('alpine:init', () => {
         prevTime = end;
         const ratio = (delta / total) * 100;
         return {
-          label: step.label || ('Step ' + (idx + 1)),
+          label: step.label || (step.type || ('Step ' + (idx + 1))),
           water: step.water_grams || 0,
           start: start,
           end: end,
