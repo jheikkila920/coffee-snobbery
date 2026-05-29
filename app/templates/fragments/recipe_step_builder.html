@@ -1,4 +1,4 @@
-{# Recipe step builder UI — UI-SPEC §"Recipe Step Builder" (D-09).
+{# Recipe step builder UI — UI-SPEC §"Recipe Step Builder" (D-09, extended Phase 20).
 
    This template lives INSIDE the x-data="recipeStepBuilder" scope set by
    recipe_form.html (so add/remove/reorder share one Alpine instance with
@@ -8,13 +8,14 @@
    - x-model is unavailable — use :value + @input pairs.
    - x-on:click="methodName()" is allowed; arbitrary JS expression strings
      in handler attributes are NOT.
-   - Property writes via Alpine-method calls (setLabel/setWater/setTime)
-     stay reactive (the @input handlers route through methods).
+   - Property writes via Alpine-method calls (setLabel/setWater/setTime/
+     setType/setNote/setWaterTemp) stay reactive.
 
    Accessibility (UI-SPEC §"Step row controls"):
    - 44×44 tap targets on the up/down/remove buttons via w-11 h-11.
    - Up/down disabled at the ends; aria-label naming.
    - Remove button label includes the step index.
+   - Step type select: aria-label "Step type for step N" (UI-SPEC §Accessibility).
 #}
 <div class="space-y-3">
   <div class="flex items-center justify-between">
@@ -47,6 +48,19 @@
         </div>
         <div class="flex-1 flex flex-col gap-2">
           <div class="flex flex-wrap gap-3 items-end">
+            {# Type select (D-04) — BEFORE the Label input; width w-32 per UI-SPEC §2 #}
+            <label class="flex flex-col gap-1 w-32">
+              <span class="text-sm font-semibold">Type</span>
+              <select :value="step.type || 'Pour'"
+                      x-on:change="setType(idx, $event.target.value)"
+                      :aria-label="'Step type for step ' + (idx + 1)"
+                      class="rounded border border-espresso-200 dark:border-espresso-700 px-2 py-3 text-base bg-cream-50 dark:bg-espresso-950">
+                <option value="Pour">Pour</option>
+                <option value="Bloom">Bloom</option>
+                <option value="Wait">Wait</option>
+                <option value="Action">Action</option>
+              </select>
+            </label>
             <label class="flex flex-col gap-1 flex-1 min-w-[10rem]">
               <span class="text-sm font-semibold">Label</span>
               <input type="text"
@@ -56,11 +70,14 @@
                      placeholder="e.g., Bloom, Main pour"
                      class="rounded border border-espresso-200 px-2 py-3 text-base">
             </label>
-            <label class="flex flex-col gap-1 w-24">
+            {# Water (g) — dimmed + disabled for Wait/Action steps (D-07) #}
+            <label class="flex flex-col gap-1 w-24"
+                   :class="(step.type === 'Wait' || step.type === 'Action') ? 'opacity-40' : ''">
               <span class="text-sm font-semibold">Water (g)</span>
               <input type="number"
                      :value="step.water_grams"
                      x-on:input="setWater(idx, $event.target.value)"
+                     :disabled="step.type === 'Wait' || step.type === 'Action'"
                      min="0" max="2000"
                      inputmode="decimal"
                      class="rounded border border-espresso-200 px-2 py-3 text-base tabular-nums">
@@ -74,8 +91,35 @@
                      inputmode="decimal"
                      class="rounded border border-espresso-200 px-2 py-3 text-base tabular-nums">
             </label>
+            {# Temp (°C) (D-06) — optional per-step water temperature; range 50-100 #}
+            <label class="flex flex-col gap-1 w-24">
+              <span class="text-sm font-semibold">Temp (&deg;C)</span>
+              <input type="number"
+                     :value="step.water_temp_c || ''"
+                     x-on:input="setWaterTemp(idx, $event.target.value)"
+                     min="50" max="100"
+                     inputmode="decimal"
+                     placeholder="&mdash;"
+                     class="rounded border border-espresso-200 px-2 py-3 text-base tabular-nums">
+            </label>
           </div>
           <p class="text-sm text-espresso-600 dark:text-cream-300 tabular-nums" x-text="formatDelta(idx)"></p>
+          {# Per-step note (D-05) — hidden until "Add note" clicked or step already has a note #}
+          <div>
+            <button type="button"
+                    x-show="!step.note && !showNote[idx]"
+                    x-on:click="showNote[idx] = true"
+                    class="text-sm text-espresso-600 dark:text-cream-300 underline cursor-pointer min-h-[44px] inline-flex items-center">
+              Add note
+            </button>
+            <textarea rows="2"
+                      maxlength="200"
+                      x-show="step.note || showNote[idx]"
+                      :value="step.note || ''"
+                      x-on:input="setNote(idx, $event.target.value)"
+                      placeholder="Optional step note (e.g. Hario Switch closed for immersion)"
+                      class="w-full rounded border border-espresso-200 dark:border-espresso-700 px-2 py-2 text-base"></textarea>
+          </div>
         </div>
         <button type="button"
                 x-on:click="removeStep(idx)"

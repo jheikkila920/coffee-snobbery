@@ -140,3 +140,72 @@ def test_extra_field_rejected() -> None:
             label="Pour",
             unknown_field="attacker_value",
         )
+
+
+def test_recipe_roundtrip_wait_action() -> None:
+    """GBREW-06 / Plan 20-04: round-trip for UI-produced step shapes.
+
+    Builds a RecipeCreate-shaped steps list containing four step types and
+    asserts that all new fields (type, note, water_temp_c, water_grams=None)
+    survive StepSchema validation — proving the step-builder UI output
+    persists correctly through the server-side schema.
+    """
+    from app.schemas.recipe import RecipeCreate, StepSchema
+
+    steps = [
+        StepSchema(  # type: ignore[call-arg]
+            type="Bloom",
+            water_grams=50,
+            time_seconds=45,
+            label="Bloom",
+        ),
+        StepSchema(  # type: ignore[call-arg]
+            type="Pour",
+            water_grams=150,
+            time_seconds=90,
+            label="Main pour",
+            water_temp_c=94,
+        ),
+        StepSchema(  # type: ignore[call-arg]
+            type="Wait",
+            time_seconds=150,
+            label="Drawdown",
+        ),
+        StepSchema(  # type: ignore[call-arg]
+            type="Action",
+            time_seconds=165,
+            label="Open Switch",
+            note="Hario Switch closed for immersion",
+        ),
+    ]
+
+    recipe = RecipeCreate(
+        name="Test Recipe",
+        dose_grams=15,
+        water_grams=250,
+        water_temp_c=94,
+        grind_setting="22 clicks",
+        steps=steps,
+    )
+
+    assert len(recipe.steps) == 4
+
+    # Bloom step: type preserved, has water_grams
+    bloom = recipe.steps[0]
+    assert bloom.type == "Bloom"
+    assert bloom.water_grams == 50
+
+    # Pour step: water_temp_c round-trips correctly
+    pour = recipe.steps[1]
+    assert pour.type == "Pour"
+    assert pour.water_temp_c == 94
+
+    # Wait step: water_grams is None (D-07 — no pour target for timed hold)
+    wait = recipe.steps[2]
+    assert wait.type == "Wait"
+    assert wait.water_grams is None
+
+    # Action step: note round-trips correctly (T-20-13 data contract)
+    action = recipe.steps[3]
+    assert action.type == "Action"
+    assert action.note == "Hario Switch closed for immersion"
