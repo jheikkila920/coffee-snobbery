@@ -225,7 +225,7 @@ def get_or_refresh_prediction(
         )
     )
 
-    # Check if prediction is fresh
+    # Check if prediction is fresh (exact match: not expired + same signature)
     if (
         existing is not None
         and existing.expires_at > now
@@ -233,7 +233,23 @@ def get_or_refresh_prediction(
     ):
         return existing
 
+    # WR-03 cost-control decision: only regenerate when the prediction is
+    # TTL-expired (or absent).  Signature-driven regeneration — firing a new LLM
+    # call every time the user logs a session while a cached coffee is displayed
+    # — is an unmetered, unbounded cost bypass (the prediction call writes no
+    # AIRecommendation telemetry row and is not gated by the daily quota).
+    # Decision: return the existing (TTL-valid) prediction even when the
+    # signature has changed.  The 7-day TTL still forces an eventual refresh
+    # that picks up the new signature.  This caps prediction LLM calls to one
+    # per 7-day TTL window per user+coffee — a deliberate, bounded cost trade-off
+    # (WR-03).
+    if existing is not None and existing.expires_at > now:
+        # TTL still valid — return existing even if signature has changed.
+        # Avoids an unbounded per-request LLM bypass (WR-03).
+        return existing
+
     # Regenerate: cheap call — no web_search, uses cache_row coffee facts
+    # (only reached when: no row exists, OR TTL has expired)
     raw = cache_row.response_json
     coffee_name = raw.get("coffee_name", "this coffee")
     roaster_name = raw.get("roaster_name", "")
@@ -424,6 +440,12 @@ async def generate_coffee_research(
             current_signature=current_signature,
             cred=cred,
         )
+        # WR-02: commit here so any prediction upsert flushed by
+        # get_or_refresh_prediction is persisted.  get_session (db.py:61-70)
+        # does NOT commit on teardown — it closes/rolls back — so without this
+        # explicit commit every cache-hit prediction refresh is discarded and
+        # silently re-computed on the next hit, defeating the 7-day TTL (WR-02).
+        db.commit()
         html = _render_research_result(
             cache_row=cache_row,
             prediction=prediction,
@@ -454,6 +476,9 @@ async def generate_coffee_research(
                 current_signature=current_signature,
                 cred=cred,
             )
+            # WR-02: commit on this second cache-hit branch too (same reason as
+            # the first hit branch above — get_session rolls back on teardown).
+            db.commit()
             html = _render_research_result(cache_row=cache_row, prediction=prediction, cached=True)
             yield ServerSentEvent(data=html, event="complete")
             return
