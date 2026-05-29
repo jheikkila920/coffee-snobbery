@@ -135,6 +135,19 @@ class BrewSession(Base):
         nullable=True,
     )
 
+    # --- water profile (GBREW-04 / D-03) ----------------------------------
+    # water_type is RETAINED but deprecated; new sessions use water_profile_id.
+    # ondelete="SET NULL": deleting a profile nulls the FK, preserving the session.
+    water_profile_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("water_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # --- brew timing (GBREW-03 / D-12..D-14) --------------------------------
+    first_drip_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bloom_time_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # --- timestamps -------------------------------------------------------
     brewed_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()

@@ -98,6 +98,15 @@ class BrewSessionCreate(BaseModel):
     notes: str = Field("", max_length=5000)
     brew_time_seconds: int | None = Field(None, ge=0, le=86400)
 
+    # --- water profile (GBREW-04) — replaces water_type freetext in new sessions
+    # water_type on line 88 is retained for backward compat (deprecated, D-12).
+    # ge=1: tamper guard — client cannot post 0 or negative id (T-20-05).
+    water_profile_id: int | None = Field(None, ge=1)
+
+    # --- brew timing (GBREW-03 / D-12..D-14) --------------------------------
+    first_drip_seconds: int | None = Field(None, ge=0, le=86400)
+    bloom_time_seconds: int | None = Field(None, ge=0, le=86400)
+
     # --- timing -----------------------------------------------------------
     # Server stores tz-aware UTC; a None default lets the column server_default
     # (now()) apply when the form omits an explicit brewed_at.

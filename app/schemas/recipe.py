@@ -31,17 +31,36 @@ classes rejects any field not declared.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class StepSchema(BaseModel):
-    """One step in a recipe's JSONB ``steps`` array (D-10)."""
+    """One step in a recipe's JSONB ``steps`` array (D-10, extended Phase 20).
+
+    New fields (Phase 20 / GBREW-06) are all optional/defaulted so that old
+    stored step dicts (lacking ``type``, ``note``, ``water_temp_c``) still
+    validate without error — backward compatibility is critical (D-04, A3).
+
+    * ``type``: step classification; defaults to ``"Pour"`` (most common step
+      and a safe default-at-read; no DB backfill needed).
+    * ``water_grams``: now Optional — Wait/Action steps do not pour (D-07).
+    * ``note``: optional per-step coaching note, max 200 chars (D-05).
+    * ``water_temp_c``: per-step target water temperature, 50-100 °C (D-06).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    water_grams: int = Field(..., ge=0, le=2000)
+    # Existing fields — water_grams is now Optional (D-07: Wait/Action steps)
+    water_grams: int | None = Field(None, ge=0, le=2000)
     time_seconds: int = Field(..., ge=0, le=3600)
     label: str = Field("", max_length=80)
+
+    # New fields (Phase 20 — all optional/defaulted for backward compat)
+    type: Literal["Bloom", "Pour", "Wait", "Action"] = Field("Pour")
+    note: str | None = Field(None, max_length=200)
+    water_temp_c: int | None = Field(None, ge=50, le=100)
 
 
 class RecipeCreate(BaseModel):
