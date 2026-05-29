@@ -330,3 +330,155 @@ def test_brew_improve_quota_bucket() -> None:
         call_args = mock_remaining.call_args[0]
         # call_args = (db, user_id, rec_type)
         assert call_args[2] == "brew_improvement"
+
+
+# ---------------------------------------------------------------------------
+# CR-02 regression: improve-brew result renders via Jinja autoescape (19-08)
+# ---------------------------------------------------------------------------
+
+
+def _build_improve_run(summary_prose: str) -> list:
+    """Drive generate_brew_improvement with a mocked Anthropic call.
+
+    Returns the list of SSE events collected from the generator.
+    """
+    from decimal import Decimal
+
+    from app.services.ai_schemas import BrewImproveSchema, BrewParameterChangeSchema
+
+    improve_result = BrewImproveSchema(
+        summary_prose=summary_prose,
+        unchanged_parameters=["ratio"],
+        next_try=[
+            BrewParameterChangeSchema(
+                parameter="grind",
+                suggested_value="2 clicks coarser",
+                rationale="Over-extraction indicated by bitter finish.",
+            )
+        ],
+    )
+
+    mock_target_session = MagicMock()
+    mock_target_session.id = 42
+    mock_target_session.user_id = 1
+    mock_target_session.coffee_id = 7
+    mock_target_session.grind_setting_actual = "medium-fine"
+    mock_target_session.dose_grams_actual = Decimal("18")
+    mock_target_session.water_grams_actual = Decimal("270")
+    mock_target_session.water_temp_c_actual = Decimal("94")
+    mock_target_session.brewer_id = 3
+    mock_target_session.recipe_id = 5
+    mock_target_session.rating = Decimal("3.5")
+    mock_target_session.notes = "Bitter"
+    mock_target_session.brewed_at = None
+
+    mock_stream = MagicMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
+    mock_stream.__aexit__ = AsyncMock(return_value=False)
+
+    async def _text_stream():
+        yield summary_prose[:20]
+
+    mock_stream.text_stream = _text_stream()
+
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "structure_output"
+    tool_block.input = improve_result.model_dump()
+
+    mock_final_msg = MagicMock()
+    mock_final_msg.content = [tool_block]
+    mock_final_msg.usage = MagicMock(input_tokens=300, output_tokens=100)
+    mock_stream.get_final_message = AsyncMock(return_value=mock_final_msg)
+
+    mock_anth_instance = MagicMock()
+    mock_anth_instance.messages.stream.return_value = mock_stream
+    mock_cred = MagicMock()
+    mock_cred.provider = "anthropic"
+    mock_cred.key = "sk-ant-test"
+    mock_cred.model_name = "claude-3-5-haiku-latest"
+
+    mock_db = MagicMock()
+
+    with (
+        patch(
+            "app.services.ai_service.credentials_service.get_provider_credential",
+            return_value=mock_cred,
+        ),
+        patch("app.services.brew_sessions.get_brew_session", return_value=mock_target_session),
+        patch(
+            "app.services.brew_sessions.list_brew_sessions",
+            return_value=[mock_target_session],
+        ),
+        patch("app.services.ai_quota.remaining", return_value=15),
+        patch("app.services.ai_service._write_recommendation_row", return_value=MagicMock()),
+        patch(
+            "app.services.ai_service.anthropic.AsyncAnthropic",
+            MagicMock(return_value=mock_anth_instance),
+        ),
+    ):
+        from app.services.ai_service import generate_brew_improvement
+
+        async def run():
+            events = []
+            async for event in generate_brew_improvement(mock_db, user_id=1, session_id=42):
+                events.append(event)
+            return events
+
+        return asyncio.run(run())
+
+
+def test_improve_brew_complete_renders_html_template() -> None:
+    """CR-02: event:complete payload is rendered HTML from improve_result.html, not raw JSON.
+
+    The rendered payload must contain id="improve-brew-result" (the template's
+    outer div id) and 'Improvement suggestions' (the template heading text).
+    """
+    events = _build_improve_run("Your grind is too fine.")
+
+    complete_events = [e for e in events if e.event == "complete"]
+    assert len(complete_events) == 1, f"Expected 1 complete event, got: {[e.event for e in events]}"
+
+    data = complete_events[0].data
+    assert 'id="improve-brew-result"' in data, (
+        f"Template outer-div id not found — raw JSON emitted instead of HTML: {data[:300]}"
+    )
+    assert "Improvement suggestions" in data, (
+        f"Template heading not found in complete payload: {data[:300]}"
+    )
+
+
+def test_improve_brew_complete_not_raw_json() -> None:
+    """CR-02: event:complete payload is not a JSON-parseable schema dict."""
+    import json
+
+    events = _build_improve_run("Your grind is too fine.")
+    complete_events = [e for e in events if e.event == "complete"]
+    assert complete_events, "No complete event found"
+
+    data = complete_events[0].data
+    try:
+        parsed = json.loads(data)
+        # If it parses as JSON and has 'summary_prose', it's the old raw-JSON emit
+        assert "summary_prose" not in parsed, (
+            "event:complete data is raw JSON schema dict — coaching card will not render"
+        )
+    except (json.JSONDecodeError, ValueError):
+        pass  # expected: HTML is not valid JSON
+
+
+def test_improve_brew_complete_escapes_adversarial_prose() -> None:
+    """CR-02: LLM-derived summary_prose containing XSS payload is HTML-escaped."""
+    xss_prose = "<script>alert(1)</script> Your grind is too fine."
+    events = _build_improve_run(xss_prose)
+
+    complete_events = [e for e in events if e.event == "complete"]
+    assert complete_events, "No complete event found"
+
+    data = complete_events[0].data
+    assert "<script>alert(1)</script>" not in data, (
+        f"Unescaped <script> tag found in improve-brew complete payload: {data[:500]}"
+    )
+    assert "&lt;script&gt;" in data, (
+        f"Expected HTML-escaped form of <script> tag, got: {data[:500]}"
+    )
