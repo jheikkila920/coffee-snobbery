@@ -543,6 +543,115 @@ def test_duration_ms_written() -> None:
 
 
 # ---------------------------------------------------------------------------
+# CR-01 regression: research result renders via Jinja autoescape (19-08)
+# ---------------------------------------------------------------------------
+
+
+def _make_cache_row(coffee_name: str, roaster_name: str | None = None) -> MagicMock:
+    """Build a minimal AICoffeeResearchCache mock with response_json."""
+    from app.services.ai_schemas import CoffeeResearchSchema
+
+    schema = CoffeeResearchSchema(
+        coffee_name=coffee_name,
+        roaster_name=roaster_name,
+        summary_prose="A test coffee.",
+    )
+    row = MagicMock()
+    row.response_json = schema.model_dump()
+    return row
+
+
+def test_render_research_result_uses_jinja_template() -> None:
+    """CR-01: _render_research_result renders via Jinja template, not an f-string.
+
+    The rendered HTML must contain a stable marker from research_result.html
+    (e.g. '+ Add to wishlist') and must NOT contain the raw f-string artefact
+    '<div id="research-result">'.
+    """
+    from app.services.ai_research import _render_research_result
+
+    cache_row = _make_cache_row("Yirgacheffe Kochere", "Counter Culture")
+    html = _render_research_result(cache_row=cache_row, prediction=None, cached=False)
+
+    # Template marker from research_result.html (the wishlist button text)
+    assert "Add to wishlist" in html, f"Expected template marker in output, got: {html[:300]}"
+    # The f-string artefact must be gone
+    assert '<div id="research-result">' not in html, (
+        f"Raw f-string div found — template not wired: {html[:300]}"
+    )
+
+
+def test_render_research_result_escapes_adversarial_coffee_name() -> None:
+    """CR-01: LLM-derived coffee_name containing XSS payload is HTML-escaped.
+
+    An adversarial coffee_name must not appear raw in the rendered HTML.
+    The escaped form must be present.
+    """
+    from app.services.ai_research import _render_research_result
+
+    xss_name = "<script>alert(1)</script>"
+    cache_row = _make_cache_row(xss_name)
+    html = _render_research_result(cache_row=cache_row, prediction=None, cached=False)
+
+    # Raw payload must NOT be present
+    assert "<script>alert(1)</script>" not in html, (
+        f"Unescaped <script> tag found in output — XSS vulnerability: {html[:500]}"
+    )
+    # Escaped form must be present
+    assert "&lt;script&gt;" in html, (
+        f"Expected HTML-escaped form of <script> tag, got: {html[:500]}"
+    )
+
+
+def test_render_research_result_escapes_onerror_payload() -> None:
+    """CR-01: onerror= payload in coffee_name is HTML-escaped."""
+    from app.services.ai_research import _render_research_result
+
+    onerror_name = '"><img src=x onerror=alert(1)>'
+    cache_row = _make_cache_row(onerror_name)
+    html = _render_research_result(cache_row=cache_row, prediction=None, cached=False)
+
+    assert "onerror=alert(1)" not in html, (
+        f"Unescaped onerror payload found — XSS vulnerability: {html[:500]}"
+    )
+    assert "&gt;" in html or "onerror=alert(1)" not in html
+
+
+def test_render_research_result_with_prediction() -> None:
+    """CR-01: prediction block renders when prediction is not None."""
+    from app.models.ai_rating_prediction import AIRatingPrediction
+    from app.services.ai_research import _render_research_result
+
+    cache_row = _make_cache_row("Test Coffee")
+
+    mock_pred = MagicMock(spec=AIRatingPrediction)
+    mock_pred.predicted_low = 3.5
+    mock_pred.predicted_high = 4.25
+    mock_pred.confidence = "High"
+    mock_pred.reasoning = "Strong flavor alignment."
+
+    html = _render_research_result(cache_row=cache_row, prediction=mock_pred, cached=False)
+
+    # Template renders the prediction range block
+    assert "3.5" in html
+    assert "4.25" in html
+    assert "High" in html
+
+
+def test_render_research_result_cached_badge() -> None:
+    """CR-01: cached=True renders the cached badge; cached=False omits it."""
+    from app.services.ai_research import _render_research_result
+
+    cache_row = _make_cache_row("Test Coffee")
+
+    html_cached = _render_research_result(cache_row=cache_row, prediction=None, cached=True)
+    html_fresh = _render_research_result(cache_row=cache_row, prediction=None, cached=False)
+
+    assert "cached" in html_cached, "Expected 'cached' text in cached=True render"
+    assert "cached" not in html_fresh, "Unexpected 'cached' text in cached=False render"
+
+
+# ---------------------------------------------------------------------------
 # Helpers for async tests
 # ---------------------------------------------------------------------------
 
