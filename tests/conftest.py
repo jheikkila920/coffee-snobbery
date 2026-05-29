@@ -153,19 +153,32 @@ def client(app: Any) -> Iterator[Any]:
 
 @pytest.fixture
 def authed_client(app: Any, seeded_admin_user: dict[str, Any]) -> Iterator[Any]:
-    """``TestClient`` with a valid session cookie + ``csrftoken`` preloaded.
+    """``TestClient`` with a valid session cookie + HMAC-signed ``csrftoken``.
 
     Mirrors ``tests/phase_04/conftest.py::authed_client`` so top-level tests
     (e.g. ``tests/test_coffee_origins.py``) can hit auth-gated routes without
     living under ``phase_04/``.
+
+    The ``csrftoken`` is primed by issuing a GET request that coaxes the
+    starlette-csrf middleware to mint a real HMAC-signed token. The middleware
+    only mints a new token when no ``csrftoken`` cookie is present, so we must
+    NOT pre-populate a placeholder. The resulting token is then set as both
+    the cookie AND the ``X-CSRF-Token`` default header so POST endpoints pass
+    the double-submit-cookie check. This mirrors the ``_prime_csrf`` helper
+    used in ``tests/phase_04/``.
     """
     from fastapi.testclient import TestClient
 
-    csrf_token = "test-csrf-token-toplevel"  # noqa: S105 — test fixture, not a credential
     with TestClient(app) as _client:
         _client.cookies.set("session_id", seeded_admin_user["signed_cookie"])
-        _client.cookies.set("csrftoken", csrf_token)
-        _client.headers["X-CSRF-Token"] = csrf_token
+        # Prime a real HMAC-signed CSRF token by issuing a GET (no csrftoken
+        # cookie present so the middleware sets a fresh Set-Cookie on the response).
+        primer = _client.get("/")
+        token = primer.cookies.get("csrftoken") or _client.cookies.get("csrftoken")
+        if not token:
+            pytest.skip("CSRF middleware did not mint a csrftoken on GET /")
+        _client.cookies.set("csrftoken", token)
+        _client.headers["X-CSRF-Token"] = token
         yield _client
 
 
@@ -570,6 +583,9 @@ def _reset_catalog_tables() -> Iterator[None]:
             conn.execute(text("TRUNCATE recipes RESTART IDENTITY CASCADE"))
             conn.execute(text("TRUNCATE roasters RESTART IDENTITY CASCADE"))
             conn.execute(text("TRUNCATE flavor_notes RESTART IDENTITY CASCADE"))
+            # Phase 20: water_profiles is a shared catalog; brew_sessions.water_profile_id
+            # is ON DELETE SET NULL so brew_sessions must be truncated first (done above).
+            conn.execute(text("TRUNCATE TABLE water_profiles RESTART IDENTITY CASCADE"))
     except Exception:
         # Table not yet created (migration not run) or transient error — no-op.
         pass
