@@ -220,18 +220,24 @@ class TestSystemInfo:
         )
         body = resp.text
 
-        # App version — either from importlib.metadata or pyproject.toml fallback.
-        try:
-            from importlib.metadata import version as pkg_version
+        # App version — mirror app/routers/admin/system.py resolution order:
+        # APP_VERSION env (baked by Dockerfile ARG; "dev" for local builds) wins,
+        # then importlib.metadata, then the pyproject.toml fallback.
+        import os
 
-            app_version = pkg_version("coffee-snobbery")
-        except Exception:
-            import tomllib
-            from pathlib import Path
+        app_version = os.environ.get("APP_VERSION") or None
+        if not app_version:
+            try:
+                from importlib.metadata import version as pkg_version
 
-            _pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-            with _pyproject.open("rb") as _f:
-                app_version = tomllib.load(_f)["project"]["version"]
+                app_version = pkg_version("coffee-snobbery")
+            except Exception:
+                import tomllib
+                from pathlib import Path
+
+                _pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+                with _pyproject.open("rb") as _f:
+                    app_version = tomllib.load(_f)["project"]["version"]
         assert app_version in body, f"App version '{app_version}' not found in /admin body"
 
         # DB version — postgres version string contains "PostgreSQL"
