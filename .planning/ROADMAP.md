@@ -224,7 +224,7 @@ Plans:
 - [x] 20-04-PLAN.md — GBREW-06: recipe step builder type/note/temp + Wait/Action waterless steps
 
 **Wave 3** *(blocked on Wave 2)*
-- [ ] 20-05-PLAN.md — GBREW-01/02/03: wall-clock-truth timer + full coach view + pre-cue + tap-to-mark + auto bloom
+- [x] 20-05-PLAN.md — GBREW-01/02/03: wall-clock-truth timer + full coach view + pre-cue + tap-to-mark + auto bloom
 
 **Wave 4** *(blocked on Wave 3)*
 - [ ] 20-06-PLAN.md — GBREW-01/02/05: phase-close gate — full suite x2 + ruff + on-device timer/coach/375px manual verify (human-verify)
@@ -281,7 +281,7 @@ Plans:
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
 | 19. AI Page & Research/Predict | v1.2 | 9/9 | Complete   | 2026-05-29 |
-| 20. Guided Brew Polish | v1.2 | 4/6 | In Progress|  |
+| 20. Guided Brew Polish | v1.2 | 5/6 | In Progress|  |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
 
