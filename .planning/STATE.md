@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
-stopped_at: Phase 20 context gathered
-last_updated: "2026-05-29T15:17:10.231Z"
-last_activity: 2026-05-29
+stopped_at: Phase 20 UI-SPEC approved
+last_updated: "2026-05-29T15:59:09.742Z"
+last_activity: 2026-05-29 -- Phase 20 planning complete
 progress:
   total_phases: 9
   completed_phases: 6
-  total_plans: 33
+  total_plans: 39
   completed_plans: 33
-  percent: 100
+  percent: 85
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 Phase: 19 (ai-page-research-predict) — EXECUTING
 Plan: 3 of 9
 Status: Ready to execute
-Last activity: 2026-05-29
+Last activity: 2026-05-29 -- Phase 20 planning complete
 
 Progress: [██████████] 100%
 
@@ -106,7 +106,7 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-05-29T15:17:10.207Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-guided-brew-polish/20-CONTEXT.md
+Last session: 2026-05-29T15:23:47.372Z
+Stopped at: Phase 20 UI-SPEC approved
+Resume file: .planning/phases/20-guided-brew-polish/20-UI-SPEC.md
 Next: `/gsd-plan-phase 16 --gaps` (re-plan to fix origin-country) — or fix inline and re-verify
