@@ -61,6 +61,7 @@ from app.services import coffees as coffees_service
 from app.services import csv_io as csv_io_service
 from app.services import equipment as equipment_service
 from app.services import recipes as recipes_service
+from app.services import water_profiles as water_profiles_service
 from app.services.form_validation import errors_by_field
 from app.templates_setup import templates
 
@@ -85,6 +86,7 @@ _FORM_FIELDS = {
     "grinder_id",
     "kettle_id",
     "water_type",
+    "water_profile_id",
     "dose_grams_actual",
     "water_grams_actual",
     "yield_grams_actual",
@@ -96,6 +98,8 @@ _FORM_FIELDS = {
     "notes",
     "brewed_at",
     "brew_time_seconds",
+    "first_drip_seconds",
+    "bloom_time_seconds",
 }
 
 # Optional scalar FK / text fields where an empty string from the browser means
@@ -114,6 +118,9 @@ _EMPTY_TO_NONE_FIELDS = {
     "rating",
     "brewed_at",
     "brew_time_seconds",
+    "water_profile_id",
+    "first_drip_seconds",
+    "bloom_time_seconds",
 }
 
 # Integer FK fields the router casts before handing to the schema (so a bad int
@@ -353,6 +360,10 @@ def _hydrate_form_context(
         "server_draft": server_draft,
         "server_draft_json": json.dumps(server_draft) if server_draft is not None else "",
         "form_action": f"/brew/{session_id}" if mode == "edit" else "/brew",
+        "water_profiles": [
+            {"id": p.id, "name": p.name}
+            for p in water_profiles_service.list_water_profiles(db)
+        ],
         **_selectables(db),
     }
     return context
@@ -780,6 +791,8 @@ def new_brew_form(
     coffee_id = _int_or_none(qp.get("coffee_id"))
     recipe_id = _int_or_none(qp.get("recipe_id"))
     brew_time = _int_or_none(qp.get("brew_time"))  # GBM completion path (BREW-13)
+    first_drip = _int_or_none(qp.get("first_drip"))  # GBM completion path (D-12, D-14)
+    bloom_time = _int_or_none(qp.get("bloom_time"))  # GBM completion path (D-12, D-14)
 
     prefill = brew_sessions_service.resolve_prefill(
         db,
@@ -794,6 +807,11 @@ def new_brew_form(
     # applied after _stringify_prefill (T-11-13: _int_or_none + schema ge=0/le=86400).
     if brew_time is not None:
         values["brew_time_seconds"] = str(brew_time)
+    # Seed first_drip_seconds and bloom_time_seconds from GBM timing params (D-12, D-14).
+    if first_drip is not None:
+        values["first_drip_seconds"] = str(first_drip)
+    if bloom_time is not None:
+        values["bloom_time_seconds"] = str(bloom_time)
     # Prefilled-untouched: every prefilled field starts touched=False (drives
     # the pills); per-attempt fields are always blank, so no pill there.
     touched = {field: False for field in brew_sessions_service._CARRYABLE_FIELDS}
@@ -949,6 +967,7 @@ async def create_brew(
         grinder_id=form.grinder_id,
         kettle_id=form.kettle_id,
         water_type=form.water_type,
+        water_profile_id=form.water_profile_id,
         dose_grams_actual=form.dose_grams_actual,
         water_grams_actual=form.water_grams_actual,
         yield_grams_actual=form.yield_grams_actual,
@@ -960,6 +979,8 @@ async def create_brew(
         notes=form.notes,
         brewed_at=form.brewed_at,
         brew_time_seconds=form.brew_time_seconds,
+        first_drip_seconds=form.first_drip_seconds,
+        bloom_time_seconds=form.bloom_time_seconds,
     )
     brew_drafts_service.clear_draft(db, by_user_id=user.id)
     return Response(status_code=204, headers={"HX-Redirect": _LIST_URL})
@@ -994,6 +1015,7 @@ def edit_brew_form(
         "grinder_id": str(session.grinder_id) if session.grinder_id is not None else "",
         "kettle_id": str(session.kettle_id) if session.kettle_id is not None else "",
         "water_type": session.water_type or "",
+        "water_profile_id": str(session.water_profile_id) if session.water_profile_id is not None else "",
         "dose_grams_actual": _num_str(session.dose_grams_actual),
         "water_grams_actual": _num_str(session.water_grams_actual),
         "yield_grams_actual": _num_str(session.yield_grams_actual),
@@ -1006,6 +1028,12 @@ def edit_brew_form(
         "brewed_at": session.brewed_at.strftime("%Y-%m-%dT%H:%M") if session.brewed_at else "",
         "brew_time_seconds": (
             str(session.brew_time_seconds) if session.brew_time_seconds is not None else ""
+        ),
+        "first_drip_seconds": (
+            str(session.first_drip_seconds) if session.first_drip_seconds is not None else ""
+        ),
+        "bloom_time_seconds": (
+            str(session.bloom_time_seconds) if session.bloom_time_seconds is not None else ""
         ),
     }
     context = _hydrate_form_context(
@@ -1065,6 +1093,7 @@ async def update_brew(
         grinder_id=form.grinder_id,
         kettle_id=form.kettle_id,
         water_type=form.water_type,
+        water_profile_id=form.water_profile_id,
         dose_grams_actual=form.dose_grams_actual,
         water_grams_actual=form.water_grams_actual,
         yield_grams_actual=form.yield_grams_actual,
@@ -1076,6 +1105,8 @@ async def update_brew(
         notes=form.notes,
         brewed_at=form.brewed_at,
         brew_time_seconds=form.brew_time_seconds,
+        first_drip_seconds=form.first_drip_seconds,
+        bloom_time_seconds=form.bloom_time_seconds,
     )
     if updated is None:  # raced delete / cross-user — IDOR non-leak.
         raise HTTPException(status_code=404)

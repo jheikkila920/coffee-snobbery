@@ -105,6 +105,7 @@ _WRITABLE_FIELDS = frozenset(
         "grinder_id",
         "kettle_id",
         "water_type",
+        "water_profile_id",
         "dose_grams_actual",
         "water_grams_actual",
         "yield_grams_actual",
@@ -116,6 +117,8 @@ _WRITABLE_FIELDS = frozenset(
         "notes",
         "brewed_at",
         "brew_time_seconds",
+        "first_drip_seconds",
+        "bloom_time_seconds",
     }
 )
 
@@ -196,6 +199,7 @@ def create_brew_session(
     grinder_id: int | None,
     kettle_id: int | None,
     water_type: str | None,
+    water_profile_id: int | None = None,
     dose_grams_actual: Decimal,
     water_grams_actual: Decimal,
     yield_grams_actual: Decimal | None,
@@ -207,6 +211,8 @@ def create_brew_session(
     notes: str,
     brewed_at: datetime | None,
     brew_time_seconds: int | None = None,
+    first_drip_seconds: int | None = None,
+    bloom_time_seconds: int | None = None,
 ) -> BrewSession:
     """Insert a per-user brew session, bump equipment usage, emit the audit event.
 
@@ -224,6 +230,7 @@ def create_brew_session(
         grinder_id=grinder_id,
         kettle_id=kettle_id,
         water_type=water_type,
+        water_profile_id=water_profile_id,
         dose_grams_actual=dose_grams_actual,
         water_grams_actual=water_grams_actual,
         yield_grams_actual=yield_grams_actual,
@@ -235,6 +242,8 @@ def create_brew_session(
         notes=notes,
         brewed_at=brewed_at if brewed_at is not None else datetime.now(UTC),
         brew_time_seconds=brew_time_seconds,
+        first_drip_seconds=first_drip_seconds,
+        bloom_time_seconds=bloom_time_seconds,
     )
     db.add(session)
     # +1 each non-null equipment FK, same transaction (before commit).
