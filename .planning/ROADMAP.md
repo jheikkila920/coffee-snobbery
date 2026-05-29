@@ -216,7 +216,7 @@ Plans:
 Plans:
 
 **Wave 1**
-- [ ] 20-01-PLAN.md — Wave 0 test scaffolding: 4 phase20 test files (GBREW-01..06 behaviors, no pass-by-skip)
+- [x] 20-01-PLAN.md — Wave 0 test scaffolding: 4 phase20 test files (GBREW-01..06 behaviors, no pass-by-skip)
 - [ ] 20-02-PLAN.md — GBREW-04/06/03 data layer: water_profiles model/schema/router/service + StepSchema extension + brew_session timing/FK cols + p20 seed/link migration
 
 **Wave 2** *(blocked on Wave 1)*
@@ -281,7 +281,7 @@ Plans:
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
 | 19. AI Page & Research/Predict | v1.2 | 9/9 | Complete   | 2026-05-29 |
-| 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
+| 20. Guided Brew Polish | v1.2 | 1/6 | In Progress|  |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
 

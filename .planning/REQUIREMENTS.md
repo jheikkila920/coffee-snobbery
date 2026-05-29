@@ -85,12 +85,12 @@ The differentiator. A dedicated AI page hosting the consolidated recommendations
 
 Make Guided Brew feel like a purpose-built mobile brewing coach, plus the brew-data additions from the Beanconqueror audit.
 
-- [ ] **GBREW-01**: The Guided Brew timer keeps running when the phone screen sleeps at the kettle (background-safe)
-- [ ] **GBREW-02**: Guided Brew steps through recipe phases (bloom, pours) as timed, coached steps
-- [ ] **GBREW-03**: User can optionally record first-drip time and bloom time on a brew session
-- [ ] **GBREW-04**: User selects water type from a managed water-profiles catalog (named profiles) instead of freetext
-- [ ] **GBREW-05**: Guided Brew Mode meets the purpose-built mobile polish bar end to end
-- [ ] **GBREW-06**: Recipe step builder supports per-step notes (e.g., "Hario Switch closed for immersion") AND supports timed steps that have neither coffee nor water (e.g., "open switch for drawdown") -- both inheritable into Guided Brew as coached steps (item #7)
+- [x] **GBREW-01**: The Guided Brew timer keeps running when the phone screen sleeps at the kettle (background-safe)
+- [x] **GBREW-02**: Guided Brew steps through recipe phases (bloom, pours) as timed, coached steps
+- [x] **GBREW-03**: User can optionally record first-drip time and bloom time on a brew session
+- [x] **GBREW-04**: User selects water type from a managed water-profiles catalog (named profiles) instead of freetext
+- [x] **GBREW-05**: Guided Brew Mode meets the purpose-built mobile polish bar end to end
+- [x] **GBREW-06**: Recipe step builder supports per-step notes (e.g., "Hario Switch closed for immersion") AND supports timed steps that have neither coffee nor water (e.g., "open switch for drawdown") -- both inheritable into Guided Brew as coached steps (item #7)
 
 ### Mobile-First Polish (MOBILE)
 
@@ -188,12 +188,12 @@ Every v1.2 requirement maps to exactly one phase.
 | AIX-11 | Phase 19 | Complete |
 | AIX-12 | Phase 19 | Complete |
 | AIX-13 | Phase 19 | Complete |
-| GBREW-01 | Phase 20 | Pending |
-| GBREW-02 | Phase 20 | Pending |
-| GBREW-03 | Phase 20 | Pending |
-| GBREW-04 | Phase 20 | Pending |
-| GBREW-05 | Phase 20 | Pending |
-| GBREW-06 | Phase 20 | Pending |
+| GBREW-01 | Phase 20 | Complete |
+| GBREW-02 | Phase 20 | Complete |
+| GBREW-03 | Phase 20 | Complete |
+| GBREW-04 | Phase 20 | Complete |
+| GBREW-05 | Phase 20 | Complete |
+| GBREW-06 | Phase 20 | Complete |
 | MOBILE-01 | Phase 21 | Pending |
 | MOBILE-02 | Phase 21 | Pending |
 | MOBILE-03 | Phase 21 | Pending |
