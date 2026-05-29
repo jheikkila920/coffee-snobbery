@@ -39,8 +39,10 @@ class AICoffeeResearchCache(Base):
     # Full CoffeeResearchSchema payload serialised to JSONB
     response_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
-    # Cited source URLs extracted at write time (D-06)
-    cited_sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    # Cited source URLs extracted at write time (D-06).
+    # Shape matches CoffeeResearchSchema.sources (list[str]); no migration needed —
+    # annotation-only reconciliation per WR-06.
+    cited_sources: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()

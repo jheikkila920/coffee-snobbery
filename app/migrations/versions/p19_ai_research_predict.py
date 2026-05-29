@@ -62,7 +62,7 @@ def upgrade() -> None:
             postgresql.JSONB(astext_type=sa.Text()),
             nullable=False,
         ),
-        # Cited source URLs list (e.g. [{"url": "...", "title": "..."}])
+        # Cited source URLs list (list[str] — URL strings per CoffeeResearchSchema.sources; WR-06)
         sa.Column(
             "cited_sources",
             postgresql.JSONB(astext_type=sa.Text()),
