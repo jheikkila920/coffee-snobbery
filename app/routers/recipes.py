@@ -311,7 +311,9 @@ async def create_recipe(
         water_grams=form.water_grams,
         water_temp_c=form.water_temp_c,
         grind_setting=form.grind_setting,
-        steps=[s.model_dump() for s in form.steps],
+        # exclude_unset: persist only user-provided keys so optional Phase 20
+        # fields (type/note/water_temp_c) default-at-read with no JSONB bloat (D-04).
+        steps=[s.model_dump(exclude_unset=True) for s in form.steps],
         by_user_id=user.id,
     )
 
@@ -482,7 +484,9 @@ async def update_recipe_handler(
         water_grams=form.water_grams,
         water_temp_c=form.water_temp_c,
         grind_setting=form.grind_setting,
-        steps=[s.model_dump() for s in form.steps],
+        # exclude_unset: persist only user-provided keys so optional Phase 20
+        # fields (type/note/water_temp_c) default-at-read with no JSONB bloat (D-04).
+        steps=[s.model_dump(exclude_unset=True) for s in form.steps],
         by_user_id=user.id,
     )
     return templates.TemplateResponse(
