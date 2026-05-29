@@ -44,7 +44,7 @@ other households.
 - [x] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration (completed 2026-05-27)
 - [x] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page (completed 2026-05-28)
 - [x] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation (completed 2026-05-28)
-- [ ] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts
+- [x] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts (completed 2026-05-29)
 - [ ] **Phase 20: Guided Brew Polish** - Purpose-built mobile brewing coach with phase timer and water profiles
 - [ ] **Phase 21: Mobile-First Full Rework** - Screen-by-screen audit and polish at 375px to major-company bar
 - [ ] **Phase 22: Verification & Release** - Full suite green, Playwright smoke, tag v1.2.0, push GHCR image
@@ -193,7 +193,7 @@ Plans:
 - [x] 19-06-PLAN.md — AIX-06/09/10/12/VIZ-01: /ai restructure + research/prefs/trends/coach fragments + Chart.js CDN + indicator CSS + improve-brew UI (human-verify)
 
 **Wave 6** *(blocked on Wave 5)*
-- [ ] 19-07-PLAN.md — AIX-05/13: latency investigation + NPM proxy_buffering off doc + admin quota verification + phase-close gate (human-verify)
+- [x] 19-07-PLAN.md — AIX-05/13: latency investigation + NPM proxy_buffering off doc + admin quota verification + phase-close gate (human-verify)
 **UI hint**: yes
 
 ### Phase 20: Guided Brew Polish
@@ -259,7 +259,7 @@ Plans:
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
-| 19. AI Page & Research/Predict | v1.2 | 6/7 | In Progress|  |
+| 19. AI Page & Research/Predict | v1.2 | 7/7 | Complete   | 2026-05-29 |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
