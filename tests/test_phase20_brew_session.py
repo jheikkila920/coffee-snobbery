@@ -27,7 +27,6 @@ from pydantic import ValidationError
 
 from tests.conftest import _require_brew_sessions_with_water_profile_id
 
-
 # --------------------------------------------------------------------------- #
 # Schema tests (no DB required)                                               #
 # --------------------------------------------------------------------------- #
@@ -196,9 +195,7 @@ def test_gbm_finish_url_has_brew_time(authed_client: Any, seeded_admin_user: Any
 
     This test will be RED until Plan 20-04 wires first_drip + bloom_time params.
     """
-    resp = authed_client.get(
-        "/brew/new?gbm=1&brew_time=215&first_drip=18&bloom_time=43"
-    )
+    resp = authed_client.get("/brew/new?gbm=1&brew_time=215&first_drip=18&bloom_time=43")
     assert resp.status_code == 200
     body = resp.text
     # brew_time_seconds is already seeded by the current handler (brew_time param).

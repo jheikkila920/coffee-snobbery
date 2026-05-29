@@ -26,7 +26,6 @@ from typing import Any
 
 from tests.conftest import _require_water_profiles_table
 
-
 # --------------------------------------------------------------------------- #
 # Endpoint tests (require authed TestClient + DB + p20 migration)             #
 # --------------------------------------------------------------------------- #
@@ -56,9 +55,7 @@ def test_create_water_profile(authed_client: Any) -> None:
         f"POST /water-profiles returned {resp.status_code}: {resp.text[:200]}"
     )
     hx_trigger = resp.headers.get("HX-Trigger", "")
-    assert hx_trigger, (
-        "HX-Trigger header missing from POST /water-profiles response (D-02)"
-    )
+    assert hx_trigger, "HX-Trigger header missing from POST /water-profiles response (D-02)"
     trigger_data = json.loads(hx_trigger)
     assert "water-profile-created" in trigger_data, (
         f"HX-Trigger payload missing 'water-profile-created' key: {hx_trigger}"
@@ -232,6 +229,5 @@ def test_migration_null_water_type(sync_db: Any) -> None:
     banned_names = {"Unknown", "Unspecified", "None", "N/A", ""}
     produced_names = {row[0] for row in rows}
     assert not (produced_names & banned_names), (
-        f"Seed SQL produced banned placeholder profile names: "
-        f"{produced_names & banned_names}"
+        f"Seed SQL produced banned placeholder profile names: {produced_names & banned_names}"
     )

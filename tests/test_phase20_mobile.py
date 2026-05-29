@@ -57,8 +57,7 @@ def test_brew_guided_loads(authed_client: Any) -> None:
 
     resp = authed_client.get(f"/brew/guided?recipe_id={recipe_id}")
     assert resp.status_code == 200, (
-        f"GET /brew/guided?recipe_id={recipe_id} returned {resp.status_code}: "
-        f"{resp.text[:200]}"
+        f"GET /brew/guided?recipe_id={recipe_id} returned {resp.status_code}: {resp.text[:200]}"
     )
     body = resp.text
     assert "guidedBrewMode" in body, (
@@ -76,9 +75,7 @@ def test_brew_form_loads(authed_client: Any) -> None:
     This test is RED until Plan 20-04 lands the template change.
     """
     resp = authed_client.get("/brew/new")
-    assert resp.status_code == 200, (
-        f"GET /brew/new returned {resp.status_code}: {resp.text[:200]}"
-    )
+    assert resp.status_code == 200, f"GET /brew/new returned {resp.status_code}: {resp.text[:200]}"
     body = resp.text
     assert 'name="water_profile_id"' in body, (
         "brew form missing name='water_profile_id' select field — "

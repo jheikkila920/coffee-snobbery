@@ -361,8 +361,7 @@ def _hydrate_form_context(
         "server_draft_json": json.dumps(server_draft) if server_draft is not None else "",
         "form_action": f"/brew/{session_id}" if mode == "edit" else "/brew",
         "water_profiles": [
-            {"id": p.id, "name": p.name}
-            for p in water_profiles_service.list_water_profiles(db)
+            {"id": p.id, "name": p.name} for p in water_profiles_service.list_water_profiles(db)
         ],
         **_selectables(db),
     }
@@ -1015,7 +1014,9 @@ def edit_brew_form(
         "grinder_id": str(session.grinder_id) if session.grinder_id is not None else "",
         "kettle_id": str(session.kettle_id) if session.kettle_id is not None else "",
         "water_type": session.water_type or "",
-        "water_profile_id": str(session.water_profile_id) if session.water_profile_id is not None else "",
+        "water_profile_id": str(session.water_profile_id)
+        if session.water_profile_id is not None
+        else "",
         "dose_grams_actual": _num_str(session.dose_grams_actual),
         "water_grams_actual": _num_str(session.water_grams_actual),
         "yield_grams_actual": _num_str(session.yield_grams_actual),

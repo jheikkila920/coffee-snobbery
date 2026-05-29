@@ -465,9 +465,7 @@ def _require_water_profiles_table() -> None:
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
     if row is None:
-        pytest.skip(
-            "water_profiles table not present — p20_water_profiles migration not applied"
-        )
+        pytest.skip("water_profiles table not present — p20_water_profiles migration not applied")
 
 
 def _require_brew_sessions_with_water_profile_id() -> None:
