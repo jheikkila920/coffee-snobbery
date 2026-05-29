@@ -117,25 +117,88 @@
     </select>
   </label>
 
-  {# --- Water type (D-07: native suggestions + Other free-text) ---
-     A <datalist> gives native dropdown suggestions (select-like) while still
-     accepting a free-typed "Other" value — CSP-safe, no JS, mobile-friendly,
-     and one `water_type` field (no select/text conflict). See 05-05-SUMMARY
-     for the deviation note vs. a separate select+toggle. #}
-  <label class="flex flex-col gap-1">
-    <span class="text-sm font-semibold">Water type {{ prefill_pill('water_type') }}</span>
-    <input name="water_type" maxlength="100" inputmode="text" list="water-type-options"
-           value="{{ values.get('water_type', '') }}"
-           class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
-    <datalist id="water-type-options">
-      <option value="Tap"></option>
-      <option value="Filtered"></option>
-      <option value="Bottled"></option>
-      <option value="Distilled"></option>
-      <option value="Third Wave Water"></option>
-      <option value="Custom mineral mix"></option>
-    </datalist>
-  </label>
+  {# --- Water profile (GBREW-04 / D-02): inline select-or-create, Alpine-managed ---
+     Replaces the freetext water_type datalist. Alpine component waterProfileSelect
+     is registered in water-profile-select.js (loaded in base.html before Alpine boots).
+     htmx.ajax() POST in saveProfile() goes through htmx-listeners.js CSRF injection
+     (no manual fetch/header — mirrors flavor-tag-input.js createFromQuery pattern).
+     data-initial-profiles uses single-quoted attr + |tojson (memory: tojson attr quoting). #}
+  <div x-data="waterProfileSelect"
+       data-initial-profiles='{{ water_profiles | tojson }}'
+       data-initial-value='{{ values.get("water_profile_id", "") }}'>
+    <label class="flex flex-col gap-1">
+      <span class="text-sm font-semibold">Water profile</span>
+      <select name="water_profile_id"
+              x-show="!showCreate"
+              x-on:change="onSelectChange($event.target.value)"
+              class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
+        <option value="">—</option>
+        <template x-for="p in profiles" :key="p.id">
+          <option :value="p.id" :selected="profileId == p.id" x-text="p.name"></option>
+        </template>
+        <option value="__new__">Add new&hellip;</option>
+      </select>
+    </label>
+
+    {# Inline create form — shown when user picks "Add new…" #}
+    <div x-show="showCreate" class="flex flex-col gap-2 mt-2">
+      <input type="text"
+             x-ref="newName"
+             placeholder="Profile name (e.g. Third Wave Water)"
+             maxlength="80"
+             class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100">
+      <textarea rows="2"
+                x-ref="newNotes"
+                placeholder="Optional notes"
+                class="w-full rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 dark:text-cream-100"></textarea>
+      <p x-show="createError" x-text="createError"
+         class="text-sm text-red-600 dark:text-red-400"></p>
+      <div class="flex gap-2 items-center">
+        <button type="button"
+                x-on:click="saveProfile()"
+                class="rounded bg-espresso-700 text-cream-50 px-4 text-sm font-semibold min-h-[44px] hover:bg-espresso-800">
+          Save profile
+        </button>
+        <button type="button"
+                x-on:click="showCreate = false; createError = ''"
+                class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# --- Brew timing (optional) — GBREW-03 / D-12 / D-14 ---
+     Editable on any session (guided or manually-logged). Seeded from
+     ?first_drip= / ?bloom_time= GBM query params when arriving from Guided Brew.
+     text-base (16px) prevents iOS auto-zoom on focus. #}
+  <fieldset class="flex flex-col gap-2 rounded border border-espresso-200 dark:border-espresso-700 p-3">
+    <legend class="text-sm font-semibold px-1">Brew timing (optional)</legend>
+    <div class="flex gap-3">
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">First drip (s)</span>
+        <input type="number"
+               name="first_drip_seconds"
+               inputmode="numeric"
+               min="0"
+               value="{{ values.get('first_drip_seconds', '') }}"
+               placeholder="e.g. 18"
+               class="w-24 rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('first_drip_seconds') %} border-red-300{% endif %}">
+        {% if errors.get('first_drip_seconds') %}<p class="text-sm text-red-700 mt-1">{{ errors['first_drip_seconds'] }}</p>{% endif %}
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-sm font-semibold">Bloom time (s)</span>
+        <input type="number"
+               name="bloom_time_seconds"
+               inputmode="numeric"
+               min="0"
+               value="{{ values.get('bloom_time_seconds', '') }}"
+               placeholder="e.g. 43"
+               class="w-24 rounded border border-espresso-200 px-2 py-2 text-base text-espresso-900 tabular-nums dark:text-cream-100{% if errors.get('bloom_time_seconds') %} border-red-300{% endif %}">
+        {% if errors.get('bloom_time_seconds') %}<p class="text-sm text-red-700 mt-1">{{ errors['bloom_time_seconds'] }}</p>{% endif %}
+      </label>
+    </div>
+  </fieldset>
 
   {# --- Dose / Water (recipe-wins template fields) ---
      x-on:input reports into the enclosing brewRatio scope (live 1:N.NN). The

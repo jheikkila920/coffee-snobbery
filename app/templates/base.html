@@ -38,6 +38,10 @@
     <script defer src="/static/js/alpine-components/flavor-tag-input.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/brew-ratio.js" nonce="{{ csp_nonce(request) }}"></script>
     <script defer src="/static/js/alpine-components/brew-draft.js" nonce="{{ csp_nonce(request) }}"></script>
+    {# Phase 20 water profile select-or-create component (plan 20-03) — registers
+       Alpine.data('waterProfileSelect') before the @alpinejs/csp core boots;
+       used by brew_prefill_fields.html to drive the inline profile picker (GBREW-04). #}
+    <script defer src="/static/js/alpine-components/water-profile-select.js" nonce="{{ csp_nonce(request) }}"></script>
     {# Phase 10 search bar component (plan 10-03) — registers Alpine.data('searchBar')
        before the @alpinejs/csp core boots and walks x-data="searchBar" in the header. #}
     <script defer src="/static/js/alpine-components/search-bar.js" nonce="{{ csp_nonce(request) }}"></script>
