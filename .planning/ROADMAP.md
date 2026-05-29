@@ -44,7 +44,7 @@ other households.
 - [x] **Phase 16: Cafe Quick-Rate** - Add per-user cafe-log entity with analytics and AI integration (completed 2026-05-27)
 - [x] **Phase 17: IA Restructure** - Move Admin off nav; add AI destination tab; simplify home page (completed 2026-05-28)
 - [x] **Phase 18: Self-Host Packaging** - Publish prebuilt multi-arch image and complete operator documentation (completed 2026-05-28)
-- [ ] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts (REOPENED 2026-05-29 — code review found 2 blockers incl. stored XSS; see 19-REVIEW.md, gap closure pending)
+- [x] **Phase 19: AI Page & Research/Predict** - Wire the AI page; add on-demand coffee research with predicted rating and charts (REOPENED 2026-05-29 — code review found 2 blockers incl. stored XSS; see 19-REVIEW.md, gap closure pending) (completed 2026-05-29)
 - [ ] **Phase 20: Guided Brew Polish** - Purpose-built mobile brewing coach with phase timer and water profiles
 - [ ] **Phase 21: Mobile-First Full Rework** - Screen-by-screen audit and polish at 375px to major-company bar
 - [ ] **Phase 22: Verification & Release** - Full suite green, Playwright smoke, tag v1.2.0, push GHCR image
@@ -199,7 +199,7 @@ Plans:
 - [x] 19-08-PLAN.md — CR-01/CR-02/WR-06/IN-01/IN-03: render research + improve-brew SSE through autoescaped Jinja templates (fix stored XSS + broken coach card), reconcile cited_sources contract, regression tests
 
 **Wave 8** *(blocked on Wave 7)*
-- [ ] 19-09-PLAN.md — WR-01/WR-02/WR-03/WR-04/WR-05/IN-02: commit+reuse cache-hit prediction, bound prediction-regen cost, narrow except clauses, one format_reset helper, accepted-risk TOCTOU note
+- [x] 19-09-PLAN.md — WR-01/WR-02/WR-03/WR-04/WR-05/IN-02: commit+reuse cache-hit prediction, bound prediction-regen cost, narrow except clauses, one format_reset helper, accepted-risk TOCTOU note
 **UI hint**: yes
 
 ### Phase 20: Guided Brew Polish
@@ -265,7 +265,7 @@ Plans:
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
-| 19. AI Page & Research/Predict | v1.2 | 8/9 | In Progress|  |
+| 19. AI Page & Research/Predict | v1.2 | 9/9 | Complete   | 2026-05-29 |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
