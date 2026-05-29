@@ -190,7 +190,7 @@ Plans:
 - [x] 19-05-PLAN.md — AIX-01/03/05/07/12/13/VIZ-01: research SSE route + quota fragment + coach picker + improve-brew route + charts + latency query
 
 **Wave 5** *(blocked on Wave 4)*
-- [ ] 19-06-PLAN.md — AIX-06/09/10/12/VIZ-01: /ai restructure + research/prefs/trends/coach fragments + Chart.js CDN + indicator CSS + improve-brew UI (human-verify)
+- [x] 19-06-PLAN.md — AIX-06/09/10/12/VIZ-01: /ai restructure + research/prefs/trends/coach fragments + Chart.js CDN + indicator CSS + improve-brew UI (human-verify)
 
 **Wave 6** *(blocked on Wave 5)*
 - [ ] 19-07-PLAN.md — AIX-05/13: latency investigation + NPM proxy_buffering off doc + admin quota verification + phase-close gate (human-verify)
@@ -259,7 +259,7 @@ Plans:
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
-| 19. AI Page & Research/Predict | v1.2 | 5/7 | In Progress|  |
+| 19. AI Page & Research/Predict | v1.2 | 6/7 | In Progress|  |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
