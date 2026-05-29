@@ -335,9 +335,10 @@ def test_sse_event_contract() -> None:
             mock_db.execute.return_value = MagicMock()
 
             mock_telemetry.return_value = MagicMock()
-            mock_write_cache.return_value = MagicMock(
-                response_json={"coffee_name": "Yirgacheffe Kochere"}
-            )
+            # The cache row stores the full CoffeeResearchSchema dump; the
+            # event:complete render validates it as a complete schema, so the
+            # mock must return the full raw_output (not just coffee_name).
+            mock_write_cache.return_value = MagicMock(response_json=raw_output)
             mock_pred.return_value = MagicMock()
 
             gen = generate_coffee_research(
@@ -611,10 +612,16 @@ def test_render_research_result_escapes_onerror_payload() -> None:
     cache_row = _make_cache_row(onerror_name)
     html = _render_research_result(cache_row=cache_row, prediction=None, cached=False)
 
-    assert "onerror=alert(1)" not in html, (
-        f"Unescaped onerror payload found — XSS vulnerability: {html[:500]}"
+    # HTML escaping neutralises < > " — not '=' or parens — so the inert
+    # substring "onerror=alert(1)" legitimately survives as display text once
+    # the tag-opening "<img" is escaped to "&lt;img". The XSS property is that
+    # no executable <img> tag can form.
+    assert "<img src=x onerror=" not in html, (
+        f"Unescaped <img> tag found — XSS vulnerability: {html[:500]}"
     )
-    assert "&gt;" in html or "onerror=alert(1)" not in html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in html, (
+        f"Expected HTML-escaped <img> payload, got: {html[:500]}"
+    )
 
 
 def test_render_research_result_with_prediction() -> None:
