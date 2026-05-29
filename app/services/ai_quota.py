@@ -89,3 +89,22 @@ def remaining(db: Session, user_id: int, rec_type: str) -> int:
     cap = get_quota_cap(rec_type)
     used = count_calls_last_24h(db, user_id, rec_type)
     return max(cap - used, 0)
+
+
+def format_reset(reset_time: datetime | None) -> str | None:
+    """Format a reset countdown as "Hh Mm" (WR-05/IN-02).
+
+    Returns None when reset_time is None (no active quota window → no countdown).
+    Clamps total_secs to max(0, ...) BEFORE the H/M split so the countdown can
+    never display a negative value ("-1h 59m") even when the oldest in-window row
+    just crossed the 24h boundary between quota-check and display (WR-05).
+    """
+    if reset_time is None:
+        return None
+    delta = reset_time - datetime.now(UTC)
+    # Clamp to zero — delta can be negative if the quota window just expired
+    # between the DB read and this render (WR-05: negative countdown prevention).
+    total_secs = max(0, int(delta.total_seconds()))
+    hours = total_secs // 3600
+    mins = (total_secs % 3600) // 60
+    return f"{hours}h {mins}m"

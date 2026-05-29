@@ -136,6 +136,56 @@ def test_quota_cap_different_keys_for_different_types() -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Test: format_reset helper — WR-05/IN-02
+# ---------------------------------------------------------------------------
+
+
+def test_format_reset_none_input() -> None:
+    """WR-05/IN-02: format_reset returns None when reset_time is None (empty window)."""
+    from app.services.ai_quota import format_reset
+
+    assert format_reset(None) is None
+
+
+def test_format_reset_future_time() -> None:
+    """WR-05/IN-02: format_reset returns correct 'Hh Mm' string for a future reset_time."""
+    from app.services.ai_quota import format_reset
+
+    now = datetime.now(UTC)
+    reset_time = now + timedelta(hours=3, minutes=45)
+    result = format_reset(reset_time)
+
+    assert result is not None
+    # Allow ± 1 second of timing drift — hours/mins should be 3h 44m or 3h 45m
+    assert result.startswith("3h"), f"Expected '3h ...' but got: {result}"
+    assert "m" in result
+
+
+def test_format_reset_past_time_clamps_to_zero() -> None:
+    """WR-05/IN-02: format_reset clamps negative delta to '0h 0m' — never negative countdown."""
+    from app.services.ai_quota import format_reset
+
+    now = datetime.now(UTC)
+    # reset_time is in the past (window just expired)
+    past_reset = now - timedelta(hours=1, minutes=30)
+    result = format_reset(past_reset)
+
+    assert result == "0h 0m", (
+        f"Expected '0h 0m' for past reset_time, got: {result!r}. "
+        "Negative countdowns (-1h 59m) must be clamped (WR-05)."
+    )
+
+
+def test_format_reset_zero_delta() -> None:
+    """WR-05: format_reset at exactly reset_time (delta=0) → '0h 0m'."""
+    from app.services.ai_quota import format_reset
+
+    # Slightly in the past to ensure non-positive
+    result = format_reset(datetime.now(UTC) - timedelta(seconds=1))
+    assert result == "0h 0m"
+
+
 def test_quota_remaining() -> None:
     """remaining = max(cap - count, 0); never negative."""
     from app.services.ai_quota import remaining

@@ -104,15 +104,8 @@ def get_ai_page(
         remaining = ai_quota.remaining(db, user.id, "coffee_research")
         quota_cap = ai_quota.get_quota_cap("coffee_research")
         if remaining == 0:
-            from datetime import UTC, datetime
-
             reset_time = ai_quota.get_quota_reset_time(db, user.id, "coffee_research")
-            if reset_time:
-                delta = reset_time - datetime.now(UTC)
-                total_secs = max(0, int(delta.total_seconds()))
-                hours = total_secs // 3600
-                mins = (total_secs % 3600) // 60
-                reset_in = f"{hours}h {mins}m"
+            reset_in = ai_quota.format_reset(reset_time)
 
     return templates.TemplateResponse(
         request=request,
@@ -582,15 +575,11 @@ async def post_ai_research(
     remaining = ai_quota.remaining(db, user_id, "coffee_research")
     if remaining <= 0:
         reset_time = ai_quota.get_quota_reset_time(db, user_id, "coffee_research")
-        if reset_time:
-            from datetime import UTC, datetime
-
-            delta = reset_time - datetime.now(UTC)
-            hours = int(delta.total_seconds() // 3600)
-            mins = int((delta.total_seconds() % 3600) // 60)
+        reset_str = ai_quota.format_reset(reset_time)
+        if reset_str:
             content = (
                 f'<div id="research-card" class="text-center py-4 text-amber-600">'
-                f"Daily research limit reached. Resets in {hours}h {mins}m."
+                f"Daily research limit reached. Resets in {reset_str}."
                 f"</div>"
             )
         else:
@@ -638,8 +627,6 @@ def get_research_quota(
     - ``"{remaining}/{cap} research calls remaining today"`` when quota > 0
     - ``"Resets in Hh Mm"`` when quota is exhausted
     """
-    from datetime import UTC, datetime
-
     user_id = user.id
     remaining = ai_quota.remaining(db, user_id, "coffee_research")
     cap = ai_quota.get_quota_cap("coffee_research")
@@ -652,13 +639,11 @@ def get_research_quota(
         )
     else:
         reset_time = ai_quota.get_quota_reset_time(db, user_id, "coffee_research")
-        if reset_time:
-            delta = reset_time - datetime.now(UTC)
-            hours = int(delta.total_seconds() // 3600)
-            mins = int((delta.total_seconds() % 3600) // 60)
+        reset_str = ai_quota.format_reset(reset_time)
+        if reset_str:
             content = (
                 f'<span id="research-quota" class="text-sm text-amber-600">'
-                f"Resets in {hours}h {mins}m"
+                f"Resets in {reset_str}"
                 f"</span>"
             )
         else:
@@ -711,15 +696,11 @@ async def post_ai_improve_brew(
     remaining = ai_quota.remaining(db, user_id, "brew_improvement")
     if remaining <= 0:
         reset_time = ai_quota.get_quota_reset_time(db, user_id, "brew_improvement")
-        if reset_time:
-            from datetime import UTC, datetime
-
-            delta = reset_time - datetime.now(UTC)
-            hours = int(delta.total_seconds() // 3600)
-            mins = int((delta.total_seconds() % 3600) // 60)
+        reset_str = ai_quota.format_reset(reset_time)
+        if reset_str:
             content = (
                 f'<div id="improve-result" class="text-center py-4 text-amber-600">'
-                f"Daily brew-improvement limit reached. Resets in {hours}h {mins}m."
+                f"Daily brew-improvement limit reached. Resets in {reset_str}."
                 f"</div>"
             )
         else:

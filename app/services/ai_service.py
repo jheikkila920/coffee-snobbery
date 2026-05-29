@@ -1975,13 +1975,9 @@ async def generate_brew_improvement(
     if remaining <= 0:
         reset_time = ai_quota.get_quota_reset_time(db, user_id, _REC_TYPE_BREW_IMPROVEMENT)
         msg = "Daily brew-improvement limit reached."
-        if reset_time:
-            delta = reset_time - __import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            )
-            hours = int(delta.total_seconds() // 3600)
-            mins = int((delta.total_seconds() % 3600) // 60)
-            msg += f" Resets in {hours}h {mins}m."
+        reset_str = ai_quota.format_reset(reset_time)
+        if reset_str:
+            msg += f" Resets in {reset_str}."
         yield ServerSentEvent(data=msg, event="error")
         return
 
