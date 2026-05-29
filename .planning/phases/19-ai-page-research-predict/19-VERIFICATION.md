@@ -71,6 +71,22 @@ Both `ai.research_daily_quota` and `ai.improve_brew_daily_quota` are seeded as `
 
 ---
 
+## Phase-Close Gate — Local (run by orchestrator, 2026-05-29)
+
+**Full suite (`coffee-snobbery-test`, baked image, `snobbery_test` dropped first):**
+Run twice (clean DB, then dirty DB) — stable: **1316 passed, 3 skipped (documented), 10 xfailed, 1 failed**.
+
+The 3 skips are documented/benign (async session fixture, FK-cascade orphan-session, live-container cafe log). The 1 failure is pre-existing and environmental:
+- `test_admin_system::test_system_info` — asserts pyproject version `1.2.0` appears in `/admin`, but the page renders `get_app_version()` = the `APP_VERSION` build-arg, which the local dev test image does not set (only `release.yml` stamps it from the git tag). Passes in release builds (`1.2.0` ⊂ `v1.2.0`). Not a Phase 19 regression, not a production bug. (Recommend a follow-up to make the test skip when `APP_VERSION` is unset/`dev`.)
+
+**Two gate failures found and fixed (test-only, commit `83d2680`):**
+1. `test_ai_router::test_ai_page_above_gate_with_key_shows_hero` asserted the Phase-17 `/ai` layout (deleted flavor-descriptors mount + replaced "Coming in Phase 19" stub). Reconciled to the D-10 / ADR-0004 structure.
+2. `test_admin_settings` quota update-persists tests committed caps (5/10) without restoring, polluting `test_p19_quota_settings_seeded` in the full suite. Added an autouse teardown restoring both quota rows to `'20'`. Verified the fix holds on a dirty-DB second run.
+
+**Ruff gates (CI parity):** `ruff format --check .` → 240 files clean; `ruff check .` → all checks passed.
+
+---
+
 ## Outstanding UAT (carried from 19-06)
 
 These items were identified in the 19-06 SUMMARY as not confirmed during Phase 19 human verification. They are input to this verification ledger but are NOT fixed in plan 19-07 (out of scope per plan frontmatter). Carry to post-phase UAT.
