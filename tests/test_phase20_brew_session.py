@@ -10,12 +10,12 @@ They are EXPECTED to fail RED until Plan 20-02 lands those additions.
 
 Also tests the GBM finish URL query-param contract (GBREW-01 D-15):
   GET /brew/new?gbm=1&brew_time=T&first_drip=X&bloom_time=Y
-  must seed those values into the rendered form.
+  must seed those values into the rendered form (Plan 20-04).
 
 Requirement traceability:
   GBREW-01 (D-14, D-15), GBREW-03 (D-12, D-14), GBREW-04 (D-02)
 
-No pytest.skip for missing data — tests fail RED now, turn GREEN in Wave 1.
+No infra-skip calls in this file — helpers live in conftest.py.
 """
 
 from __future__ import annotations
@@ -25,34 +25,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-
-# --------------------------------------------------------------------------- #
-# Skip gates (DB-dependent tests only)                                        #
-# --------------------------------------------------------------------------- #
-
-
-def _require_postgres_and_migration() -> None:
-    """Fail-fast skip when Postgres is unreachable or the migration hasn't run."""
-    try:
-        from tests.conftest import _postgres_reachable
-    except ImportError:
-        pytest.skip("postgres reachability probe missing from conftest")
-    if not _postgres_reachable():
-        pytest.skip("Postgres not reachable — timing_columns test needs the DB")
-
-    try:
-        from sqlalchemy import text
-
-        from app.db import engine
-    except ImportError:
-        pytest.skip("app.db not importable")
-    try:
-        with engine.connect() as conn:
-            row = conn.execute(text("SELECT to_regclass('public.brew_sessions')")).scalar()
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
-    if row is None:
-        pytest.skip("brew_sessions table not present — migration not applied")
+from tests.conftest import _require_brew_sessions_with_water_profile_id
 
 
 # --------------------------------------------------------------------------- #
@@ -163,10 +136,9 @@ def test_timing_columns(authed_client: Any) -> None:  # noqa: ARG001
       - first_drip_seconds (integer, nullable)
       - bloom_time_seconds (integer, nullable)
 
-    This test requires both Postgres and the p20 migration to have run.
-    The authed_client fixture ensures the app + DB are reachable.
+    Infra skip (no Postgres or migration not run): handled via conftest helper.
     """
-    _require_postgres_and_migration()
+    _require_brew_sessions_with_water_profile_id()
 
     from sqlalchemy import text
 
@@ -222,7 +194,7 @@ def test_gbm_finish_url_has_brew_time(authed_client: Any, seeded_admin_user: Any
       - first_drip_seconds field is seeded with the first_drip query param value
       - bloom_time_seconds field is seeded with the bloom_time query param value
 
-    This test will be RED until Plan 20-04 wires those params in the GET handler.
+    This test will be RED until Plan 20-04 wires first_drip + bloom_time params.
     """
     resp = authed_client.get(
         "/brew/new?gbm=1&brew_time=215&first_drip=18&bloom_time=43"
@@ -230,16 +202,15 @@ def test_gbm_finish_url_has_brew_time(authed_client: Any, seeded_admin_user: Any
     assert resp.status_code == 200
     body = resp.text
     # brew_time_seconds is already seeded by the current handler (brew_time param).
-    # first_drip_seconds and bloom_time_seconds are new (Plan 20-04 wires them).
     assert 'name="brew_time_seconds"' in body or "215" in body, (
         "brew_time_seconds not seeded in form — GBM brew_time param not wired"
     )
+    # first_drip_seconds and bloom_time_seconds are new — Plan 20-04 wires them.
     assert 'name="first_drip_seconds"' in body, (
         "first_drip_seconds field not in form — Plan 20-04 must add this field"
     )
     assert 'name="bloom_time_seconds"' in body, (
         "bloom_time_seconds field not in form — Plan 20-04 must add this field"
     )
-    # Values must be seeded from query params
     assert "18" in body, "first_drip value (18s) not seeded in form"
     assert "43" in body, "bloom_time value (43s) not seeded in form"

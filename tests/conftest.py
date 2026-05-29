@@ -429,6 +429,65 @@ def _require_cafe_logs_table() -> None:
         pytest.skip("cafe_logs table not present — migration p16_cafe_logs not applied")
 
 
+def _require_water_profiles_table() -> None:
+    """Skip if the water_profiles table is not present (Phase 20 migration not run).
+
+    Used by Phase 20 tests that assert water_profile endpoint + migration behavior.
+    Calling this from the test body keeps the test file free of pytest.skip(
+    calls while still surface a clear, actionable skip message under ``pytest -rs``.
+
+    Added Phase 20 Plan 01 — mirrors the _require_cafe_logs_table pattern.
+    """
+    if not _postgres_reachable():
+        pytest.skip("Postgres not reachable — water profile tests need the DB")
+    try:
+        from sqlalchemy import text
+
+        from app.db import engine
+    except ImportError:
+        pytest.skip("app.db not importable")
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT to_regclass('public.water_profiles')")).scalar()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
+    if row is None:
+        pytest.skip(
+            "water_profiles table not present — p20_water_profiles migration not applied"
+        )
+
+
+def _require_brew_sessions_with_water_profile_id() -> None:
+    """Skip if brew_sessions.water_profile_id column is absent (Phase 20 migration not run).
+
+    Used by Phase 20 brew-session timing-column introspection tests.
+    """
+    if not _postgres_reachable():
+        pytest.skip("Postgres not reachable — timing column test needs the DB")
+    try:
+        from sqlalchemy import text
+
+        from app.db import engine
+    except ImportError:
+        pytest.skip("app.db not importable")
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='brew_sessions' "
+                    "  AND column_name='water_profile_id'"
+                )
+            ).fetchone()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"DB unreachable: {exc.__class__.__name__}: {exc}")
+    if row is None:
+        pytest.skip(
+            "brew_sessions.water_profile_id column absent — "
+            "p20_water_profiles migration not applied"
+        )
+
+
 def _postgres_reachable() -> bool:
     """Return True iff the configured Postgres host:port accepts a TCP connect.
 
