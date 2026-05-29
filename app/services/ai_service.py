@@ -79,6 +79,7 @@ from app.services.ai_schemas import (
     RecipeSuggestionSchema,
     SweetSpotsProseSchema,  # noqa: F401 — used in Task 2
 )
+from app.templates_setup import templates
 
 log = structlog.get_logger(__name__)
 
@@ -2153,13 +2154,14 @@ async def generate_brew_improvement(
             duration_ms=duration_ms,
         )
 
-        # (9) Emit event:complete with validated result JSON
-        import json as _json
-
-        yield ServerSentEvent(
-            data=_json.dumps(result_schema.model_dump()),
-            event="complete",
+        # (9) Emit event:complete as rendered HTML via Jinja autoescape (CR-02).
+        # All AI-derived prose (summary_prose, next_try rationale, etc.) passes
+        # through fragments/brew/improve_result.html — never raw JSON or f-string.
+        html = templates.get_template("fragments/brew/improve_result.html").render(
+            result=result_schema,
+            session_id=session_id,
         )
+        yield ServerSentEvent(data=html, event="complete")
 
 
 def _build_brew_improve_prompt(session: Any, prior_sessions: list[Any]) -> str:
