@@ -1,43 +1,27 @@
-{# Research result card — compact single-column layout (D-03 / AIX-01 / AIX-02 / AIX-06).
+{# Research result card — trimmed to score + Why + wishlist (D-03 revised 2026-05-28).
    Emitted as event:complete data by the POST /ai/research SSE stream.
 
    Context (from CoffeeResearchSchema + AIRatingPrediction + bool flags):
-     result             — CoffeeResearchSchema: coffee_name, roaster_name, origin,
-                          process, roast_level, tasting_notes[], buy_url, sources[]
+     result             — CoffeeResearchSchema: coffee_name, roaster_name, buy_url
+                          (origin, process, roast_level, tasting_notes, sources still
+                          produced by the AI call as rating-prediction inputs — not displayed)
      prediction         — AIRatingPrediction | None: predicted_low, predicted_high,
                           confidence, reasoning
      is_cached          — bool: True when result was served from cache (shows · cached badge)
      buy_url_unverified — bool: True when buy_url failed the SSRF verifier (shows warning chip)
 
-   Card stack (D-03): title → metadata → tasting notes → predicted rating → sources → wishlist.
+   Card stack (D-03 revised): title [+ cached badge] → predicted rating → wishlist [+ unverified chip].
    CSP-clean. All values autoescaped. Never use the safe filter. Never a lone rating number — always range (AIX-02).
 #}
 <div class="mt-4 space-y-3">
 
-  {# Title row: roaster — coffee name #}
-  <div>
+  {# Title row: roaster — coffee name + cached badge inline #}
+  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
     <p class="text-base font-semibold text-espresso-900 dark:text-cream-100">
       {% if result.roaster_name %}{{ result.roaster_name }} &mdash; {% endif %}{{ result.coffee_name }}
     </p>
+    {% if is_cached %}<span class="text-xs italic text-espresso-400 dark:text-espresso-500">cached</span>{% endif %}
   </div>
-
-  {# Metadata row: origin · process · roast level · cached badge #}
-  <p class="text-sm text-espresso-600 dark:text-cream-300 flex flex-wrap gap-x-2 gap-y-1">
-    {% if result.origin %}<span>{{ result.origin }}</span>{% endif %}
-    {% if result.process %}<span class="text-espresso-400 dark:text-espresso-500" aria-hidden="true">&middot;</span><span>{{ result.process }}</span>{% endif %}
-    {% if result.roast_level %}<span class="text-espresso-400 dark:text-espresso-500" aria-hidden="true">&middot;</span><span>{{ result.roast_level }}</span>{% endif %}
-    {% if is_cached %}<span class="text-espresso-400 dark:text-espresso-500" aria-hidden="true">&middot;</span><span class="text-xs italic">cached</span>{% endif %}
-    {% if buy_url_unverified %}<span class="ml-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">buy URL not verified</span>{% endif %}
-  </p>
-
-  {# Tasting notes chips #}
-  {% if result.tasting_notes %}
-    <div class="flex flex-wrap gap-2" aria-label="Tasting notes">
-      {% for note in result.tasting_notes %}
-        <span class="px-2 py-0.5 rounded text-sm bg-espresso-100 text-espresso-800 dark:bg-espresso-800 dark:text-cream-200">{{ note }}</span>
-      {% endfor %}
-    </div>
-  {% endif %}
 
   {# Predicted rating block (AIX-02/D-02) — ALWAYS range + confidence + reasoning; never a lone number #}
   {% if prediction %}
@@ -53,20 +37,8 @@
     </div>
   {% endif %}
 
-  {# Cited sources as footnote-style links (sources is list[str] URLs) #}
-  {% if result.sources %}
-    <div class="text-xs text-espresso-500 dark:text-cream-400 space-y-0.5">
-      {% for source in result.sources %}
-        <p>
-          <sup>{{ loop.index }}</sup>
-          <a href="{{ source }}" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ source }}</a>
-        </p>
-      {% endfor %}
-    </div>
-  {% endif %}
-
   {# Add to wishlist button — POST /ai/wishlist/add with prefilled fields (AIX-06/D-05) #}
-  <div>
+  <div class="flex flex-wrap items-center gap-3">
     <form hx-post="/ai/wishlist/add"
           hx-swap="none"
           class="inline">
@@ -79,6 +51,7 @@
         + Add to wishlist
       </button>
     </form>
+    {% if buy_url_unverified %}<span class="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">buy URL not verified</span>{% endif %}
   </div>
 
 </div>
