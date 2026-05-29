@@ -42,7 +42,7 @@
     <form hx-post="/ai/wishlist/add"
           hx-swap="none"
           class="inline">
-      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') }}">
+      <input type="hidden" name="X-CSRF-Token" value="{{ request.cookies.get('csrftoken', '') if request else '' }}">
       <input type="hidden" name="coffee_name" value="{{ result.coffee_name }}">
       {% if result.roaster_name %}<input type="hidden" name="roaster_name" value="{{ result.roaster_name }}">{% endif %}
       {% if result.buy_url %}<input type="hidden" name="source_url" value="{{ result.buy_url }}">{% endif %}

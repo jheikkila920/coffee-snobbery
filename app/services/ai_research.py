@@ -45,6 +45,7 @@ from app.services.ai_service import (
     _project_tool_use_input,
     _try_advisory_lock,
 )
+from app.templates_setup import templates
 
 try:
     from sse_starlette.sse import ServerSentEvent
@@ -647,7 +648,7 @@ def _build_research_prompt(coffee_name: str, roaster_name: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Result renderer (stub — routes/templates added in 19-04)
+# Result renderer — routes AI-derived prose through Jinja autoescape (CR-01)
 # ---------------------------------------------------------------------------
 
 
@@ -656,20 +657,34 @@ def _render_research_result(
     cache_row: AICoffeeResearchCache,
     prediction: AIRatingPrediction | None,
     cached: bool,
+    buy_url_unverified: bool = False,
+    request: Any = None,
 ) -> str:
-    """Render the research result card HTML fragment.
+    """Render the research result card via fragments/ai/research_result.html.
 
-    Returns a minimal HTML string when the templates are not yet wired
-    (Phase 19-04 adds the full template). This stub is sufficient for
-    the service-layer tests and SSE contract.
+    This is the live render path for the SSE event:complete payload.  All
+    AI-derived strings (coffee_name, roaster_name, buy_url, etc.) pass through
+    Jinja autoescape ON — never via an f-string.  This satisfies the project's
+    non-negotiable "never bypass autoescape for AI prose" invariant (CR-01).
+
+    Args:
+        cache_row: The cached research row whose ``response_json`` is a
+            CoffeeResearchSchema-compatible dict.
+        prediction: Optional per-user rating prediction; None when not available.
+        cached: True when the result was served from cache (renders a 'cached' badge).
+        buy_url_unverified: True when the buy_url failed SSRF verification.
+            Defaults to False (SSRF verifier runs as a BackgroundTask post-stream;
+            the initial render uses the safe default).
+        request: Optional Starlette Request for CSRF cookie extraction.  The
+            template guards against None (renders an empty hidden field value),
+            so passing None is safe.  The wishlist POST is independently protected
+            by CSRFMiddleware double-submit cookie+header (T-19-08-04).
     """
-    raw = cache_row.response_json
-    coffee_name = raw.get("coffee_name", "")
-    cached_badge = ' <span class="text-xs text-muted">· cached</span>' if cached else ""
-    pred_text = ""
-    if prediction is not None:
-        pred_text = (
-            f'<p class="text-sm">Predicted: {prediction.predicted_low}'
-            f"–{prediction.predicted_high}/5 ({prediction.confidence})</p>"
-        )
-    return f'<div id="research-result"><h3>{coffee_name}{cached_badge}</h3>{pred_text}</div>'
+    result = CoffeeResearchSchema.model_validate(cache_row.response_json)
+    return templates.get_template("fragments/ai/research_result.html").render(
+        result=result,
+        prediction=prediction,
+        is_cached=cached,
+        buy_url_unverified=buy_url_unverified,
+        request=request,
+    )
