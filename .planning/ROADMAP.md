@@ -212,7 +212,22 @@ Plans:
   3. User can optionally record first-drip time and bloom time on any brew session
   4. Water type is chosen from a named water-profiles catalog instead of free text
   5. Guided Brew Mode passes the 375px mobile audit: correct touch targets, safe-area, no horizontal scroll
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+
+**Wave 1**
+- [ ] 20-01-PLAN.md — Wave 0 test scaffolding: 4 phase20 test files (GBREW-01..06 behaviors, no pass-by-skip)
+- [ ] 20-02-PLAN.md — GBREW-04/06/03 data layer: water_profiles model/schema/router/service + StepSchema extension + brew_session timing/FK cols + p20 seed/link migration
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 20-03-PLAN.md — GBREW-04/03: brew-form water-profile select-or-create + timing fieldset + context/persistence wiring
+- [ ] 20-04-PLAN.md — GBREW-06: recipe step builder type/note/temp + Wait/Action waterless steps
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 20-05-PLAN.md — GBREW-01/02/03: wall-clock-truth timer + full coach view + pre-cue + tap-to-mark + auto bloom
+
+**Wave 4** *(blocked on Wave 3)*
+- [ ] 20-06-PLAN.md — GBREW-01/02/05: phase-close gate — full suite x2 + ruff + on-device timer/coach/375px manual verify (human-verify)
 **UI hint**: yes
 
 ### Phase 21: Mobile-First Full Rework
