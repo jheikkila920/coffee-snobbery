@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {#
-  Guided Brew Mode — full-screen page (BREW-12/13, Phase 11 / Plan 04).
+  Guided Brew Mode — full-screen page (BREW-12/13, Phase 11 / Plan 04, extended Phase 20 / Plan 05).
 
   Covers the bottom nav via fixed inset-0 z-50 (D-20). The guidedBrewMode Alpine
   component owns all timer/wake-lock/cue state. Three screens toggled by Alpine state:
     - Start screen (pre-start / zero-steps disabled state)
-    - Timer screen (countdown + step progress + cues)
+    - Timer screen (countdown + step progress + coaching card + pre-cue + tap-to-mark)
     - Done screen (log or skip)
 
   NoSleep.js is loaded ONLY on this page via head_extra (Pitfall 5 — not globally).
@@ -13,6 +13,9 @@
   before the CSP core boots; this page is the only surface that uses guidedBrewMode.
 
   CSP-strict: no |safe, no inline hx-on:, no hx-vals='js:'. Autoescape ON.
+  Safe-area: the full-screen container owns pb-[max(env(safe-area-inset-bottom),_16px)]
+  on the bottom cancel section — NOT .content-nav-safe-area (that is for body content
+  under the fixed nav). Technique from commit 982c0e6 (Phase 15 D-13).
 #}
 {% block page_title %}Guided brew{% endblock %}
 {% block head_extra %}
@@ -67,11 +70,13 @@
             {% if recipe.water_temp_c %}· {{ recipe.water_temp_c }}°C{% endif %}
           </div>
 
-          {# Step preview list #}
+          {# Step preview list — shows step type alongside label (Phase 20 Plan 05) #}
           <div class="rounded-lg border border-espresso-200 dark:border-espresso-700 overflow-hidden">
             {% for step in recipe.steps %}
               <div class="flex items-center justify-between px-4 py-3 {% if not loop.last %}border-b border-espresso-100 dark:border-espresso-800{% endif %}">
-                <span class="text-sm font-medium">{{ step.label or ('Step ' ~ loop.index) }}</span>
+                <span class="text-sm font-medium">
+                  {{ step.type or 'Pour' }} — {{ step.label or ('Step ' ~ loop.index) }}
+                </span>
                 <span class="text-sm tabular-nums text-espresso-600 dark:text-cream-300">
                   {% if step.water_grams %}{{ step.water_grams }}g{% endif %}
                   {% if step.time_seconds %}· {{ step.time_seconds // 60 }}:{{ '%02d' % (step.time_seconds % 60) }}{% endif %}
@@ -140,11 +145,11 @@
         <div class="flex items-center justify-center">
           <span x-show="wakeLockState === 'held'"
                 class="text-xs text-green-600 dark:text-green-400 tabular-nums">
-            ● Screen stays on
+            &#9679; Screen stays on
           </span>
           <span x-show="wakeLockState === 'fallback'"
                 class="text-xs text-yellow-600 dark:text-yellow-400 tabular-nums">
-            ● Screen kept on (fallback)
+            &#9679; Screen kept on (fallback)
           </span>
         </div>
 
@@ -153,7 +158,15 @@
           Step <span x-text="currentStepIndex + 1"></span> of <span x-text="stepCount"></span>
         </div>
 
-        {# Countdown #}
+        {# Pre-cue countdown (D-10) — shown 3s before step transition; visual only.
+           Chime fires at the transition in _syncStateFromElapsed, NOT here (Pitfall 2). #}
+        <div x-show="isPreCue" aria-live="polite" class="text-center">
+          <p class="text-2xl font-semibold text-espresso-600 dark:text-cream-300">Get ready&hellip;</p>
+          <p class="text-5xl font-semibold tabular-nums text-espresso-700 dark:text-cream-100"
+             x-text="preCueCountdown"></p>
+        </div>
+
+        {# Main countdown #}
         <div class="text-center">
           <span class="text-7xl font-semibold tabular-nums" x-text="formattedRemaining">00:00</span>
         </div>
@@ -164,25 +177,66 @@
                :style="'width: ' + progressPct + '%'"></div>
         </div>
 
-        {# Current step card #}
-        <div class="rounded-lg bg-espresso-700 text-cream-50 px-4 py-4 flex flex-col gap-1">
-          <p class="text-base font-semibold" x-text="currentStep ? (currentStep.label || 'Step ' + (currentStepIndex + 1)) : ''"></p>
-          <p class="text-sm tabular-nums opacity-80"
-             x-show="currentStep && currentStep.water_grams"
-             x-text="currentStep ? currentStep.water_grams + 'g / {{ recipe.water_grams }}g total' : ''"></p>
+        {# Full coach card (D-11) — step type badge + coaching line + per-step note + temp #}
+        <div class="rounded-lg bg-espresso-700 text-cream-50 px-4 py-5 flex flex-col gap-1"
+             aria-live="assertive">
+          <span class="text-xs font-semibold uppercase tracking-wide opacity-70"
+                x-text="stepTypeBadge"></span>
+          <p class="text-xl font-semibold" x-text="coachingLine"></p>
+          <p class="text-sm opacity-80" x-show="stepNote" x-text="stepNote"></p>
+          <p class="text-sm opacity-70" x-show="stepWaterTemp" x-text="stepWaterTemp"></p>
         </div>
 
-        {# Upcoming step preview #}
+        {# Bloom auto-record indicator (D-13) #}
+        <p x-show="currentStep && (currentStep.type || 'Pour') === 'Bloom'"
+           class="text-sm text-espresso-600 dark:text-cream-300 text-center">
+          Bloom will auto-record
+        </p>
+        <p x-show="bloomTimeSeconds !== null"
+           class="text-sm text-espresso-600 dark:text-cream-300 tabular-nums text-center">
+          Bloom: <span x-text="bloomTimeSeconds !== null ? _formatTime(bloomTimeSeconds) : ''"></span>
+        </p>
+
+        {# Cumulative water target #}
+        <div x-show="currentStep && currentStep.water_grams"
+             class="text-base tabular-nums text-espresso-700 dark:text-cream-200 font-semibold text-center">
+          <span x-text="currentStep ? currentStep.water_grams + 'g' : ''"></span>
+          / {{ recipe.water_grams }}g total
+        </div>
+
+        {# Total elapsed #}
+        <div class="text-center text-sm text-espresso-600 dark:text-cream-300 tabular-nums">
+          Elapsed: <span x-text="formattedElapsed"></span>
+        </div>
+
+        {# Next step preview #}
         <div x-show="nextStep" class="text-sm text-espresso-600 dark:text-cream-300">
-          Next: <span x-text="nextStep ? (nextStep.label || 'Step ' + (currentStepIndex + 2)) : ''"></span>
+          Next: <span x-text="nextStep ? ((nextStep.type || 'Pour') + (nextStep.label ? ' — ' + nextStep.label : '')) : ''"></span>
           <span x-show="nextStep && nextStep.water_grams"
                 x-text="nextStep ? ' — ' + nextStep.water_grams + 'g' : ''"
                 class="tabular-nums"></span>
         </div>
 
-        {# Elapsed time #}
-        <div class="text-center text-sm text-espresso-600 dark:text-cream-300 tabular-nums">
-          Elapsed: <span x-text="formattedElapsed"></span>
+        {# First-drip tap-to-mark (D-12 / D-14) #}
+        <div x-show="firstDripSeconds === null">
+          <button type="button"
+                  x-on:click="markFirstDrip()"
+                  aria-label="Mark first drip time"
+                  class="w-full rounded bg-espresso-700 text-cream-50 text-base font-semibold
+                         min-h-[56px] flex items-center justify-center hover:bg-espresso-800">
+            Mark first drip
+          </button>
+        </div>
+        <div x-show="firstDripSeconds !== null"
+             class="rounded border border-espresso-200 dark:border-espresso-700 px-4 py-3
+                    flex items-center justify-between text-sm">
+          <span class="tabular-nums">First drip: <span x-text="_formatTime(firstDripSeconds)"></span></span>
+          <button type="button"
+                  x-on:click="clearFirstDrip()"
+                  aria-label="Clear first drip time"
+                  class="text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
+            Clear
+          </button>
         </div>
 
         {# Timer controls #}
@@ -216,9 +270,11 @@
           </button>
         </div>
 
-        {# Cancel — bottom of the running screen (mt-auto pins it to the screen
-           bottom) so it is an easy thumb reach on iOS rather than at the top. #}
-        <div class="mt-auto pt-2 flex justify-center">
+        {# Cancel — bottom of the running screen with iOS safe-area padding.
+           pb-[max(env(safe-area-inset-bottom),_16px)] follows the Phase 15 technique
+           (commit 982c0e6). The full-screen container is fixed inset-0 z-50 and owns
+           its own safe-area; .content-nav-safe-area is NOT used here. #}
+        <div class="mt-auto pt-2 flex justify-center pb-[max(env(safe-area-inset-bottom),_16px)]">
           <button type="button"
                   x-on:click="cancelWithoutLogging()"
                   class="text-sm text-espresso-600 dark:text-cream-300 underline min-h-[44px] inline-flex items-center">
@@ -232,6 +288,19 @@
         <h1 class="text-2xl font-semibold">Brew complete!</h1>
         <p class="text-xl tabular-nums text-espresso-700 dark:text-cream-200">
           Time: <span x-text="formattedElapsed"></span>
+        </p>
+        {% if recipe.water_grams %}
+        <p class="text-base tabular-nums text-espresso-600 dark:text-cream-300">
+          {{ recipe.water_grams }}g total water
+        </p>
+        {% endif %}
+        <p x-show="firstDripSeconds !== null"
+           class="text-sm tabular-nums text-espresso-600 dark:text-cream-300">
+          First drip: <span x-text="firstDripSeconds !== null ? _formatTime(firstDripSeconds) : ''"></span>
+        </p>
+        <p x-show="bloomTimeSeconds !== null"
+           class="text-sm tabular-nums text-espresso-600 dark:text-cream-300">
+          Bloom: <span x-text="bloomTimeSeconds !== null ? _formatTime(bloomTimeSeconds) : ''"></span>
         </p>
         <p class="text-sm text-espresso-600 dark:text-cream-300">
           Log this brew to track your snobbery.
