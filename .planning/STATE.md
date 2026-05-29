@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
-status: verifying
-stopped_at: Phase 19 Plan 02 complete
-last_updated: "2026-05-29T03:31:25.534Z"
-last_activity: 2026-05-29
+status: gaps_found
+stopped_at: Phase 19 code review found 2 blockers (stored XSS + broken improve-brew); gap closure pending
+last_updated: "2026-05-29T13:00:00.000Z"
+last_activity: 2026-05-29 -- Phase 19 code review reopened the phase
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 5
   total_plans: 31
   completed_plans: 31
   percent: 100
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 ## Current Position
 
-Phase: 19 (ai-page-research-predict) — EXECUTING
-Plan: 7 of 7
-Status: Phase complete — ready for verification
+Phase: 19 (ai-page-research-predict) — REOPENED (gaps found in code review)
+Plan: 7 of 7 executed; gap-closure plans pending
+Status: 2 blockers from 19-REVIEW.md (CR-01 stored XSS in research SSE stub; CR-02 improve-brew emits raw JSON) + cost-control/commit warnings. Local tests + ruff green; orphaned templates are the root cause.
 Last activity: 2026-05-29
 
-Progress: [██████████] 100%
+Progress: [█████████░] code complete, blockers open
 
 ## Performance Metrics
 
