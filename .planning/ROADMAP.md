@@ -196,7 +196,7 @@ Plans:
 - [x] 19-07-PLAN.md — AIX-05/13: latency investigation + NPM proxy_buffering off doc + admin quota verification + phase-close gate (human-verify)
 
 **Wave 7 — gap closure (REOPENED 2026-05-29, 19-REVIEW.md)**
-- [ ] 19-08-PLAN.md — CR-01/CR-02/WR-06/IN-01/IN-03: render research + improve-brew SSE through autoescaped Jinja templates (fix stored XSS + broken coach card), reconcile cited_sources contract, regression tests
+- [x] 19-08-PLAN.md — CR-01/CR-02/WR-06/IN-01/IN-03: render research + improve-brew SSE through autoescaped Jinja templates (fix stored XSS + broken coach card), reconcile cited_sources contract, regression tests
 
 **Wave 8** *(blocked on Wave 7)*
 - [ ] 19-09-PLAN.md — WR-01/WR-02/WR-03/WR-04/WR-05/IN-02: commit+reuse cache-hit prediction, bound prediction-regen cost, narrow except clauses, one format_reset helper, accepted-risk TOCTOU note
@@ -265,7 +265,7 @@ Plans:
 | 16. Cafe Quick-Rate | v1.2 | 6/6 | Complete   | 2026-05-27 |
 | 17. IA Restructure | v1.2 | 5/5 | Complete    | 2026-05-28 |
 | 18. Self-Host Packaging | v1.2 | 5/5 | Complete   | 2026-05-28 |
-| 19. AI Page & Research/Predict | v1.2 | 7/9 | Reopened (gap closure) | 2026-05-29 |
+| 19. AI Page & Research/Predict | v1.2 | 8/9 | In Progress|  |
 | 20. Guided Brew Polish | v1.2 | 0/TBD | Not started | - |
 | 21. Mobile-First Full Rework | v1.2 | 0/TBD | Not started | - |
 | 22. Verification & Release | v1.2 | 0/TBD | Not started | - |
