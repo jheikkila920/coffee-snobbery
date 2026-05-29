@@ -1,15 +1,19 @@
-// guided-brew-mode.js — guidedBrewMode Alpine component (Phase 11 / Plan 04).
+// guided-brew-mode.js — guidedBrewMode Alpine component (Phase 11 / Plan 04, extended Phase 20 / Plan 05).
 //
 // CSP-build compliant (docs/decisions/0001): registered via Alpine.data,
 // string x-data reference, config via data-* attributes. No eval.
 //
 // Responsibilities:
 //   1. Read recipe steps from data-steps attribute (JSON.parse — no eval).
-//   2. Timer: setInterval countdown, auto-advance on step elapsed time.
+//   2. Timer: wall-clock-truth (Date.now() - _startTimestamp), not an incrementing counter.
+//      _resync() on visibilitychange so the timer self-corrects on wake from screen sleep.
 //   3. Audio: AudioContext synthesized chime (unlocked in Start button handler).
 //   4. Vibration: navigator.vibrate — fails silently on iOS.
 //   5. Wake lock: navigator.wakeLock.request('screen') + NoSleep.js fallback.
 //   6. Cue prefs: read/write localStorage 'snobbery:gbm:cues'.
+//   7. Coaching getters: coachingLine, stepTypeBadge, stepNote, stepWaterTemp, preCueCountdown, isPreCue.
+//   8. Tap-to-mark: markFirstDrip / clearFirstDrip; bloom auto-derives on Bloom step completion.
+//   9. finishBrewing(): carries first_drip + bloom_time + brew_time into /brew/new.
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('guidedBrewMode', () => ({
@@ -23,6 +27,15 @@ document.addEventListener('alpine:init', () => {
     elapsedTotalSeconds: 0,
     cuePrefs: { chime: true, vibrate: true },
     wakeLockState: 'none', // 'held' | 'fallback' | 'none'
+
+    // Wall-clock timer state (Phase 20 D-15)
+    _startTimestamp: null,   // Date.now() at brew start — wall-clock truth
+    _pausedOffset: 0,        // accumulated pause duration in seconds
+    _pausedAt: null,         // Date.now() at last pause
+
+    // Capture state (Phase 20 D-12..D-14)
+    firstDripSeconds: null,  // tap-to-mark; null = not yet marked
+    bloomTimeSeconds: null,  // auto-set when Bloom step transitions
 
     // private
     recipeId: '',
@@ -58,6 +71,9 @@ document.addEventListener('alpine:init', () => {
         document.removeEventListener('visibilitychange', this._onVisibility);
         this._onVisibility = null;
       }
+      try {
+        localStorage.removeItem('snobbery:gbm:start');
+      } catch (_) {}
     },
 
     // --- computed helpers ---
@@ -88,6 +104,51 @@ document.addEventListener('alpine:init', () => {
 
     get formattedElapsed() {
       return this._formatTime(this.elapsedTotalSeconds);
+    },
+
+    // --- coaching getters (Phase 20 D-08..D-11) ---
+
+    get coachingLine() {
+      const step = this.currentStep;
+      if (!step) return '';
+      const type = step.type || 'Pour';
+      const w = step.water_grams;
+      // Pour sequence number: count Pour steps up to and including current
+      const pourNum = this.steps
+        .slice(0, this.currentStepIndex + 1)
+        .filter(s => (s.type || 'Pour') === 'Pour').length;
+      switch (type) {
+        case 'Bloom':  return w ? 'Bloom — ' + w + 'g' : 'Bloom';
+        case 'Pour':   return 'Pour ' + pourNum + ' — to ' + (w ? w + 'g' : '?');
+        case 'Wait':   return 'Wait — ' + this._formatTime(step.time_seconds || 0);
+        case 'Action': return step.label || 'Action';
+        default:       return step.label || 'Step ' + (this.currentStepIndex + 1);
+      }
+    },
+
+    get stepTypeBadge() {
+      const step = this.currentStep;
+      return step ? (step.type || 'Pour').toUpperCase() : '';
+    },
+
+    get stepNote() {
+      const step = this.currentStep;
+      return (step && step.note) ? step.note : '';
+    },
+
+    get stepWaterTemp() {
+      const step = this.currentStep;
+      return (step && step.water_temp_c) ? 'at ' + step.water_temp_c + '°C' : '';
+    },
+
+    // Pre-cue countdown: returns 1–3 when within 3s of a transition (D-10)
+    get preCueCountdown() {
+      if (this.remainingSeconds > 3 || this.remainingSeconds <= 0) return 0;
+      return this.remainingSeconds;
+    },
+
+    get isPreCue() {
+      return this.preCueCountdown > 0;
     },
 
     _formatTime(secs) {
@@ -125,12 +186,17 @@ document.addEventListener('alpine:init', () => {
     pause() {
       if (!this.isRunning || this.isPaused) return;
       this.isPaused = true;
+      this._pausedAt = Date.now();
       this._stopTimer();
     },
 
     resume() {
       if (!this.isRunning || !this.isPaused) return;
       this.isPaused = false;
+      if (this._pausedAt) {
+        this._pausedOffset += Math.floor((Date.now() - this._pausedAt) / 1000);
+        this._pausedAt = null;
+      }
       this._startTimer();
     },
 
@@ -145,6 +211,10 @@ document.addEventListener('alpine:init', () => {
     // --- timer internals ---
     _startTimer() {
       this._stopTimer();
+      if (!this._startTimestamp) {
+        this._startTimestamp = Date.now() - (this.elapsedTotalSeconds * 1000);
+        try { localStorage.setItem('snobbery:gbm:start', String(this._startTimestamp)); } catch (_) {}
+      }
       this._timer = setInterval(() => this._tick(), 1000);
     },
 
@@ -155,31 +225,59 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    // Wall-clock-truth tick: compute elapsed from Date.now() - _startTimestamp (Pitfall 1).
     _tick() {
-      this.elapsedTotalSeconds++;
-
-      if (this.remainingSeconds > 0) {
-        this.remainingSeconds--;
-      }
-
-      if (this.remainingSeconds === 0) {
-        this._advanceStep();
-      }
+      const elapsed = Math.floor((Date.now() - this._startTimestamp) / 1000) - this._pausedOffset;
+      this.elapsedTotalSeconds = elapsed;
+      this._syncStateFromElapsed(elapsed);
     },
 
-    _advanceStep() {
-      if (this.currentStepIndex >= this.steps.length - 1) {
-        // All steps done.
-        this._stopTimer();
-        this.isRunning = false;
-        this.isDone = true;
-        this._releaseWakeLock();
+    // Self-correct on wake from screen sleep (D-15, Pitfall 7).
+    _resync() {
+      if (!this._startTimestamp || !this.isRunning || this.isPaused) return;
+      const elapsed = Math.floor((Date.now() - this._startTimestamp) / 1000) - this._pausedOffset;
+      this.elapsedTotalSeconds = elapsed;
+      this._syncStateFromElapsed(elapsed);
+    },
+
+    // Walk steps using cumulative time_seconds offsets (Pitfall 5).
+    // Fires chime/vibrate for newly crossed step boundaries only.
+    _syncStateFromElapsed(elapsed) {
+      let stepIdx = 0;
+      for (let i = 0; i < this.steps.length; i++) {
+        if (elapsed >= (this.steps[i].time_seconds || 0)) {
+          stepIdx = i + 1;
+        } else {
+          break;
+        }
+      }
+
+      if (stepIdx >= this.steps.length) {
+        if (!this.isDone) {
+          this._stopTimer();
+          this.isRunning = false;
+          this.isDone = true;
+          this._releaseWakeLock();
+        }
         return;
       }
-      this.currentStepIndex++;
-      this.remainingSeconds = this._stepDuration(this.currentStepIndex);
-      if (this.cuePrefs.chime) this.playChime();
-      if (this.cuePrefs.vibrate) this.triggerVibration();
+
+      const prevIndex = this.currentStepIndex;
+      this.currentStepIndex = stepIdx;
+      const stepEnd = this.steps[stepIdx].time_seconds || 0;
+      this.remainingSeconds = Math.max(0, stepEnd - elapsed);
+
+      // Newly crossed step boundary — fire cues and auto-derive bloom time.
+      if (stepIdx > prevIndex) {
+        const completedStep = this.steps[prevIndex];
+        if ((completedStep.type || 'Pour') === 'Bloom') {
+          // D-13: bloom time auto-derives when the Bloom step transitions out.
+          this.bloomTimeSeconds = this.elapsedTotalSeconds;
+        }
+        // Chime fires at the transition, NOT during pre-cue display (Pitfall 2).
+        if (this.cuePrefs.chime) this.playChime();
+        if (this.cuePrefs.vibrate) this.triggerVibration();
+      }
     },
 
     // Manual skip to next step.
@@ -192,10 +290,26 @@ document.addEventListener('alpine:init', () => {
         this._releaseWakeLock();
         return;
       }
+      const prevIndex = this.currentStepIndex;
       this.currentStepIndex++;
       this.remainingSeconds = this._stepDuration(this.currentStepIndex);
+      const completedStep = this.steps[prevIndex];
+      if ((completedStep.type || 'Pour') === 'Bloom') {
+        this.bloomTimeSeconds = this.elapsedTotalSeconds;
+      }
       if (this.cuePrefs.chime) this.playChime();
       if (this.cuePrefs.vibrate) this.triggerVibration();
+    },
+
+    // --- tap-to-mark (Phase 20 D-12 / D-14) ---
+    markFirstDrip() {
+      if (this.firstDripSeconds === null) {
+        this.firstDripSeconds = this.elapsedTotalSeconds;
+      }
+    },
+
+    clearFirstDrip() {
+      this.firstDripSeconds = null;
     },
 
     // --- audio ---
@@ -282,6 +396,8 @@ document.addEventListener('alpine:init', () => {
     _setupVisibilityReacquire() {
       this._onVisibility = async () => {
         if (document.visibilityState === 'visible' && this.isRunning && !this.isPaused) {
+          // Resync first so missed transitions auto-advance silently (D-15).
+          this._resync();
           await this.requestWakeLock();
         }
       };
@@ -354,13 +470,19 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    // Navigate to /brew/new prefilled with recipe, coffee, and all timing params (Phase 20 D-15).
     finishBrewing() {
-      // Navigate to /brew/new prefilled with recipe, coffee (if set), and elapsed time.
       let url = '/brew/new?gbm=1&recipe_id=' + encodeURIComponent(this.recipeId);
       if (this.coffeeId) {
         url += '&coffee_id=' + encodeURIComponent(this.coffeeId);
       }
       url += '&brew_time=' + encodeURIComponent(this.elapsedTotalSeconds);
+      if (this.firstDripSeconds !== null) {
+        url += '&first_drip=' + encodeURIComponent(this.firstDripSeconds);
+      }
+      if (this.bloomTimeSeconds !== null) {
+        url += '&bloom_time=' + encodeURIComponent(this.bloomTimeSeconds);
+      }
       window.location.assign(url);
     },
 
