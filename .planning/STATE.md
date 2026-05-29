@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Polish & Mobile-First
 status: executing
-stopped_at: Phase 20 UI-SPEC approved
-last_updated: "2026-05-29T16:30:31.294Z"
+stopped_at: Completed 20-03-PLAN.md
+last_updated: "2026-05-29T16:41:58.811Z"
 last_activity: 2026-05-29
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 39
-  completed_plans: 35
-  percent: 90
+  completed_plans: 36
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 ## Current Position
 
 Phase: 20 (guided-brew-polish) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-05-29
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [█████████░] 90%
 | Phase 19-ai-page-research-predict P09 | 40 | 3 tasks | 6 files |
 | Phase 20-guided-brew-polish P01 | 35 | 2 tasks | 5 files |
 | Phase 20-guided-brew-polish P02 | 13 | 3 tasks | 10 files |
+| Phase 20 P03 | 14 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Progress: [█████████░] 90%
 - [Phase ?]: D-11 applied in plan 19-01: RecipeSuggestionSchema.no_match removed; ratio/temp_c/grind_hint required
 - [Phase ?]: D-14/D-15 applied in plan 19-02: 404/410 rejection + archived retry + latency comments
 - [Phase ?]: D-07/AIX-02 prediction upsert uses ON CONFLICT on uq_ai_rating_pred_user_cache_key -- single row per user+cache_key
+- [Phase ?]: water-profile-select.js loaded globally in base.html; timing fieldset in brew_prefill_fields.html included in re-prefill swap; _WRITABLE_FIELDS extended to persist all three new columns
 
 ### Pending Todos
 
@@ -108,7 +110,7 @@ Progress: [█████████░] 90%
 
 ## Session Continuity
 
-Last session: 2026-05-29T16:30:31.272Z
-Stopped at: Phase 20 UI-SPEC approved
+Last session: 2026-05-29T16:41:58.787Z
+Stopped at: Completed 20-03-PLAN.md
 Resume file: None
 Next: `/gsd-plan-phase 16 --gaps` (re-plan to fix origin-country) — or fix inline and re-verify
