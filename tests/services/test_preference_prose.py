@@ -144,9 +144,7 @@ def test_preference_prose_consumes_analytics_helpers() -> None:
     ):
         from app.services.ai_service import generate_preference_profile_prose
 
-        status, row = asyncio.run(
-            generate_preference_profile_prose(mock_db, user_id=user_id)
-        )
+        status, row = asyncio.run(generate_preference_profile_prose(mock_db, user_id=user_id))
 
         # Both analytics helpers must have been called with the user_id
         mock_get_profile.assert_called_once_with(mock_db, user_id)
@@ -191,9 +189,7 @@ def test_preference_prose_skips_on_unchanged_signature() -> None:
     ):
         from app.services.ai_service import generate_preference_profile_prose
 
-        status, row = asyncio.run(
-            generate_preference_profile_prose(mock_db, user_id=user_id)
-        )
+        status, row = asyncio.run(generate_preference_profile_prose(mock_db, user_id=user_id))
 
         assert status == "skipped"
         assert row is existing_row

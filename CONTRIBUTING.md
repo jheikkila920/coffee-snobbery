@@ -92,6 +92,40 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 Branches: small changes go straight to `main`; anything touching schema, auth, encryption, AI scheduling, or deployment topology goes on a feature branch with a PR.
 
+## Reverse-Proxy SSE Configuration (NPM)
+
+The research and improve-brew flows stream prose via SSE (`text/event-stream`). Nginx Proxy Manager (NPM) buffers responses by default, which causes the entire SSE stream to be held and delivered as a burst at close rather than incrementally.
+
+### Required NPM Advanced Config Block
+
+In the Snobbery NPM Proxy Host, open **Advanced** and add:
+
+```nginx
+proxy_buffering off;
+proxy_http_version 1.1;
+proxy_read_timeout 300s;
+proxy_send_timeout 300s;
+```
+
+**Why each directive:**
+- `proxy_buffering off` — disables response buffering so SSE chunks are forwarded immediately
+- `proxy_http_version 1.1` — required for keep-alive connections that SSE depends on
+- `proxy_read_timeout 300s` / `proxy_send_timeout 300s` — prevents NPM from closing a long-running SSE stream before the AI response completes (research calls can take 10–30s)
+
+**Backend defense-in-depth:** The SSE routes already emit `X-Accel-Buffering: no` in the response headers. This instructs the underlying nginx to disable buffering on this response even without the explicit Advanced config block. The Advanced config block is belt-and-suspenders — it ensures consistent behavior and protects against future NPM config resets.
+
+### Operator SSE Smoke Procedure
+
+After applying the NPM config block:
+
+1. Deploy the latest image: `git pull && docker compose build coffee-snobbery && docker compose up -d coffee-snobbery`
+2. Open a browser through NPM (not direct Docker port) and navigate to `/ai`
+3. Enter a coffee name in the Research field and submit
+4. Observe: prose text should appear **incrementally** as the AI streams, not appear all at once at the end
+5. If prose appears in a single burst at the end, `proxy_buffering off` is not taking effect — recheck the NPM Advanced config and confirm the block is saved
+
+**Verification pass criteria:** Visible incremental text delivery within 2–3 seconds of submitting the research form, before the result card renders.
+
 ## Deploying a Change to the VPS
 
 From the repo root on the VPS:

@@ -32,15 +32,14 @@ the structural promises made in the plan frontmatter must_haves:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Jinja env + file helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_jinja_env():
     """Obtain the Jinja2 Environment — mirrors test_recipe_row.py pattern."""
@@ -97,6 +96,7 @@ def _read_template(env, name: str) -> str:
 # Task 1: base.html CDN + tailwind.src.css + chart-trends.js
 # ---------------------------------------------------------------------------
 
+
 def test_base_has_chartjs_cdn() -> None:
     """Chart.js @4.5.1 CDN tag with csp_nonce must be present in base.html."""
     src = _read_static("app/templates/base.html")
@@ -112,7 +112,10 @@ def test_base_has_htmx_sse_cdn() -> None:
 
 
 def test_tailwind_has_htmx_indicator() -> None:
-    """.htmx-indicator rule must exist in tailwind.src.css (project memory strict-csp-blocks-htmx-indicator)."""
+    """.htmx-indicator rule must exist in tailwind.src.css.
+
+    See project memory strict-csp-blocks-htmx-indicator.
+    """
     src = _read_static("app/static/css/tailwind.src.css")
     assert ".htmx-indicator" in src, ".htmx-indicator rule missing from tailwind.src.css"
     assert ".htmx-request .htmx-indicator" in src, ".htmx-request .htmx-indicator rule missing"
@@ -129,19 +132,23 @@ def test_chart_trends_js_no_eval() -> None:
     src = _read_static("app/static/js/alpine-components/chart-trends.js")
     # eval( as a call — not a comment or string inside a name
     import re
-    assert not re.search(r'\beval\s*\(', src), "eval() found in chart-trends.js — CSP violation"
+
+    assert not re.search(r"\beval\s*\(", src), "eval() found in chart-trends.js — CSP violation"
 
 
 def test_chart_trends_js_registers() -> None:
     """chart-trends.js must register Alpine.data('chartTrends', ...)."""
     src = _read_static("app/static/js/alpine-components/chart-trends.js")
-    assert "chartTrends" in src, "Alpine.data('chartTrends') registration missing from chart-trends.js"
+    assert "chartTrends" in src, (
+        "Alpine.data('chartTrends') registration missing from chart-trends.js"
+    )
     assert "Alpine.data" in src, "Alpine.data call missing from chart-trends.js"
 
 
 # ---------------------------------------------------------------------------
 # Task 2: AI page structure + fragments
 # ---------------------------------------------------------------------------
+
 
 def test_ai_page_has_research_form_include() -> None:
     """ai.html must include research_form.html at the top of the key-present branch."""
@@ -162,7 +169,8 @@ def test_ai_page_no_top_flavor_descriptors() -> None:
     env = _get_jinja_env()
     src = _read_template(env, "pages/ai.html")
     assert "flavor-descriptors" not in src, (
-        "flavor-descriptors hx-get still present in ai.html — Top Flavor Descriptors must be deleted (D-10)"
+        "flavor-descriptors hx-get still present in ai.html"
+        " — Top Flavor Descriptors must be deleted (D-10)"
     )
 
 
@@ -232,6 +240,7 @@ def test_trends_card_has_canvas_refs() -> None:
 # Task 3: Improve-brew fragments + brew form
 # ---------------------------------------------------------------------------
 
+
 def test_improve_result_no_safe() -> None:
     """improve_result.html must never use |safe on AI prose (T-19-21)."""
     env = _get_jinja_env()
@@ -252,5 +261,6 @@ def test_brew_form_has_improve_button() -> None:
     env = _get_jinja_env()
     src = _read_template(env, "pages/brew_form.html")
     assert "improve-brew" in src, (
-        "brew_form.html missing improve-brew affordance — check for /ai/improve-brew/{session_id} reference"
+        "brew_form.html missing improve-brew affordance"
+        " — check for /ai/improve-brew/{session_id} reference"
     )

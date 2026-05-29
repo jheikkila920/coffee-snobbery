@@ -269,9 +269,7 @@ def test_brew_improve_cross_user_returns_error() -> None:
 
         async def run_generator():
             events = []
-            async for event in generate_brew_improvement(
-                mock_db, user_id=1, session_id=999
-            ):
+            async for event in generate_brew_improvement(mock_db, user_id=1, session_id=999):
                 events.append(event)
             return events
 
@@ -317,9 +315,7 @@ def test_brew_improve_quota_bucket() -> None:
 
         async def run_generator():
             events = []
-            async for event in generate_brew_improvement(
-                mock_db, user_id=1, session_id=1
-            ):
+            async for event in generate_brew_improvement(mock_db, user_id=1, session_id=1):
                 events.append(event)
             return events
 
