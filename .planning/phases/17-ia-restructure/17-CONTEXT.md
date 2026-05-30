@@ -43,8 +43,8 @@ Explicitly NOT in this phase:
 - **D-06:** Home sections after Phase 17, in order:
   1. **Action button row** — Guided Brew + Log session + Quick rate (three equal `flex-1` buttons). Admin button removed (it lives under Config now per IA-01). Quick rate links to the same flow as the `/brew` page header's Quick rate button introduced in 16-D-09 — symmetric entry from both surfaces.
   2. **Recent brews** (eager, unchanged from today)
-  3. **Not tried yet** (lazy-loaded, unchanged from today — list length cap NOT changed in this phase; revisit in Phase 21)
-  4. **Top Coffees** (eager render — see D-08; IA-06 mandates top 5 with no minimum-star / minimum-session floor — see D-09)
+  3. **Top Coffees** (eager render — see D-08; IA-06 mandates top 5 with no minimum-star / minimum-session floor — see D-09). **Moved above "Not tried yet" 2026-05-29 at user request (reorder of items 3↔4); the "See AI recommendations →" breadcrumb moves up with this section.**
+  4. **Not tried yet** (lazy-loaded — list length cap NOT changed in this phase; revisit in Phase 21)
   5. Small inline link at the bottom of the Top Coffees section: **"See AI recommendations →"** linking to `/ai`. Discovery breadcrumb for users who default to home; not a heavy banner.
   6. **Wishlist** stays on home as its current entry (link/card to `/ai/wishlist`). NOT removed despite IA-03's "AI surfaces consolidate" wording — Wishlist is "data the user added" not "AI-generated content"; reach from home is preserved. Wishlist is NOT also rendered on `/ai` (see D-12 reversal).
 - **D-07:** Removed from home:

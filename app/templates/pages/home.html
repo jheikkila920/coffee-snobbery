@@ -2,9 +2,10 @@
 {% block page_title %}Home{% endblock %}
 {% block content %}
   {# Phase 17 home composition (IA-03 / IA-04 / IA-06 + D-06..D-11):
-     greeting H1 + three-button action row + Recent brews (eager) + Not tried
-     yet (lazy) + Top Coffees (eager, no-floor) + "See AI recommendations →"
-     link + Wishlist card. AI surfaces moved to /ai (plan 17-04). Cold-start
+     greeting H1 + three-button action row + Recent brews (eager) + Top Coffees
+     (eager, no-floor, top 5) + "See AI recommendations →" link + Not tried yet
+     (lazy) + Wishlist card. (Top Coffees moved above Not tried yet per user
+     request 2026-05-29 — D-06 reorder.) AI surfaces moved to /ai (plan 17-04). Cold-start
      meter moved with them per D-11 — home is now invariant across gate
      states. All values autoescaped. CSP-clean. #}
   <main class="mx-auto max-w-6xl px-6 py-12">
@@ -39,27 +40,14 @@
         {% include "fragments/home/recent_brews.html" %}
       </section>
 
-      {# Not tried yet — lazy loaded (load delay:150ms), always visible (D-06 item 3). #}
-      <section aria-labelledby="unrated-heading"
-               class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
-        <h2 id="unrated-heading" class="text-xl font-semibold mb-4">Not tried yet</h2>
-        <div hx-get="/home/cards/unrated-coffees"
-             hx-trigger="load delay:150ms"
-             hx-swap="innerHTML">
-          <div class="animate-pulse space-y-2">
-            <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
-            <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
-          </div>
-        </div>
-      </section>
-
-      {# Top Coffees — EAGER include of the row fragment (D-08). Uses the
-         no-floor variant (D-09 / IA-06) populated by home_shell. The shared
-         fragments/home/top_coffees.html template expects `rows` and
-         `all_unrated`; we forward them via {% with %} so the fragment
-         renders identically when included eagerly here or fetched via
-         the /home/cards/top-coffees endpoint. The "See AI recommendations →"
-         breadcrumb (D-06 item 5) lives just below this section. #}
+      {# Top Coffees — EAGER include of the row fragment (D-08). Uses the no-floor
+         variant (D-09 / IA-06, top 5) populated by home_shell. The shared
+         fragments/home/top_coffees.html template expects `rows` and `all_unrated`;
+         forwarded via {% with %} so it renders identically here or via the
+         /home/cards/top-coffees endpoint.
+         ORDER: placed ABOVE "Not tried yet" per user request 2026-05-29 (overrides
+         the D-06 item 3/4 sequence). The "See AI recommendations →" breadcrumb moves
+         up with this section. #}
       <section aria-labelledby="top-coffees-heading"
                class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
         <h2 id="top-coffees-heading" class="text-xl font-semibold mb-4">Top Coffees</h2>
@@ -72,6 +60,21 @@
             See AI recommendations →
           </a>
         </p>
+      </section>
+
+      {# Not tried yet — lazy loaded (load delay:150ms), always visible.
+         Placed BELOW Top Coffees per user request 2026-05-29 (D-06 reorder). #}
+      <section aria-labelledby="unrated-heading"
+               class="rounded-lg border border-espresso-200 bg-cream-100 p-4 dark:bg-espresso-900 dark:border-espresso-800">
+        <h2 id="unrated-heading" class="text-xl font-semibold mb-4">Not tried yet</h2>
+        <div hx-get="/home/cards/unrated-coffees"
+             hx-trigger="load delay:150ms"
+             hx-swap="innerHTML">
+          <div class="animate-pulse space-y-2">
+            <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-3/4"></div>
+            <div class="h-4 bg-espresso-100 dark:bg-espresso-800 rounded w-1/2"></div>
+          </div>
+        </div>
       </section>
 
       {# Wishlist — D-06 item 6. Wishlist is "data the user added", reachable
