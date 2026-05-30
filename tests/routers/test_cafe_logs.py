@@ -610,20 +610,17 @@ def test_tab_cafe_renders_list(
         )
 
 
-def test_empty_state_is_blank(
+def test_empty_state_shows_hint_and_cta(
     app: Any,
     seeded_regular_user: dict[str, Any],
     clean_cafe_router: None,
 ) -> None:
-    """GET /brew?tab=cafe with zero cafe_logs returns 200 + BLANK session-list region.
+    """GET /brew?tab=cafe with zero cafe_logs returns 200 + a hint + Quick rate CTA.
 
-    D-08 LOCKED: the no-data empty state for the Cafe tastings tab is blank —
-    no heading, no body, no illustration, no CTA. The list region must render
-    the #session-list div with no child content and no hint-copy substrings.
-
-    Filtered-zero state is OUT of scope for this test — it lives in UI-SPEC
-    § Empty States and is exercised by the existing filtered-zero behavior on
-    the brew tab. D-08 LOCKED carve-out applies only to the no-data state.
+    D-08 was OVERRIDDEN 2026-05-29 (user request): the no-data Cafe tastings empty
+    state now carries a one-line hint and a "Quick rate" CTA to /cafe-logs/new,
+    matching Snobbery's other empty-state surfaces. (Previously this asserted a
+    blank region under the original D-08; see 16-CONTEXT.md D-08, updated.)
 
     This test seeds ZERO cafe_logs (the default fresh-user state via
     clean_cafe_router fixture) — no _seed_cafe_log call.
@@ -657,25 +654,18 @@ def test_empty_state_is_blank(
         # to asserting on the full body but with tighter phrase checks.
         list_region = body
 
-    # D-08 LOCKED — no <article or <tr rows in the list region.
-    assert b"<article" not in list_region, (
-        "D-08 LOCKED: <article element found in the blank empty state. "
-        "The no-data Cafe tastings tab must render the session-list div empty."
-    )
-    assert b"<tr" not in list_region, (
-        "D-08 LOCKED: <tr element found in the blank empty state. "
-        "The no-data Cafe tastings tab must render the session-list div empty."
-    )
+    # No data rows when there are zero cafe logs.
+    assert b"<article" not in list_region, "no-data empty state must have no <article rows"
+    assert b"<tr" not in list_region, "no-data empty state must have no <tr rows"
 
-    # D-08 LOCKED — no hint-copy substrings (case-insensitive check on bytes).
-    hint_phrases = [b"no ", b"yet", b"drop", b"add", b"first"]
+    # D-08 override — the hint copy + Quick rate CTA are present.
     list_lower = list_region.lower()
-    for phrase in hint_phrases:
-        assert phrase not in list_lower, (
-            f"D-08 LOCKED: hint-copy phrase {phrase!r} found in the blank empty state. "
-            "The no-data Cafe tastings tab must render completely blank — no heading, "
-            "no body, no CTA. See .planning/phases/16-cafe-quick-rate/16-CONTEXT.md D-08."
-        )
+    assert b"no cafe tastings yet" in list_lower, (
+        "empty Cafe tastings tab must show the no-data hint copy (D-08 override)"
+    )
+    assert b"/cafe-logs/new" in list_region, (
+        "empty Cafe tastings tab must link the Quick rate CTA to /cafe-logs/new"
+    )
 
 
 def test_cafe_form_save_visible_at_375x667(

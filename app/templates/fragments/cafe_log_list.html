@@ -57,9 +57,16 @@
       </a>
     </div>
   {% else %}
-    {# D-08 LOCKED — blank no-data empty state. Do NOT add a heading or CTA.
-       See .planning/phases/16-cafe-quick-rate/16-CONTEXT.md D-08.
-       Deliberate divergence from session_list.html's "No brews logged yet." copy.
-       A future contributor MUST NOT add hint copy here without re-opening D-08. #}
+    {# No-data empty state. D-08 was REOPENED + OVERRIDDEN 2026-05-29 at the user's
+       request: the cafe tab now carries a hint + quick-log CTA, matching Snobbery's
+       other empty-state surfaces. See 16-CONTEXT.md D-08 (updated). #}
+    <div class="flex flex-col items-center justify-center text-center py-16 gap-3">
+      <h2 class="text-lg font-semibold">No cafe tastings yet.</h2>
+      <p class="text-base text-espresso-700 dark:text-cream-200">Tried a coffee out somewhere? Do a quick log to get started.</p>
+      <a href="/cafe-logs/new"
+         class="rounded bg-espresso-700 px-4 py-2 text-base font-semibold text-cream-50 hover:bg-espresso-800 dark:text-cream-50">
+        Quick rate
+      </a>
+    </div>
   {% endif %}
 </div>

@@ -58,7 +58,7 @@ Explicitly NOT in this phase:
 
 - **D-07:** Cafe cards differ from brew session cards via **border-l-2 amber accent** (vs the espresso-600 brew accent) + a small coffee-cup icon in the corner (vs the kettle icon on brew). Subtle, mobile-readable, no badge clutter, theme-friendly in dark mode. The card body itself stays similar (coffee name, rating, flavor chips) — the discriminator is the accent + icon, not the layout.
 
-- **D-08:** Empty state for the Cafe tastings tab is a **blank list** — no friendly copy, no sample entry, no watermark. Matches the minimalist aesthetic and follows the user's explicit preference. (Note: this is a deliberate divergence from Snobbery's other empty-state surfaces which typically carry a one-line hint; locked here at the user's request.)
+- **D-08:** ~~Empty state for the Cafe tastings tab is a **blank list** — no friendly copy, no sample entry, no watermark.~~ **OVERRIDDEN 2026-05-29 (user request):** the cafe tab now carries a one-line hint + a "Quick rate" CTA in the no-data state, matching Snobbery's other empty-state surfaces (`fragments/cafe_log_list.html` `{% else %}` branch). Original rationale (blank, minimalist) no longer reflects the user's preference.
 
 ### Claude's discretion — list view operational details
 
@@ -221,7 +221,7 @@ No external specs introduced during discussion — the decisions above are the c
 
 - **"Quick rate" button placement next to "Log session"** (D-09) — concrete: same flex row, same Tailwind utility classes, same HTMX progressive-enhancement shape. Visual parity with the two existing buttons; no FAB pattern, no modal pattern, no home-page CTA card.
 - **Border-l-2 amber accent + cafe-cup icon** for visual distinction (D-07) — specific: `border-l-2` Tailwind class with an amber-500-ish accent for cafe vs the existing espresso-600 brew accent, and a small coffee-cup SVG icon where brew session cards show a kettle icon. Subtle, not loud.
-- **Blank empty state** (D-08) — deliberate divergence from Snobbery's other empty-state surfaces (which typically carry a hint line). The user explicitly prefers blank. Capture this so a future contributor doesn't "helpfully" add hint copy.
+- **Blank empty state** (D-08) — ~~deliberate divergence; user prefers blank~~ **OVERRIDDEN 2026-05-29 (user request):** cafe tab now shows a hint + "Quick rate" CTA in the no-data state, consistent with other empty-state surfaces.
 - **No autosave-draft at v1** (D-11 Claude's discretion) — the form is short enough that ITP-loss isn't a meaningful risk; localstorage form-restore is acceptable but not required, and a `brew_drafts`-style server-side table is explicitly out-of-scope at v1.
 - **Cafe cold-start counts toward the gate** (D-15) — specific arithmetic: `(brew_count + cafe_count) >= 3 AND distinct flavor_notes across both >= 5`. The UI meter (where it lives today) reflects the combined count.
 - **`cafe_log_id` is in a separate namespace from `coffee_id`** so the D-12 signature append cannot collide — both are BIGINTs but the row-shape distinguishes them (a brew row has 5 fields including `coffee_id`; a cafe row has 5 fields including `cafe_log_id`). Sequential `ORDER BY` within each list segment + concatenation = deterministic.
