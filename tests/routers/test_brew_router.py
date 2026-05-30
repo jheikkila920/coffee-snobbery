@@ -445,6 +445,42 @@ def test_brew_again_blanks_per_attempt(app, seeded_regular_user, clean_brew_rout
     assert "source notes" not in r.text
 
 
+def test_brew_new_string_coffee_id_draft_200(app, seeded_regular_user, clean_brew_router) -> None:
+    """A server draft storing coffee_id as a string must not 500 (D-10 restore).
+
+    Regression: the draft-restore branch compared Coffee.id (bigint) against the
+    raw draft coffee_id (varchar from the form-value JSON), raising
+    ``operator does not exist: bigint = character varying`` on every /brew/new once
+    a draft carried a coffee_id ("Brew again" was just how it surfaced). The id is
+    now coerced to int before the query.
+    """
+    _require_postgres()
+    _require_p5_migration_applied()
+    _require_brew_router()
+    from app.db import SessionLocal
+    from app.services import brew_drafts as draft_svc
+
+    uid = seeded_regular_user["user"].id
+    with SessionLocal() as db:
+        coffee = _seed_coffee(db, name=f"{_COFFEE_PREFIX} DraftStr")
+        db.commit()
+        cid = coffee.id
+    with SessionLocal() as db:
+        # coffee_id stored as a STRING, exactly as the draft autosave persists it.
+        draft_svc.upsert_draft(
+            db,
+            by_user_id=uid,
+            payload={"coffee_id": str(cid), "flavor_note_ids_observed": []},
+        )
+        db.commit()
+
+    client = _authed_client(app, seeded_regular_user["signed_cookie"])
+    r = client.get("/brew/new")
+    assert r.status_code == 200, (
+        f"GET /brew/new must 200 with a string-coffee_id draft, got {r.status_code}"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Task 2 — draft autosave + restore wiring                                    #
 # --------------------------------------------------------------------------- #

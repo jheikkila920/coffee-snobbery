@@ -824,7 +824,10 @@ def new_brew_form(
     # Additive merge: new advertised chips appear in the restored draft; chips
     # removed from advertised after the draft was saved are still kept in the draft.
     if server_draft is not None and "flavor_note_ids_observed" in server_draft:
-        coffee_id_from_draft = server_draft.get("coffee_id")
+        # Draft JSON stores coffee_id as a string (form value); coerce to int so the
+        # Coffee.id (bigint) comparison doesn't blow up as bigint = varchar (500 on
+        # any /brew/new once a draft carries a coffee_id).
+        coffee_id_from_draft = _int_or_none(server_draft.get("coffee_id"))
         if coffee_id_from_draft:
             from sqlalchemy import select as sa_select
 
